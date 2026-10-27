@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { usePreview } from '../../app/context';
 import { Icon, type IconName } from '../../components/Icon';
+import { useGlider } from '../../components/motion';
 import type { CollectionId, Location } from '../../domain/types';
 import { spaceColorVar } from '../items/item-meta';
 
@@ -13,7 +14,8 @@ const collectionIcon: Record<CollectionId, IconName> = {
 
 /**
  * Spaces-first navigation (D-018): "Deine Spaces" on top, quick access below. Shared by the desktop sidebar and the mobile
- * drawer, so both always show the same entries and active state. `--i` drives the staggered label reveal (M-01).
+ * drawer, so both always show the same entries and active state. `--i` drives the staggered label reveal (M-01); one glider
+ * moves between the active entries of both lists and carries the active space colour as its glow.
  */
 export function SpaceNav({ idPrefix }: { idPrefix: string }) {
   const { state, dispatch, library, notify } = usePreview();
@@ -21,9 +23,14 @@ export function SpaceNav({ idPrefix }: { idPrefix: string }) {
   const go = (next: Location) => dispatch({ type: 'navigate', location: next });
   const indexStyle = (i: number) => ({ '--i': i }) as CSSProperties;
   let index = 0;
+  const locationKey = location.type === 'space' ? location.spaceId : location.collectionId;
+  const navRef = useGlider<HTMLElement>('[aria-current="page"]', [locationKey]);
+  const activeSpace = location.type === 'space' ? library.getSpace(location.spaceId) : undefined;
+  const activeTint = activeSpace ? spaceColorVar(activeSpace.color) : 'var(--cb-accent)';
 
   return (
-    <nav className="cb-nav" aria-label="Spaces und Schnellzugriff">
+    <nav ref={navRef} className="cb-nav" aria-label="Spaces und Schnellzugriff" style={{ '--cb-active-tint': activeTint } as CSSProperties}>
+      <span className="cb-glider cb-nav__glider" aria-hidden="true" />
       <h2 className="cb-nav__heading" id={`${idPrefix}-spaces`}>
         Deine Spaces
       </h2>

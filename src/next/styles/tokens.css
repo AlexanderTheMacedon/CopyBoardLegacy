@@ -1,10 +1,21 @@
 /*
- * CopyBoard 2 design tokens — Run C (Design WOW v1).
- * Calibrated from the Blueprint 04 [PROPOSAL] candidates against rendered screens in light and dark. Still not final
- * product tokens (DS-TOKEN-01..03 stay open), but one consistent system:
- *   primitives (--cb-p-*) → semantic (--cb-*) → component (--cb-card-*, --cb-dock-* …).
- * Components only use semantic and component tokens. Reduced motion collapses every duration to 0 (Blueprint 03 §4.5).
+ * CopyBoard 2 design tokens — Glass Experience WOW v2 (builds on Run C · Soft Studio / Mist & Lavender).
+ *   primitives (--cb-p-*) → semantic (--cb-*) → material (--cb-glass-*) → component (--cb-card-*, …).
+ * Material system: every surface is one of four glass tiers over the same ambient scene —
+ *   thin    chips, segmented tracks, small controls   (most transparent, light blur)
+ *   regular cards, composer, sidebar pills            (translucent, readable)
+ *   thick   inspector, palette, settings, popovers    (dense frost for long reading)
+ *   solid   code and text reading areas inside glass  (opaque where legibility wins)
+ * Each tier shares the same lit edge (top highlight + hairline rim) and elevation family, so every component has one DNA.
+ * Reduced motion collapses every duration to 0; reduced transparency swaps glass for opaque fills.
  */
+
+/* Pointer light intensity on cards (registered so it can transition). */
+@property --cb-light {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
 
 .cb-app {
   /* --- Primitives: Mist & Lavender brand study (D-013) --- */
@@ -15,6 +26,7 @@
   --cb-p-iris: #6e5fcb;
   --cb-p-iris-deep: #4f41a8;
   --cb-p-graphite: #27223a;
+  --cb-p-ember: #ffd4bd;
 
   /* --- Space identity colours (D-018/D-031): ambient tint and small markers only, never status --- */
   --cb-space-lavender: #b9a3f3;
@@ -34,18 +46,21 @@
   --cb-space-10: 40px;
   --cb-space-12: 48px;
 
-  /* --- Radius hierarchy (D-014): controls < cards < panels < sheets. Boost compensates the optically smaller squircle. --- */
+  /* --- Radius hierarchy (D-014): one nested squircle family. Inner radius = outer radius − inset. --- */
   --cb-squircle-boost: 1;
-  --cb-radius-control-sm: calc(9px * var(--cb-squircle-boost));
-  --cb-radius-control: calc(12px * var(--cb-squircle-boost));
-  --cb-radius-card: calc(20px * var(--cb-squircle-boost));
-  --cb-radius-panel: calc(24px * var(--cb-squircle-boost));
-  --cb-radius-sheet: calc(30px * var(--cb-squircle-boost));
+  --cb-radius-control-sm: calc(10px * var(--cb-squircle-boost));
+  --cb-radius-control: calc(14px * var(--cb-squircle-boost));
+  --cb-radius-card: calc(22px * var(--cb-squircle-boost));
+  --cb-radius-panel: calc(28px * var(--cb-squircle-boost));
+  --cb-radius-sheet: calc(34px * var(--cb-squircle-boost));
+  --cb-radius-pill: 999px;
+  /* Track + thumb of segmented controls and chip rows share one inset */
+  --cb-track-inset: 4px;
 
-  /* --- Typography: Soft Editorial (D-016). System stack until the font licence gate; expressive display sizes. --- */
+  /* --- Typography: Soft Editorial (D-016). System stack until the font licence gate. --- */
   --cb-font-ui: system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --cb-font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
-  --cb-text-display: 700 clamp(34px, 3.7vw, 46px) / 1.06 var(--cb-font-ui);
+  --cb-text-display: 720 clamp(36px, 3.4vw, 50px) / 1.02 var(--cb-font-ui);
   --cb-text-section: 650 24px / 30px var(--cb-font-ui);
   --cb-text-panel: 650 18px / 24px var(--cb-font-ui);
   --cb-text-body: 400 15px / 23px var(--cb-font-ui);
@@ -53,33 +68,46 @@
   --cb-text-meta: 400 13px / 18px var(--cb-font-ui);
   --cb-text-caption: 500 12px / 16px var(--cb-font-ui);
   --cb-text-mono: 400 13px / 1.6 var(--cb-font-mono);
-  --cb-tracking-display: -0.028em;
-  --cb-tracking-heading: -0.016em;
+  --cb-tracking-display: -0.036em;
+  --cb-tracking-heading: -0.018em;
+  --cb-tracking-eyebrow: 0.09em;
 
-  /* --- Motion grammar (D-017 · 80 % expressive / 20 % soft choreography) --- */
+  /* --- Motion system (D-017). Fast for direct interaction, soft for layout, spatial for overlays. --- */
   --cb-dur-instant: 80ms;
+  --cb-dur-hover: 160ms;
   --cb-dur-micro: 150ms;
+  --cb-dur-select: 240ms;
   --cb-dur-swift: 220ms;
   --cb-dur-standard: 300ms;
+  --cb-dur-panel: 380ms;
+  --cb-dur-overlay: 340ms;
+  --cb-dur-exit: 190ms;
   --cb-dur-expressive: 440ms;
-  --cb-dur-ambient: 32s;
-  --cb-stagger: 28ms;
+  --cb-dur-ambient: 48s;
+  --cb-stagger: 26ms;
   --cb-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --cb-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* glide: long, decelerating tail for layout and panels */
+  --cb-ease-glide: cubic-bezier(0.32, 0.72, 0, 1);
+  --cb-ease-exit: cubic-bezier(0.4, 0, 0.9, 0.4);
   --cb-ease-spring: cubic-bezier(0.3, 1.35, 0.5, 1);
   --cb-ease-spring-soft: cubic-bezier(0.34, 1.12, 0.64, 1);
-  --cb-hover-lift: -3px;
+  /* physical springs (damped, sampled); browsers without linear() fall back to their default curve */
+  --cb-spring: linear(0, 0.0384, 0.1311, 0.2511, 0.3797, 0.5045, 0.618, 0.7163, 0.7981, 0.8638, 0.9146, 0.9525, 0.9797, 0.9981, 1.0098, 1.0164, 1.0194, 1.0199, 1.0187, 1.0167, 1.0142, 1.0117, 1.0092, 1.0071, 1.0052, 1.0036, 1.0024, 1.0015, 1);
+  --cb-spring-bouncy: linear(0, 0.0396, 0.1386, 0.271, 0.4167, 0.5607, 0.6927, 0.8066, 0.8996, 0.9711, 1.0226, 1.0564, 1.0755, 1.0831, 1.0821, 1.0752, 1.0649, 1.053, 1.0408, 1.0293, 1.0193, 1.0109, 1.0043, 0.9994, 0.9961, 0.9941, 0.9932, 0.9931, 0.9935, 0.9943, 0.9952, 0.9962, 1);
+  --cb-hover-lift: -4px;
   --cb-settle-scale: 1.018;
-  --cb-enter-shift: 12px;
+  --cb-enter-shift: 14px;
 
-  /* --- Layout (Blueprint 04 §4.2 candidates) --- */
-  --cb-rail-w: 68px;
+  /* --- Layout --- */
+  --cb-float: 12px; /* distance of floating panels to the window edge */
+  --cb-rail-w: 60px;
   --cb-sidebar-w: 260px;
   --cb-inspector-w: 400px;
   --cb-rail-context-w: 300px;
-  --cb-toolbar-h: 60px;
+  --cb-toolbar-h: 64px;
   --cb-dock-h: 68px;
-  --cb-ambient-h: 560px;
+  --cb-ambient-h: 520px;
   --cb-safe-bottom: env(safe-area-inset-bottom, 0px);
   --cb-safe-top: env(safe-area-inset-top, 0px);
   --cb-content-max: 1320px;
@@ -90,25 +118,26 @@
   --cb-focus-offset: 2px;
 }
 
-/* --- Semantic colours: light (Blueprint 04 §1.2, calibrated) --- */
+/* --- Semantic colours + glass materials: light --- */
 .cb-app,
 .cb-app[data-theme='light'] {
   color-scheme: light;
-  --cb-surface-canvas: #f7f5fb;
+  --cb-surface-canvas: #f3f0fa;
   --cb-surface-base: #ffffff;
   --cb-surface-subtle: #f3f0f9;
-  --cb-surface-hover: #eee9f7;
-  --cb-surface-selected: #e9e2fa;
+  --cb-surface-hover: #ece6f8;
+  --cb-surface-selected: #e6ddfb;
   --cb-surface-inverse: #241f36;
-  --cb-text-primary: #27223a;
-  --cb-text-secondary: #5f5873;
-  --cb-text-tertiary: #7c7590;
+  --cb-text-primary: #221d35;
+  --cb-text-secondary: #5a536e;
+  --cb-text-tertiary: #7a7390;
   --cb-text-on-inverse: #e9e4f6;
-  --cb-border-subtle: #e6e1ef;
-  --cb-border-strong: #d2cbe0;
-  --cb-accent: #6e5fcb;
-  --cb-accent-hover: #5a4bb9;
-  --cb-accent-soft: #ece7fb;
+  --cb-border-subtle: #e4def0;
+  --cb-border-strong: #cfc6e2;
+  --cb-accent: #6a5ad0;
+  --cb-accent-hover: #5747bd;
+  --cb-accent-soft: #ebe5fd;
+  --cb-accent-glow: rgb(122 101 240 / 0.38);
   --cb-on-accent: #ffffff;
   --cb-focus-ring: #5a4bb9;
   --cb-status-success: #1f6e52;
@@ -117,48 +146,77 @@
   --cb-status-info: #3e5fab;
   --cb-status-warning-soft: #fbf1dc;
   --cb-status-error-soft: #fbe3e8;
-  /* Ambient light fields (D-019/D-031) */
+  --cb-logo-a: #5b49d6;
+  --cb-logo-b: #a48cff;
+
+  /* Ambient scene (D-019/D-031) */
+  --cb-scene-base: linear-gradient(168deg, #f1edfb 0%, #ece8fa 38%, #f4eff9 72%, #f6f0f5 100%);
   --cb-orb-lilac: #cdbcff;
   --cb-orb-orchid: #ebc2f7;
   --cb-orb-periwinkle: #b6c0ff;
   --cb-orb-iris: #a394f4;
-  --cb-ambient-opacity: 0.92;
-  --cb-ambient-wash: color-mix(in srgb, var(--cb-p-lilac) 34%, transparent);
-  /* Material tiers (D-015 · ~70 % opaque soft elevation / ~30 % frosted accents) */
-  --cb-frosted-popover: rgb(255 255 255 / 0.8);
-  --cb-frosted-floating: rgb(255 255 255 / 0.76);
-  --cb-frosted-sticky: rgb(247 245 251 / 0.84);
-  --cb-blur-popover: 24px;
-  --cb-blur-sticky: 16px;
-  --cb-backdrop: rgb(30 24 52 / 0.34);
-  --cb-shadow-color: 50 40 96;
-  --cb-shadow-1: 0 1px 2px rgb(var(--cb-shadow-color) / 0.05), 0 2px 10px rgb(var(--cb-shadow-color) / 0.05);
-  --cb-shadow-2: 0 2px 4px rgb(var(--cb-shadow-color) / 0.05), 0 10px 28px -6px rgb(var(--cb-shadow-color) / 0.14);
-  --cb-shadow-3: 0 4px 10px rgb(var(--cb-shadow-color) / 0.06), 0 22px 48px -12px rgb(var(--cb-shadow-color) / 0.22);
-  --cb-shadow-4: 0 10px 24px rgb(var(--cb-shadow-color) / 0.1), 0 40px 90px -20px rgb(var(--cb-shadow-color) / 0.32);
-  --cb-code-bg: #2a2540;
-  --cb-code-text: #d9d2f2;
+  --cb-orb-warm: #ffd9c4;
+  --cb-bokeh: rgb(255 255 255 / 0.55);
+  --cb-bokeh-tint: rgb(196 178 255 / 0.32);
+  --cb-ambient-opacity: 0.82;
+  --cb-ambient-wash: color-mix(in srgb, var(--cb-p-lilac) 26%, transparent);
+
+  /* Glass materials */
+  --cb-glass-thin: rgb(255 255 255 / 0.46);
+  --cb-glass-regular: rgb(255 255 255 / 0.62);
+  --cb-glass-thick: rgb(250 248 255 / 0.78);
+  --cb-glass-solid: rgb(255 255 255 / 0.92);
+  --cb-glass-hover: rgb(255 255 255 / 0.74);
+  --cb-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0) 46%);
+  --cb-glass-rim: rgb(255 255 255 / 0.78);
+  --cb-glass-rim-soft: rgb(255 255 255 / 0.5);
+  --cb-glass-hairline: rgb(92 76 150 / 0.11);
+  --cb-glass-lit: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(255 255 255 / 0.28);
+  --cb-glass-saturate: 1.7;
+  --cb-blur-thin: 14px;
+  --cb-blur-regular: 24px;
+  --cb-blur-thick: 40px;
+  --cb-divider: linear-gradient(90deg, transparent, rgb(92 76 150 / 0.14) 18%, rgb(92 76 150 / 0.14) 82%, transparent);
+
+  /* legacy material aliases (used across features) now point into the glass system */
+  --cb-frosted-popover: var(--cb-glass-thick);
+  --cb-frosted-floating: var(--cb-glass-regular);
+  --cb-frosted-sticky: var(--cb-glass-regular);
+  --cb-blur-popover: var(--cb-blur-thick);
+  --cb-blur-sticky: var(--cb-blur-regular);
+
+  --cb-backdrop: rgb(36 26 72 / 0.26);
+  --cb-shadow-color: 62 46 128;
+  --cb-shadow-1: 0 1px 2px rgb(var(--cb-shadow-color) / 0.06), 0 4px 14px -4px rgb(var(--cb-shadow-color) / 0.1);
+  --cb-shadow-2: 0 2px 4px rgb(var(--cb-shadow-color) / 0.05), 0 14px 34px -10px rgb(var(--cb-shadow-color) / 0.2);
+  --cb-shadow-3: 0 4px 12px rgb(var(--cb-shadow-color) / 0.06), 0 28px 60px -18px rgb(var(--cb-shadow-color) / 0.28);
+  --cb-shadow-4: 0 10px 28px rgb(var(--cb-shadow-color) / 0.1), 0 50px 110px -28px rgb(var(--cb-shadow-color) / 0.4);
+  --cb-scroll-thumb: rgb(92 76 150 / 0.34);
+  --cb-scroll-thumb-idle: rgb(92 76 150 / 0.14);
+  --cb-code-bg: #241f38;
+  --cb-code-text: #ddd6f6;
   --cb-code-muted: #8c82b4;
 }
 
-/* --- Semantic colours: dark — own graphite/aubergine studio with controlled violet light (D-031) --- */
+/* --- Semantic colours + glass materials: dark — graphite/aubergine studio with controlled violet light (D-031) --- */
 .cb-app[data-theme='dark'] {
   color-scheme: dark;
-  --cb-surface-canvas: #15121f;
-  --cb-surface-base: #1f1b2c;
-  --cb-surface-subtle: #272336;
-  --cb-surface-hover: #302b42;
-  --cb-surface-selected: #3a3157;
+  --cb-surface-canvas: #110e1a;
+  --cb-surface-base: #1d1929;
+  --cb-surface-subtle: #251f33;
+  --cb-surface-hover: #2e2840;
+  --cb-surface-selected: #3a3058;
   --cb-surface-inverse: #f3effa;
-  --cb-text-primary: #f3effa;
-  --cb-text-secondary: #c3bbd3;
-  --cb-text-tertiary: #9790ab;
+  --cb-text-primary: #f4f0fb;
+  --cb-text-secondary: #c4bcd6;
+  --cb-text-tertiary: #978fae;
   --cb-text-on-inverse: #27223a;
-  --cb-border-subtle: #332e45;
-  --cb-border-strong: #4a4360;
+  --cb-border-subtle: #322b46;
+  --cb-border-strong: #4a4262;
   --cb-accent: #b6a5ff;
-  --cb-accent-hover: #c9bbff;
-  --cb-accent-soft: #312a4d;
+  --cb-accent-hover: #cbbdff;
+  --cb-accent-soft: #2f284b;
+  --cb-accent-glow: rgb(150 128 255 / 0.4);
   --cb-on-accent: #1b1630;
   --cb-focus-ring: #c9bbff;
   --cb-status-success: #83dbb5;
@@ -167,22 +225,42 @@
   --cb-status-info: #a0bfff;
   --cb-status-warning-soft: #3a3020;
   --cb-status-error-soft: #45222c;
-  --cb-orb-lilac: #7a63e6;
-  --cb-orb-orchid: #a86fd9;
-  --cb-orb-periwinkle: #5e6fe0;
-  --cb-orb-iris: #8b78f0;
-  --cb-ambient-opacity: 0.6;
-  --cb-ambient-wash: color-mix(in srgb, #5e4bc8 22%, transparent);
-  --cb-frosted-popover: rgb(31 27 44 / 0.82);
-  --cb-frosted-floating: rgb(31 27 44 / 0.8);
-  --cb-frosted-sticky: rgb(21 18 31 / 0.82);
-  --cb-backdrop: rgb(6 4 14 / 0.6);
+  --cb-logo-a: #9d8bff;
+  --cb-logo-b: #e2d9ff;
+
+  --cb-scene-base: linear-gradient(168deg, #15111f 0%, #110e1a 45%, #140f1c 100%);
+  --cb-orb-lilac: #5b45c9;
+  --cb-orb-orchid: #8a4fc0;
+  --cb-orb-periwinkle: #3f4fc4;
+  --cb-orb-iris: #6f5be0;
+  --cb-orb-warm: #8a4a52;
+  --cb-bokeh: rgb(214 200 255 / 0.12);
+  --cb-bokeh-tint: rgb(150 120 255 / 0.16);
+  --cb-ambient-opacity: 0.55;
+  --cb-ambient-wash: color-mix(in srgb, #5e4bc8 18%, transparent);
+
+  --cb-glass-thin: rgb(44 38 64 / 0.42);
+  --cb-glass-regular: rgb(34 29 50 / 0.58);
+  --cb-glass-thick: rgb(26 22 39 / 0.8);
+  --cb-glass-solid: rgb(29 25 41 / 0.94);
+  --cb-glass-hover: rgb(48 41 70 / 0.66);
+  --cb-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0) 46%);
+  --cb-glass-rim: rgb(255 255 255 / 0.1);
+  --cb-glass-rim-soft: rgb(255 255 255 / 0.06);
+  --cb-glass-hairline: rgb(255 255 255 / 0.08);
+  --cb-glass-lit: inset 0 1px 0 rgb(255 255 255 / 0.1), inset 0 -1px 0 rgb(255 255 255 / 0.02);
+  --cb-glass-saturate: 1.5;
+  --cb-divider: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.09) 18%, rgb(255 255 255 / 0.09) 82%, transparent);
+
+  --cb-backdrop: rgb(6 4 14 / 0.56);
   --cb-shadow-color: 0 0 0;
-  --cb-shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 10px rgb(0 0 0 / 0.2);
-  --cb-shadow-2: 0 2px 4px rgb(0 0 0 / 0.3), 0 12px 30px -6px rgb(0 0 0 / 0.45);
-  --cb-shadow-3: 0 4px 10px rgb(0 0 0 / 0.3), 0 24px 50px -12px rgb(0 0 0 / 0.6);
-  --cb-shadow-4: 0 10px 24px rgb(0 0 0 / 0.35), 0 40px 90px -20px rgb(0 0 0 / 0.7);
-  --cb-code-bg: #16131f;
+  --cb-shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px -4px rgb(0 0 0 / 0.35);
+  --cb-shadow-2: 0 2px 4px rgb(0 0 0 / 0.3), 0 14px 34px -10px rgb(0 0 0 / 0.55);
+  --cb-shadow-3: 0 4px 12px rgb(0 0 0 / 0.3), 0 28px 60px -18px rgb(0 0 0 / 0.65);
+  --cb-shadow-4: 0 10px 28px rgb(0 0 0 / 0.4), 0 50px 110px -28px rgb(0 0 0 / 0.75);
+  --cb-scroll-thumb: rgb(220 210 255 / 0.3);
+  --cb-scroll-thumb-idle: rgb(220 210 255 / 0.1);
+  --cb-code-bg: #14111d;
   --cb-code-text: #ddd6f3;
   --cb-code-muted: #7e74a6;
 }
@@ -191,24 +269,24 @@
 .cb-grid,
 .cb-grid[data-density='standard'] {
   --cb-card-min: 224px;
-  --cb-card-gap: 16px;
-  --cb-card-inset: 12px;
-  --cb-preview-h: 128px;
-  --cb-row-min-h: 56px;
+  --cb-card-gap: 18px;
+  --cb-card-inset: 10px;
+  --cb-preview-h: 132px;
+  --cb-row-min-h: 58px;
 }
 .cb-grid[data-density='comfort'] {
-  --cb-card-min: 280px;
-  --cb-card-gap: 22px;
-  --cb-card-inset: 16px;
-  --cb-preview-h: 188px;
-  --cb-row-min-h: 68px;
+  --cb-card-min: 288px;
+  --cb-card-gap: 24px;
+  --cb-card-inset: 12px;
+  --cb-preview-h: 192px;
+  --cb-row-min-h: 70px;
 }
 .cb-grid[data-density='compact'] {
   --cb-card-min: 180px;
-  --cb-card-gap: 10px;
-  --cb-card-inset: 10px;
-  --cb-preview-h: 88px;
-  --cb-row-min-h: 46px;
+  --cb-card-gap: 12px;
+  --cb-card-inset: 8px;
+  --cb-preview-h: 92px;
+  --cb-row-min-h: 48px;
 }
 
 /* --- Real squircle silhouettes where supported (D-014); border-radius stays the fallback --- */
@@ -221,6 +299,7 @@
   .cb-tile__preview,
   .cb-capture,
   .cb-capture__lead,
+  .cb-inspector,
   .cb-inspector__image,
   .cb-inspector__content,
   .cb-dialog__panel,
@@ -229,14 +308,17 @@
   .cb-dock,
   .cb-button,
   .cb-icon-button,
-  .cb-segmented,
+  .cb-segmented--segmented,
+  .cb-segmented--segmented .cb-glider,
   .cb-nav__swatch,
   .cb-brand-mark,
   .cb-empty__art,
   .cb-palette__icon,
+  .cb-palette__glider,
+  .cb-settings__glider,
+  .cb-settings__row,
   .cb-rail__slot,
   .cb-notice,
-  .cb-hero__fact,
   .cb-search-trigger {
     corner-shape: squircle;
   }
@@ -246,9 +328,14 @@
 @media (prefers-reduced-motion: reduce) {
   .cb-app {
     --cb-dur-instant: 0ms;
+    --cb-dur-hover: 0ms;
     --cb-dur-micro: 0ms;
+    --cb-dur-select: 0ms;
     --cb-dur-swift: 0ms;
     --cb-dur-standard: 0ms;
+    --cb-dur-panel: 0ms;
+    --cb-dur-overlay: 0ms;
+    --cb-dur-exit: 0ms;
     --cb-dur-expressive: 0ms;
     --cb-stagger: 0ms;
     --cb-hover-lift: 0px;
@@ -260,15 +347,18 @@
 /* --- Reduced transparency / no backdrop-filter: opaque fallbacks (D-031 accessibility) --- */
 @media (prefers-reduced-transparency: reduce) {
   .cb-app[data-theme] {
-    --cb-frosted-popover: var(--cb-surface-base);
-    --cb-frosted-floating: var(--cb-surface-base);
-    --cb-frosted-sticky: var(--cb-surface-canvas);
+    --cb-glass-thin: var(--cb-surface-subtle);
+    --cb-glass-regular: var(--cb-surface-base);
+    --cb-glass-thick: var(--cb-surface-base);
+    --cb-glass-solid: var(--cb-surface-base);
+    --cb-glass-hover: var(--cb-surface-hover);
   }
 }
 @supports not (backdrop-filter: blur(1px)) {
   .cb-app[data-theme] {
-    --cb-frosted-popover: var(--cb-surface-base);
-    --cb-frosted-floating: var(--cb-surface-base);
-    --cb-frosted-sticky: var(--cb-surface-canvas);
+    --cb-glass-thin: var(--cb-surface-subtle);
+    --cb-glass-regular: var(--cb-surface-base);
+    --cb-glass-thick: var(--cb-surface-base);
+    --cb-glass-solid: var(--cb-surface-base);
   }
 }

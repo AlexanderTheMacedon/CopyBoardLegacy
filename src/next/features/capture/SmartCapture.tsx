@@ -68,7 +68,8 @@ export function SmartCapture() {
         <textarea
           id={CAPTURE_INPUT_ID}
           className="cb-capture__input"
-          rows={captureState === 'rest' ? 1 : 3}
+          // One row; height is driven by CSS (min-height transition + field-sizing), so expanding never jumps.
+          rows={1}
           placeholder={space ? `In „${space.name}“ schreiben, einfügen oder ablegen …` : 'Schreiben, einfügen oder ablegen …'}
           value={text}
           onChange={(event) => setText(event.target.value)}

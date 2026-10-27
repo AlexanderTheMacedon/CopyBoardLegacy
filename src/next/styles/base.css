@@ -13,7 +13,7 @@ body {
 }
 
 body {
-  background: #f7f5fb;
+  background: #f3f0fa;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -21,7 +21,7 @@ body {
 
 @media (prefers-color-scheme: dark) {
   body {
-    background: #15121f;
+    background: #110e1a;
   }
 }
 
@@ -38,8 +38,108 @@ body {
   font: var(--cb-text-body);
   font-feature-settings: 'cv11', 'ss01', 'calt';
   transition: background-color var(--cb-dur-expressive) var(--cb-ease-out), color var(--cb-dur-expressive) var(--cb-ease-out);
-  scrollbar-color: color-mix(in srgb, var(--cb-text-tertiary) 45%, transparent) transparent;
+  scrollbar-color: var(--cb-scroll-thumb-idle) transparent;
   scrollbar-width: thin;
+}
+/* --- Ambient scene: one living light field behind every glass surface. First child of the app; every shell layer after it
+   is positioned, so it paints above the scene in tree order. ------------------------------------------------------- */
+.cb-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--cb-scene-base);
+  transition: background var(--cb-dur-expressive) var(--cb-ease-out);
+}
+.cb-scene__field {
+  position: absolute;
+  border-radius: 50%;
+}
+.cb-scene__field--lilac {
+  width: 70vmax;
+  height: 70vmax;
+  left: -24vmax;
+  top: -34vmax;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--cb-orb-lilac) 78%, transparent), transparent);
+}
+.cb-scene__field--periwinkle {
+  width: 64vmax;
+  height: 64vmax;
+  right: -26vmax;
+  top: -22vmax;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--cb-orb-periwinkle) 70%, transparent), transparent);
+}
+/* warm counter-light from the lower right: the studio window */
+.cb-scene__field--warm {
+  width: 60vmax;
+  height: 60vmax;
+  right: -18vmax;
+  bottom: -32vmax;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--cb-orb-warm) 70%, transparent), transparent);
+}
+.cb-scene__field--orchid {
+  width: 52vmax;
+  height: 52vmax;
+  left: 10vmax;
+  bottom: -30vmax;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--cb-orb-orchid) 52%, transparent), transparent);
+}
+/* bokeh: out-of-focus light discs with a slightly brighter rim */
+.cb-scene__bokeh {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--cb-bokeh-tint) 0 52%, var(--cb-bokeh) 64%, transparent 71%);
+  opacity: 0.7;
+  animation: cb-bokeh-drift var(--cb-dur-ambient) var(--cb-ease-in-out) infinite alternate;
+}
+.cb-scene__bokeh--1 { width: 220px; height: 220px; left: 58%; top: 6%; animation-delay: -12s; }
+.cb-scene__bokeh--2 { width: 120px; height: 120px; left: 78%; top: 28%; opacity: 0.55; animation-delay: -30s; }
+.cb-scene__bokeh--3 { width: 64px; height: 64px; left: 38%; top: 16%; opacity: 0.5; animation-delay: -6s; }
+.cb-scene__bokeh--4 { width: 300px; height: 300px; left: 86%; top: 62%; opacity: 0.45; animation-delay: -22s; }
+.cb-scene__bokeh--5 { width: 90px; height: 90px; left: 18%; top: 70%; opacity: 0.45; animation-delay: -40s; }
+.cb-scene__bokeh--6 { width: 40px; height: 40px; left: 70%; top: 48%; opacity: 0.6; animation-delay: -18s; }
+.cb-scene__bokeh--7 { width: 160px; height: 160px; left: 6%; top: 34%; opacity: 0.35; animation-delay: -3s; }
+@keyframes cb-bokeh-drift {
+  to {
+    transform: translate3d(-3vw, 4vh, 0) scale(1.06);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cb-scene__bokeh {
+    animation: none;
+  }
+}
+
+/* --- Overlay-style scrollbars: thin, invisible at rest, visible on hover and while scrolling ---------------------- */
+.cb-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 480ms var(--cb-ease-out);
+}
+.cb-scroll:hover {
+  scrollbar-color: var(--cb-scroll-thumb-idle) transparent;
+}
+.cb-scroll[data-scrolling] {
+  scrollbar-color: var(--cb-scroll-thumb) transparent;
+  transition-duration: 120ms;
+}
+
+/* --- Selection glider (motion.ts useGlider): one indicator glides to the active option ------------------------------ */
+.cb-glider {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--glider-w, 0px);
+  height: var(--glider-h, 0px);
+  transform: translate3d(var(--glider-x, 0px), var(--glider-y, 0px), 0);
+  opacity: var(--glider-o, 0);
+  pointer-events: none;
+}
+[data-glide='on'] > .cb-glider {
+  transition: transform var(--cb-dur-select) var(--cb-spring), width var(--cb-dur-select) var(--cb-spring),
+    height var(--cb-dur-select) var(--cb-spring), opacity var(--cb-dur-hover) var(--cb-ease-out),
+    background-color var(--cb-dur-select) var(--cb-ease-out), box-shadow var(--cb-dur-select) var(--cb-ease-out);
 }
 
 .cb-app ::selection {
@@ -156,6 +256,20 @@ body {
   from {
     opacity: 0;
     transform: scale(0.94) translateY(-4px);
+  }
+}
+@keyframes cb-glass-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--cb-enter-shift)) scale(0.97);
+    filter: blur(6px);
+  }
+}
+@keyframes cb-glass-out {
+  to {
+    opacity: 0;
+    transform: translateY(calc(var(--cb-enter-shift) * -0.5)) scale(0.98);
+    filter: blur(4px);
   }
 }
 @keyframes cb-pulse {

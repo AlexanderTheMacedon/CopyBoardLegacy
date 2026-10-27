@@ -167,6 +167,8 @@ test('P4', 'card opens the inspector, focus moves to it and Escape returns focus
   const current = await page.$eval('.cb-tile[data-item-id="it-snippet-debounce"] .cb-tile__open', (e) => e.getAttribute('aria-current'));
   const board = await page.$$eval('.cb-grid .cb-tile', (els) => els.length);
   await page.keyboard.press('Escape');
+  // The inspector plays a short exit transition before it unmounts.
+  await page.waitForSelector('.cb-inspector', { state: 'detached', timeout: 2000 }).catch(() => {});
   await settle(page);
   const open = await page.$('.cb-inspector');
   const focus2 = await focusedId(page);

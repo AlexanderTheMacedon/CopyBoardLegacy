@@ -6,6 +6,7 @@ import { DemoBadge } from '../../components/DemoBadge';
 import { Dialog } from '../../components/Dialog';
 import { Icon, type IconName } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
+import { useGlider, useScrollFade } from '../../components/motion';
 import { SegmentedControl } from '../../components/SegmentedControl';
 
 const sections: readonly { id: SettingsSection; label: string; icon: IconName }[] = [
@@ -96,10 +97,24 @@ function SectionContent({ section }: { section: SettingsSection }) {
   }
 }
 
+function SettingsPanel({ section }: { section: SettingsSection }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useScrollFade(ref);
+  return (
+    <div ref={ref} role="tabpanel" id="cb-settings-panel" aria-labelledby={`cb-settings-tab-${section}`} className="cb-settings__panel cb-scroll">
+      {/* Keyed content replays the section reveal; the scroller itself stays. */}
+      <div key={section} className="cb-settings__section">
+        <SectionContent section={section} />
+      </div>
+    </div>
+  );
+}
+
 /** Settings Studio (D-033, DS-C37): same preference state as the Quick Preferences; data/security areas are prepared only. */
 export function SettingsStudio() {
   const { state, dispatch } = usePreview();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const tabListRef = useGlider<HTMLDivElement>('[aria-selected="true"]', [state.settingsSection]);
   const close = () => dispatch({ type: 'closeOverlay' });
   const current = sections.findIndex((s) => s.id === state.settingsSection);
 
@@ -122,7 +137,8 @@ export function SettingsStudio() {
           <IconButton icon="x" label="Einstellungen schließen" onClick={close} />
         </header>
         <div className="cb-settings__layout">
-          <div role="tablist" aria-label="Bereiche" aria-orientation="vertical" className="cb-settings__tabs" onKeyDown={onTabKeyDown}>
+          <div ref={tabListRef} role="tablist" aria-label="Bereiche" aria-orientation="vertical" className="cb-settings__tabs" onKeyDown={onTabKeyDown}>
+            <span className="cb-glider cb-settings__glider" aria-hidden="true" />
             {sections.map((section, index) => (
               <button
                 key={section.id}
@@ -143,9 +159,7 @@ export function SettingsStudio() {
               </button>
             ))}
           </div>
-          <div key={state.settingsSection} role="tabpanel" id="cb-settings-panel" aria-labelledby={`cb-settings-tab-${state.settingsSection}`} className="cb-settings__panel">
-            <SectionContent section={state.settingsSection} />
-          </div>
+          <SettingsPanel section={state.settingsSection} />
         </div>
       </div>
     </Dialog>

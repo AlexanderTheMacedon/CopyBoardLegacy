@@ -1,23 +1,20 @@
 import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { usePreview } from '../../app/context';
-import { Icon, type IconName } from '../../components/Icon';
+import type { BoardFilter } from '../../app/state';
+import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { Popover } from '../../components/Popover';
+import { SegmentedControl, type SegmentOption } from '../../components/SegmentedControl';
 import { focusCapture } from '../capture/SmartCapture';
 import { spaceColorVar } from '../items/item-meta';
 import { ThemeQuickPreference } from './QuickPreferences';
 
-export interface HeaderFact {
-  readonly icon: IconName;
-  readonly label: string;
-}
-
 interface WorkspaceHeaderProps {
-  eyebrow: string;
   title: string;
-  description: string;
-  /** Small facts under the title (counts per type, favourites …); purely informational. */
-  facts?: readonly HeaderFact[];
+  /** Filter chips under the title, built from the real items of the location. */
+  filters?: readonly SegmentOption<BoardFilter>[];
+  filter: BoardFilter;
+  onFilterChange: (filter: BoardFilter) => void;
   /** Short count label for the collapsed toolbar, e.g. "6 Inhalte". */
   countLabel?: string;
   /** Scroll container of the workspace; the toolbar collapses when the hero scrolls away. */
@@ -52,7 +49,7 @@ function TrustIndicator() {
  * presentation via `data-collapsed`, so Search/Capture/Trust never remount (SM-10). Collapse is scroll-driven with a
  * hysteresis band instead of a single threshold.
  */
-export function WorkspaceHeader({ eyebrow, title, description, facts, countLabel, scrollRoot }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ title, filters, filter, onFilterChange, countLabel, scrollRoot }: WorkspaceHeaderProps) {
   const { state, dispatch, library } = usePreview();
   const [collapsed, setCollapsed] = useState(false);
   const space = state.location.type === 'space' ? library.getSpace(state.location.spaceId) : undefined;
@@ -130,24 +127,22 @@ export function WorkspaceHeader({ eyebrow, title, description, facts, countLabel
         <TrustIndicator />
       </div>
 
-      <header className="cb-hero" style={{ '--cb-hero-tint': tint } as CSSProperties}>
-        <p className="cb-hero__eyebrow">
-          {space && <span className="cb-hero__dot" style={{ background: tint }} aria-hidden="true" />}
-          {eyebrow}
-        </p>
-        <h1 className="cb-hero__title" id="cb-workspace-title">
-          {title}
-        </h1>
-        <p className="cb-hero__description">{description}</p>
-        {facts && facts.length > 0 && (
-          <ul className="cb-hero__facts" aria-label="Überblick">
-            {facts.map((fact) => (
-              <li key={fact.label} className="cb-hero__fact">
-                <Icon name={fact.icon} size={14} />
-                {fact.label}
-              </li>
-            ))}
-          </ul>
+      {/* Radical header: only the board name and its filters (Glass WOW v2). */}
+      <header className="cb-hero">
+        <div className="cb-hero__heading">
+          <h1 className="cb-hero__title" id="cb-workspace-title">
+            {title}
+          </h1>
+        </div>
+        {filters && (
+          <SegmentedControl
+            label="Inhalte filtern"
+            variant="chips"
+            options={filters}
+            value={filter}
+            onChange={onFilterChange}
+            className="cb-hero__filters"
+          />
         )}
       </header>
     </>

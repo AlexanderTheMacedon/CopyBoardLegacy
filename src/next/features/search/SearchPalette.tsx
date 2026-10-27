@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties, type KeyboardEvent } from 'react
 import { usePreview } from '../../app/context';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
+import { useGlider, useScrollFade } from '../../components/motion';
 import { searchItems } from '../../domain/search';
 import type { Item } from '../../domain/types';
 import { kindIcon, kindLabel } from '../items/item-meta';
@@ -25,6 +26,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const entries = [...itemEntries, ...commandEntries];
   const activeIndex = Math.min(active, Math.max(entries.length - 1, 0));
   const activeEntry = entries[activeIndex];
+  // One selection surface glides between results (keyboard and pointer alike); the list fades its scrollbar.
+  const resultsRef = useGlider<HTMLDivElement>('[aria-selected="true"]', [activeEntry?.id, query]);
+  useScrollFade(resultsRef);
 
   const activate = (entry: Entry) => {
     onClose();
@@ -38,7 +42,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       event.preventDefault();
       if (!entries.length) return;
       const delta = event.key === 'ArrowDown' ? 1 : -1;
+      const next = entries[(activeIndex + delta + entries.length) % entries.length];
       setActive((activeIndex + delta + entries.length) % entries.length);
+      if (next) requestAnimationFrame(() => document.getElementById(optionId(next))?.scrollIntoView({ block: 'nearest' }));
     } else if (event.key === 'Enter' && activeEntry) {
       event.preventDefault();
       activate(activeEntry);
@@ -62,7 +68,10 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
               aria-selected={selected}
               className="cb-palette__option"
               style={{ '--i': Math.min(index, 10) } as CSSProperties}
-              onMouseMove={() => !selected && setActive(index)}
+              onMouseMove={(event) => {
+                // Scrolling under a resting pointer fires moves without movement; they must not steal keyboard selection.
+                if (!selected && (event.movementX || event.movementY)) setActive(index);
+              }}
               onClick={() => activate(entry)}
             >
               {entry.kind === 'item' ? (
@@ -120,7 +129,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
         />
         <kbd className="cb-kbd">Esc</kbd>
       </div>
-      <div id="cb-search-results" role="listbox" aria-label="Suchergebnisse" className="cb-palette__results">
+      <div ref={resultsRef} id="cb-search-results" role="listbox" aria-label="Suchergebnisse" className="cb-palette__results cb-scroll">
+        <span className="cb-glider cb-palette__glider" aria-hidden="true" />
         {renderGroup(query.trim() ? 'Inhalte' : 'Zuletzt', itemEntries, 0)}
         {renderGroup('Befehle', commandEntries, itemEntries.length)}
       </div>

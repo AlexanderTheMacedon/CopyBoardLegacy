@@ -1,11 +1,14 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { Icon, type IconName } from './Icon';
+import { useGlider } from './motion';
 
 export interface SegmentOption<V extends string> {
   readonly value: V;
   readonly label: string;
   readonly icon?: IconName;
   readonly disabled?: boolean;
+  /** Optional count shown after the label (filter chips). */
+  readonly count?: number;
 }
 
 interface SegmentedControlProps<V extends string> {
@@ -16,10 +19,12 @@ interface SegmentedControlProps<V extends string> {
   /** Show icons only; labels stay as accessible names and tooltips. */
   iconOnly?: boolean;
   size?: 'sm' | 'md';
+  /** `segmented` = one glass track with a sliding thumb; `chips` = separate glass chips with a sliding accent pill. */
+  variant?: 'segmented' | 'chips';
   className?: string;
 }
 
-/** Single choice as an ARIA radio group with roving tabindex and arrow-key navigation. */
+/** Single choice as an ARIA radio group with roving tabindex, arrow-key navigation and a gliding selection thumb. */
 export function SegmentedControl<V extends string>({
   label,
   options,
@@ -27,9 +32,11 @@ export function SegmentedControl<V extends string>({
   onChange,
   iconOnly = false,
   size = 'md',
+  variant = 'segmented',
   className,
 }: SegmentedControlProps<V>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const groupRef = useGlider<HTMLDivElement>('[aria-checked="true"]', [value, options.length]);
   const enabled = options.filter((o) => !o.disabled);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -42,18 +49,23 @@ export function SegmentedControl<V extends string>({
     const next = enabled[nextIndex];
     if (!next) return;
     onChange(next.value);
-    refs.current[options.indexOf(next)]?.focus();
+    const button = refs.current[options.indexOf(next)];
+    button?.focus();
+    button?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   };
 
   return (
     <div
+      ref={groupRef}
       role="radiogroup"
       aria-label={label}
-      className={`cb-segmented cb-segmented--${size}${className ? ` ${className}` : ''}`}
+      className={`cb-segmented cb-segmented--${size} cb-segmented--${variant}${className ? ` ${className}` : ''}`}
       onKeyDown={onKeyDown}
     >
+      <span className="cb-glider" aria-hidden="true" />
       {options.map((option, index) => {
         const checked = option.value === value;
+        const name = iconOnly ? option.label : option.count !== undefined ? `${option.label}, ${option.count}` : undefined;
         return (
           <button
             key={option.value}
@@ -63,7 +75,7 @@ export function SegmentedControl<V extends string>({
             type="button"
             role="radio"
             aria-checked={checked}
-            aria-label={iconOnly ? option.label : undefined}
+            aria-label={name}
             title={iconOnly ? option.label : undefined}
             tabIndex={checked ? 0 : -1}
             disabled={option.disabled}
@@ -72,6 +84,11 @@ export function SegmentedControl<V extends string>({
           >
             {option.icon && <Icon name={option.icon} size={size === 'sm' ? 16 : 18} />}
             {!iconOnly && <span>{option.label}</span>}
+            {option.count !== undefined && (
+              <span className="cb-segmented__count" aria-hidden="true">
+                {option.count}
+              </span>
+            )}
           </button>
         );
       })}

@@ -1,4 +1,4 @@
-import type { ItemId, Location } from '../domain/types';
+import type { ItemId, ItemKind, Location } from '../domain/types';
 import { defaultPreferences, type Preferences } from './preferences';
 
 // Volatile UI state of the preview (navigation, selection, layers, preferences). Lives only in React memory.
@@ -8,8 +8,12 @@ export type Overlay = 'search' | 'settings' | 'spaces-drawer';
 
 export type SettingsSection = 'general' | 'data' | 'security';
 
+/** Board filter chips: everything, one content kind, or favourites. Belongs to the current location. */
+export type BoardFilter = 'all' | 'favorites' | ItemKind;
+
 export interface UiState {
   readonly location: Location;
+  readonly filter: BoardFilter;
   /** Item shown in the Inspector (detail context, D-004). */
   readonly inspectedItemId: ItemId | null;
   /** Item open in the Hybrid Composer; the Composer replaces the Inspector on the right (IA-02 §3.2). */
@@ -23,6 +27,7 @@ export interface UiState {
 
 export type UiAction =
   | { type: 'navigate'; location: Location }
+  | { type: 'setFilter'; filter: BoardFilter }
   | { type: 'inspect'; itemId: ItemId }
   | { type: 'closeInspector' }
   | { type: 'openComposer'; itemId: ItemId }
@@ -36,6 +41,7 @@ export type UiAction =
 
 export const createInitialState = (location: Location): UiState => ({
   location,
+  filter: 'all',
   inspectedItemId: null,
   composerItemId: null,
   overlay: null,
@@ -52,7 +58,9 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
     case 'navigate':
       // Navigation owns the collection; detail context belongs to the old collection and closes. Recorder keeps running (D-008).
       if (sameLocation(state.location, action.location)) return state.overlay === 'spaces-drawer' ? { ...state, overlay: null } : state;
-      return { ...state, location: action.location, inspectedItemId: null, composerItemId: null, overlay: null };
+      return { ...state, location: action.location, filter: 'all', inspectedItemId: null, composerItemId: null, overlay: null };
+    case 'setFilter':
+      return { ...state, filter: action.filter };
     case 'inspect':
       return { ...state, inspectedItemId: action.itemId, composerItemId: null };
     case 'closeInspector':

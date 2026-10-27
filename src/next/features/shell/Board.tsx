@@ -1,40 +1,46 @@
 import type { RefObject } from 'react';
 import { usePreview } from '../../app/context';
+import type { BoardFilter } from '../../app/state';
+import type { SegmentOption } from '../../components/SegmentedControl';
 import type { Item, ItemKind } from '../../domain/types';
 import { SmartCapture } from '../capture/SmartCapture';
 import { EmptyState } from '../grid/EmptyState';
 import { SmartGrid } from '../grid/SmartGrid';
 import { ViewControls } from '../grid/ViewControls';
-import { formatDate, kindIcon, kindLabel } from '../items/item-meta';
-import { WorkspaceHeader, type HeaderFact } from './WorkspaceHeader';
+import { kindIcon, kindLabel } from '../items/item-meta';
+import { WorkspaceHeader } from './WorkspaceHeader';
 
 const kindOrder: readonly ItemKind[] = ['text', 'markdown', 'code', 'image', 'file', 'audio'];
 
-/** Small informational facts for the hero: per-type counts, favourites and the latest change. */
-function boardFacts(items: readonly Item[]): HeaderFact[] {
-  if (!items.length) return [];
-  const facts: HeaderFact[] = [];
+/** Filter chips from the real items of the location: "Alle", every kind that occurs, favourites if there are any. */
+function filterOptions(items: readonly Item[], showFavorites: boolean): SegmentOption<BoardFilter>[] {
+  const options: SegmentOption<BoardFilter>[] = [{ value: 'all', label: 'Alle', count: items.length }];
   for (const kind of kindOrder) {
-    const n = items.filter((i) => i.kind === kind).length;
-    if (n) facts.push({ icon: kindIcon[kind], label: `${n} ${kindLabel[kind]}` });
+    const count = items.filter((i) => i.kind === kind).length;
+    if (count) options.push({ value: kind, label: kindLabel[kind], icon: kindIcon[kind], count });
   }
   const favorites = items.filter((i) => i.favorite).length;
-  if (favorites) facts.push({ icon: 'star', label: `${favorites} ${favorites === 1 ? 'Favorit' : 'Favoriten'}` });
-  const latest = items.reduce((max, i) => (i.updatedAt > max ? i.updatedAt : max), items[0]?.updatedAt ?? '');
-  if (latest) facts.push({ icon: 'clock', label: `Zuletzt ${formatDate(latest)}` });
-  return facts;
+  if (showFavorites && favorites) options.push({ value: 'favorites', label: 'Favoriten', icon: 'star', count: favorites });
+  return options;
 }
 
-/** Space board / collection view (SC-02, SC-04..07): Ambient header → Smart Capture → Smart Grid. */
+const applyFilter = (items: readonly Item[], filter: BoardFilter): readonly Item[] =>
+  filter === 'all' ? items : items.filter((i) => (filter === 'favorites' ? i.favorite : i.kind === filter));
+
+/** Space board / collection view (SC-02, SC-04..07): title + filter chips → Smart Capture → Smart Grid. */
 export function Board({ scrollRoot }: { scrollRoot: RefObject<HTMLElement | null> }) {
-  const { state, library } = usePreview();
+  const { state, dispatch, library } = usePreview();
   const { location } = state;
   const items = library.listItems(location);
 
   const space = location.type === 'space' ? library.getSpace(location.spaceId) : undefined;
   const collection = location.type === 'collection' ? library.collections.find((c) => c.id === location.collectionId) : undefined;
   const title = space?.name ?? collection?.name ?? '';
-  const description = space?.description ?? (collection?.available ? 'Globale Ansicht über alle Spaces.' : 'Diese Ansicht ist in der Vorschau noch leer.');
+
+  const options = filterOptions(items, !(location.type === 'collection' && location.collectionId === 'favorites'));
+  // A filter whose chip does not exist here (e.g. after the data changed) falls back to everything.
+  const filter = options.some((o) => o.value === state.filter) ? state.filter : 'all';
+  const visible = applyFilter(items, filter);
 
   const emptyVariant = collection && !collection.available ? 'unavailable' : space ? 'space-empty' : 'collection-empty';
   const countLabel = items.length === 1 ? '1 Inhalt' : `${items.length} Inhalte`;
@@ -42,10 +48,10 @@ export function Board({ scrollRoot }: { scrollRoot: RefObject<HTMLElement | null
   return (
     <>
       <WorkspaceHeader
-        eyebrow={space ? 'Space' : 'Schnellzugriff'}
         title={title}
-        description={description}
-        facts={boardFacts(items)}
+        filters={items.length > 1 ? options : undefined}
+        filter={filter}
+        onFilterChange={(next) => dispatch({ type: 'setFilter', filter: next })}
         countLabel={items.length ? countLabel : undefined}
         scrollRoot={scrollRoot}
       />
@@ -53,8 +59,8 @@ export function Board({ scrollRoot }: { scrollRoot: RefObject<HTMLElement | null
         <SmartCapture />
         {items.length > 0 ? (
           <>
-            <ViewControls count={items.length} />
-            <SmartGrid items={items} label={`Inhalte in ${title}`} />
+            <ViewControls count={visible.length} total={items.length} />
+            <SmartGrid items={visible} filter={filter} label={`Inhalte in ${title}`} />
           </>
         ) : (
           <EmptyState variant={emptyVariant} />
