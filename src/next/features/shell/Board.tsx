@@ -10,7 +10,7 @@ import { ViewControls } from '../grid/ViewControls';
 import { kindIcon, kindLabel } from '../items/item-meta';
 import { WorkspaceHeader } from './WorkspaceHeader';
 
-const kindOrder: readonly ItemKind[] = ['text', 'markdown', 'code', 'image', 'file', 'audio'];
+const kindOrder: readonly ItemKind[] = ['text', 'markdown', 'code', 'link', 'image', 'file', 'audio'];
 
 /** Filter chips from the real items of the location: "Alle", every kind that occurs, favourites if there are any. */
 function filterOptions(items: readonly Item[], showFavorites: boolean): SegmentOption<BoardFilter>[] {

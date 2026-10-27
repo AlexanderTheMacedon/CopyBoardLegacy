@@ -20,7 +20,7 @@ const STAGGER_CAP = 11;
  * so there are no nested interactive elements.
  */
 export function ItemTile({ item, index, showSpace }: { item: Item; index: number; showSpace: boolean }) {
-  const { state, dispatch, library } = usePreview();
+  const { state, dispatch, library, freshIds } = usePreview();
   const runAction = useRunItemAction();
   const selected = state.inspectedItemId === item.id;
   const quick = primaryQuickAction(item, state.location);
@@ -32,6 +32,7 @@ export function ItemTile({ item, index, showSpace }: { item: Item; index: number
       className="cb-tile"
       data-kind={item.kind}
       data-selected={selected || undefined}
+      data-fresh={freshIds.has(item.id) || undefined}
       data-item-id={item.id}
       style={{ '--i': Math.min(index, STAGGER_CAP) } as CSSProperties}
     >
@@ -77,7 +78,7 @@ export function ItemTile({ item, index, showSpace }: { item: Item; index: number
             icon={quick.icon}
             size="sm"
             variant="subtle"
-            label={`${item.title}: ${quick.label} (Demo)`}
+            label={`${item.title}: ${quick.label}`}
             onClick={() => runAction(quick, item)}
           />
         )}
@@ -95,6 +96,7 @@ export function ItemTile({ item, index, showSpace }: { item: Item; index: number
                   type="button"
                   role="menuitem"
                   className="cb-menu__item"
+                  data-danger={action.danger || undefined}
                   onClick={() => {
                     close();
                     runAction(action, item);
@@ -102,7 +104,6 @@ export function ItemTile({ item, index, showSpace }: { item: Item; index: number
                 >
                   <Icon name={action.icon} size={16} />
                   <span>{action.label}</span>
-                  {action.availability === 'demo' && <span className="cb-demo-badge">Demo</span>}
                 </button>
               ))}
             </div>

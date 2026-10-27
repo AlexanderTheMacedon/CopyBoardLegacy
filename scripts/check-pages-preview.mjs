@@ -1,7 +1,8 @@
 // Verifies the Cloudflare Pages preview build in `dist-preview` (run after `npm run build:pages-preview`):
-//   1. static: only the React preview and its assets are in the output; no legacy app, no CNAME, no backend or storage code;
-//   2. runtime: the preview boots at "/" and passes the complete preview browser suite (tests/e2e/preview.mjs), including its
-//      zero-storage / zero-network / zero-device-API instrumentation.
+//   1. static: only the React app and its assets (incl. the ambient photo) are in the output; no legacy app, no CNAME, no
+//      backend, no legacy storage; the only storage is the app's own IndexedDB database;
+//   2. runtime: the app boots at "/" and passes the complete browser suite (tests/e2e/preview.mjs), including Universal Paste
+//      with reload persistence and the zero-network / no-legacy-storage / no-microphone instrumentation.
 import { spawn } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
@@ -32,7 +33,8 @@ walk(outDir);
 check(!files.includes('CNAME'), 'CNAME must not be deployed with the preview');
 check(!files.includes('preview.html'), 'preview.html must be renamed to index.html');
 check(!files.some((f) => /^assets\/main-/.test(f)), 'legacy main-* bundle must not be part of the preview build');
-check(files.every((f) => /^(index\.html|favicon\.svg|assets\/preview-[\w-]+\.(js|css)|assets\/modulepreload-polyfill-[\w-]+\.js)$/.test(f)), `unexpected files in dist-preview: ${files.join(', ')}`);
+check(files.every((f) => /^(index\.html|favicon\.svg|assets\/preview-[\w-]+\.(js|css)|assets\/modulepreload-polyfill-[\w-]+\.js|assets\/ambient-orange-[\w-]+\.jpg)$/.test(f)), `unexpected files in dist-preview: ${files.join(', ')}`);
+check(files.some((f) => /^assets\/ambient-orange-[\w-]+\.jpg$/.test(f)), 'the ambient background photo must be part of the build');
 
 const html = readFileSync(join(outDir, 'index.html'), 'utf8');
 check(html.includes('id="preview-root"'), 'index.html must mount the React preview');
@@ -43,10 +45,14 @@ check(/<link rel="stylesheet" crossorigin href="\.\/assets\/preview-[\w-]+\.css"
 
 for (const asset of files.filter((f) => /^assets\/.*\.(js|css)$/.test(f))) {
   const text = readFileSync(join(outDir, asset), 'utf8');
-  const forbidden = /localStorage|sessionStorage|indexedDB|supabase|getUserMedia|navigator\.clipboard|copyboard_state|MediaRecorder|XMLHttpRequest|WebSocket/;
+  // IndexedDB (own database `copyboard-next`) and the Clipboard API (Universal Paste) are intended; legacy storage is not.
+  const forbidden = /localStorage|sessionStorage|supabase|getUserMedia|copyboard_state|MediaRecorder|XMLHttpRequest|WebSocket/;
   const hit = forbidden.exec(text);
   check(!hit, `${asset} contains forbidden API or backend reference: ${hit?.[0]}`);
 }
+
+const js = files.filter((f) => /^assets\/preview-[\w-]+\.js$/.test(f)).map((f) => readFileSync(join(outDir, f), 'utf8')).join('\n');
+check(js.includes('copyboard-next'), 'the bundle must use its own IndexedDB database (copyboard-next)');
 
 console.log(`static check: ${files.length} files in dist-preview (${files.join(', ')})`);
 if (problems.length) {

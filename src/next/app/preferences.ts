@@ -1,23 +1,20 @@
 import type { IconName } from '../components/Icon';
 
-// One preference model for Quick Preferences and Settings Studio (D-033). Session-only in the preview: no persistence.
+// One preference model for Quick Preferences and Settings Studio (D-033). Explicit choices persist in the local store.
 
 export type ThemeMode = 'light' | 'dark' | 'system';
-export type SidebarMode = 'compact' | 'expanded' | 'dynamic';
 export type Density = 'comfort' | 'standard' | 'compact';
 export type ViewMode = 'grid' | 'list';
 
 export interface Preferences {
   readonly theme: ThemeMode;
-  readonly sidebarMode: SidebarMode;
   readonly density: Density;
   readonly view: ViewMode;
 }
 
+/** Light is the primary design state: first start is always light, never derived from the OS theme. */
 export const defaultPreferences: Preferences = {
-  theme: 'system',
-  // D-002: proposed default is the dynamic (hover) mode.
-  sidebarMode: 'dynamic',
+  theme: 'light',
   density: 'standard',
   view: 'grid',
 };
@@ -44,16 +41,6 @@ export const themePreference: PreferenceDefinition<'theme'> = {
   ],
 };
 
-export const sidebarPreference: PreferenceDefinition<'sidebarMode'> = {
-  key: 'sidebarMode',
-  label: 'Seitenleiste',
-  options: [
-    { value: 'compact', label: 'Immer kompakt' },
-    { value: 'expanded', label: 'Immer ausgefahren' },
-    { value: 'dynamic', label: 'Dynamisch (Hover)' },
-  ],
-};
-
 export const densityPreference: PreferenceDefinition<'density'> = {
   key: 'density',
   label: 'Dichte',
@@ -72,3 +59,15 @@ export const viewPreference: PreferenceDefinition<'view'> = {
     { value: 'list', label: 'Liste', icon: 'list' },
   ],
 };
+
+const pick = <V extends string>(value: unknown, options: readonly PreferenceOption<V>[]): V | undefined =>
+  options.find((o) => o.value === value)?.value;
+
+/** Restores stored preferences; unknown or outdated values fall back to the defaults. */
+export function restorePreferences(saved: Partial<Record<keyof Preferences, unknown>> | undefined): Preferences {
+  return {
+    theme: pick(saved?.theme, themePreference.options) ?? defaultPreferences.theme,
+    density: pick(saved?.density, densityPreference.options) ?? defaultPreferences.density,
+    view: pick(saved?.view, viewPreference.options) ?? defaultPreferences.view,
+  };
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import { usePreview } from '../../app/context';
 import type { BoardFilter } from '../../app/state';
 import { Icon } from '../../components/Icon';
@@ -27,16 +27,19 @@ const EXPAND_AT = 44;
 
 const shortcutHint = () => (typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘K' : 'Strg K');
 
-/** D-028 trust indicator, honest for the preview: nothing is saved or synced. */
+/** D-028 trust indicator: where captured content lives. Says plainly when local storage is blocked. */
 function TrustIndicator() {
+  const { workspace } = usePreview();
+  const local = workspace.persistent;
   return (
-    <Popover label="Vorschau – Speicherstatus" icon="shield" iconSize={18} text="Vorschau" triggerClassName="cb-trust">
+    <Popover label="Speicherstatus" icon={local ? 'shield' : 'info'} iconSize={18} text={local ? 'Lokal' : 'Nicht gespeichert'} triggerClassName="cb-trust">
       {() => (
         <div className="cb-quick-pref">
-          <p className="cb-quick-pref__title">Schreibgeschützte Vorschau</p>
+          <p className="cb-quick-pref__title">{local ? 'Lokal auf diesem Gerät' : 'Lokales Speichern blockiert'}</p>
           <p className="cb-quick-pref__note">
-            Alle Inhalte sind synthetische Beispiele. Es wird nichts gespeichert, nichts synchronisiert und keine Verbindung zu
-            einem Konto hergestellt.
+            {local
+              ? 'Eingefügte Inhalte werden in diesem Browser gespeichert und bleiben nach dem Neuladen erhalten. Keine Cloud, kein Konto, keine Synchronisierung. Die Beispielinhalte sind synthetisch.'
+              : 'Dieser Browser erlaubt keinen lokalen Speicher. Eingefügte Inhalte können nicht übernommen werden.'}
           </p>
         </div>
       )}
@@ -85,20 +88,10 @@ export function WorkspaceHeader({ title, filters, filter, onFilterChange, countL
     scrollRoot.current?.scrollTo({ top: 0 });
   }, [scrollRoot, locationKey]);
 
-  const tint = space ? spaceColorVar(space.color) : 'var(--cb-space-lavender)';
+  const tint = space ? spaceColorVar(space.color) : 'var(--cb-accent)';
 
   return (
     <>
-      {/* Ambient layer scrolls with the content and dissolves into the canvas (D-019); orbs are decorative only. */}
-      <div className="cb-ambient" data-collapsed={collapsed || undefined} style={{ '--cb-ambient-tint': tint } as CSSProperties} aria-hidden="true">
-        <span className="cb-ambient__orb cb-ambient__orb--a" />
-        <span className="cb-ambient__orb cb-ambient__orb--b" />
-        <span className="cb-ambient__orb cb-ambient__orb--c" />
-        <span className="cb-ambient__orb cb-ambient__orb--d" />
-        <span className="cb-ambient__orb cb-ambient__orb--e" />
-        <span className="cb-ambient__orb cb-ambient__orb--tint" />
-      </div>
-
       {/* Direct child of the scroll container so `position: sticky` holds for the whole board. */}
       <div className="cb-toolbar" data-collapsed={collapsed || undefined}>
         <IconButton
@@ -123,7 +116,9 @@ export function WorkspaceHeader({ title, filters, filter, onFilterChange, countL
           <kbd className="cb-search-trigger__kbd">{shortcutHint()}</kbd>
         </button>
         <IconButton icon="plus" label="Erfassen" className="cb-toolbar__capture" onClick={focusCapture} />
-        <ThemeQuickPreference />
+        <span className="cb-toolbar__theme">
+          <ThemeQuickPreference />
+        </span>
         <TrustIndicator />
       </div>
 

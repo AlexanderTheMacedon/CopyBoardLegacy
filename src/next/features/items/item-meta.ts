@@ -5,6 +5,7 @@ export const kindLabel: Record<ItemKind, string> = {
   text: 'Text',
   markdown: 'Markdown',
   code: 'Code',
+  link: 'Link',
   image: 'Bild',
   file: 'Datei',
   audio: 'Audio',
@@ -14,6 +15,7 @@ export const kindIcon: Record<ItemKind, IconName> = {
   text: 'text',
   markdown: 'hash',
   code: 'code',
+  link: 'link',
   image: 'image',
   file: 'file',
   audio: 'waveform',
@@ -59,4 +61,15 @@ export function excerpt(item: Item, max = 180, omitFirstHeading = false): string
     .replace(/\s*\n+\s*/g, ' ')
     .trim();
   return plain.length > max ? `${plain.slice(0, max - 1).trimEnd()}…` : plain;
+}
+
+/** Host and path of a link for display, without protocol and `www.`. */
+export function linkParts(url: string): { host: string; path: string } {
+  try {
+    const parsed = new URL(url);
+    const path = `${parsed.pathname === '/' ? '' : parsed.pathname}${parsed.search}`;
+    return { host: parsed.hostname.replace(/^www\./, ''), path };
+  } catch {
+    return { host: url, path: '' };
+  }
 }

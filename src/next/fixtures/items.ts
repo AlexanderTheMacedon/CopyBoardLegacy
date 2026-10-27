@@ -56,7 +56,7 @@ export const fixtureItems: readonly Item[] = [
     alt: 'Synthetischer Screenshot eines Fehlerdialogs in Grau- und Violetttönen',
     width: 1440,
     height: 900,
-    palette: ['#E9E4F7', '#B9A8FF', '#7064C8'],
+    palette: ['#FFF1E4', '#FFB27A', '#C8541A'],
   },
   {
     id: 'it-log-build',
@@ -96,7 +96,7 @@ export const fixtureItems: readonly Item[] = [
     alt: 'Weiche, ineinanderfließende Lichtfelder in Lilac, Orchid und Periwinkle',
     width: 1600,
     height: 1000,
-    palette: ['#DBB6F5', '#C4B5FD', '#AEB8FA'],
+    palette: ['#FFE0C2', '#F7A35C', '#E9773A'],
   },
   {
     id: 'it-tokens',
@@ -121,7 +121,7 @@ export const fixtureItems: readonly Item[] = [
     alt: 'Synthetische Skizze eines mobilen Docks mit vier Aktionen',
     width: 780,
     height: 1688,
-    palette: ['#F5F3FA', '#A7C9EB', '#3E5FAA'],
+    palette: ['#FFF6EE', '#E9B48C', '#8E4420'],
   },
   {
     id: 'it-critique',

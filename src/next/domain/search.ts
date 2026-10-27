@@ -19,12 +19,14 @@ function secondaryText(item: Item): string {
       return item.body;
     case 'code':
       return `${item.language} ${item.body}`;
+    case 'link':
+      return item.url;
     case 'image':
       return item.alt;
     case 'file':
       return item.fileName;
     case 'audio':
-      return '';
+      return item.fileName ?? '';
   }
 }
 

@@ -12,18 +12,27 @@ function sourceFiles(dir: string): string[] {
   );
 }
 
-describe('preview track is isolated from the live data path', () => {
-  it('declares itself read-only and offline', () => {
-    expect(previewInfo.writesEnabled).toBe(false);
+describe('React app is isolated from the legacy data path and the network', () => {
+  it('writes only to its own local store and stays offline', () => {
+    expect(previewInfo.writesEnabled).toBe(true);
+    expect(previewInfo.storage).toBe('indexeddb-local');
     expect(previewInfo.cloudEnabled).toBe(false);
   });
 
-  // Run A guarantee, extended in Run B: no second writer, no real save/cloud endpoints, no device APIs, synthetic fixtures only.
+  // Device and storage access is confined to named modules (Orange Squircle run: Universal Paste + local persistence).
+  // Everything else keeps the Run A/B guarantees: no legacy storage, no network, no microphone, no HTML injection.
+  const confined: { pattern: RegExp; files: string[] }[] = [
+    { pattern: /\bindexedDB\b/, files: ['src/next/data/store.ts'] },
+    { pattern: /navigator\.clipboard|\bClipboardItem\b/, files: ['src/next/data/clipboard.ts'] },
+    // Paste/drop events hand their data straight to data/clipboard.ts#readTransfer.
+    { pattern: /\bclipboardData\b/, files: ['src/next/features/shell/AppShell.tsx', 'src/next/features/capture/SmartCapture.tsx'] },
+    { pattern: /type=["']file["']/, files: ['src/next/features/capture/SmartCapture.tsx'] },
+  ];
+
   const forbidden = [
-    // storage
+    // storage outside the own IndexedDB store; never the legacy keys
     /localStorage/,
     /sessionStorage/,
-    /indexedDB/i,
     /document\.cookie/,
     /caches\./,
     /copyboard_/,
@@ -35,14 +44,11 @@ describe('preview track is isolated from the live data path', () => {
     /EventSource/,
     /sendBeacon/,
     /https?:\/\//,
-    // device and content access (clipboard, microphone, files, uploads)
-    /navigator\.clipboard/,
-    /\bclipboardData\b/,
+    // device access that stays out of scope (microphone, file system handles)
     /getUserMedia|mediaDevices|MediaRecorder/,
     /\bFileReader\b/,
     /dataTransfer\.(files|items|getData)/,
     /showOpenFilePicker|showSaveFilePicker/,
-    /type=["']file["']/,
     // HTML injection
     /dangerouslySetInnerHTML|innerHTML|outerHTML|insertAdjacentHTML/,
     // legacy app modules
@@ -59,11 +65,19 @@ describe('preview track is isolated from the live data path', () => {
   });
 
   for (const file of files) {
-    it(`${file.slice(root.length + 1)} has no storage, network, device or legacy-app access`, () => {
+    const rel = file.slice(root.length + 1);
+    it(`${rel} has no legacy storage, network or out-of-scope device access`, () => {
       const text = readFileSync(file, 'utf8');
       for (const pattern of forbidden) expect(text, String(pattern)).not.toMatch(pattern);
+      for (const { pattern, files: allowed } of confined) if (!allowed.includes(rel)) expect(text, `${pattern} outside ${allowed.join(', ')}`).not.toMatch(pattern);
     });
   }
+
+  it('the local store uses its own database, never the legacy state', () => {
+    const store = readFileSync(join(nextDir, 'data/store.ts'), 'utf8');
+    expect(store).toMatch(/DB_NAME = 'copyboard-next'/);
+    expect(store).not.toMatch(/copyboard_state|STORAGE_KEY/);
+  });
 
   it('imports stay inside src/next, React or CSS', () => {
     for (const file of files.filter((f) => /\.tsx?$/.test(f))) {

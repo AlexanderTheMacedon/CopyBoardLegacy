@@ -13,7 +13,7 @@ export interface Space {
   readonly description: string;
 }
 
-export type ItemKind = 'text' | 'markdown' | 'code' | 'image' | 'file' | 'audio';
+export type ItemKind = 'text' | 'markdown' | 'code' | 'link' | 'image' | 'file' | 'audio';
 
 interface ItemBase {
   readonly id: ItemId;
@@ -24,6 +24,8 @@ interface ItemBase {
   readonly updatedAt: string;
   readonly tags: readonly string[];
   readonly favorite: boolean;
+  /** `local` = captured by the user and stored on this device; absent = synthetic fixture. */
+  readonly origin?: 'local';
 }
 
 export interface TextItem extends ItemBase {
@@ -37,19 +39,32 @@ export interface CodeItem extends ItemBase {
   readonly body: string;
 }
 
-/** Synthetic image: rendered as a gradient, no binary asset and no network request. */
+export interface LinkItem extends ItemBase {
+  readonly kind: 'link';
+  readonly url: string;
+}
+
+/** Binary content captured on this device (paste, drop, file picker). Never fetched from anywhere. */
+export interface ItemAsset {
+  readonly blob: Blob;
+  readonly mimeType: string;
+}
+
+/** Captured images carry their real pixels as `asset`; synthetic fixtures render `palette` as a gradient. */
 export interface ImageItem extends ItemBase {
   readonly kind: 'image';
   readonly alt: string;
   readonly width: number;
   readonly height: number;
-  readonly palette: readonly [string, string, string];
+  readonly palette?: readonly [string, string, string];
+  readonly asset?: ItemAsset;
 }
 
 export interface FileItem extends ItemBase {
   readonly kind: 'file';
   readonly fileName: string;
   readonly sizeBytes: number;
+  readonly asset?: ItemAsset;
 }
 
 export interface AudioItem extends ItemBase {
@@ -57,9 +72,11 @@ export interface AudioItem extends ItemBase {
   readonly durationSec: number;
   /** Normalised bar heights 0..1 for a static waveform preview. */
   readonly waveform: readonly number[];
+  readonly fileName?: string;
+  readonly asset?: ItemAsset;
 }
 
-export type Item = TextItem | CodeItem | ImageItem | FileItem | AudioItem;
+export type Item = TextItem | CodeItem | LinkItem | ImageItem | FileItem | AudioItem;
 
 /** Global quick-access views (D-018), subordinate to the spaces. */
 export type CollectionId = 'all' | 'favorites' | 'recent' | 'sessions';
@@ -77,3 +94,5 @@ export type Location =
 
 export const isTextual = (item: Item): item is TextItem | CodeItem =>
   item.kind === 'text' || item.kind === 'markdown' || item.kind === 'code';
+
+export const isLocal = (item: Item): boolean => item.origin === 'local';

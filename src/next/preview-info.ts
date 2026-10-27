@@ -1,8 +1,9 @@
-// Contract of the preview track. The preview never writes data and never talks to a backend.
+// Contract of the React app track: captured content is stored locally on this device (IndexedDB), never sent to a backend.
 export const previewInfo = {
   name: 'CopyBoard Preview',
-  status: 'react-foundation',
-  writesEnabled: false,
+  status: 'local-capture',
+  writesEnabled: true,
+  storage: 'indexeddb-local',
   cloudEnabled: false,
 } as const;
 

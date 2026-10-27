@@ -78,6 +78,12 @@ describe('palette commands', () => {
 describe('UI reducer', () => {
   const start = createInitialState(dev);
 
+  it('starts light by default and remembers the last space for captures in collections', () => {
+    expect(start.prefs.theme).toBe('light');
+    const all = uiReducer(uiReducer(start, { type: 'navigate', location: design }), { type: 'navigate', location: { type: 'collection', collectionId: 'all' } });
+    expect(all.lastSpaceId).toBe('sp-design');
+  });
+
   it('navigation closes detail context but keeps the recorder and preferences', () => {
     let state: UiState = uiReducer(start, { type: 'setRecorderOpen', open: true });
     state = uiReducer(state, { type: 'setPreference', patch: { view: 'list', density: 'compact' } });
@@ -120,17 +126,27 @@ describe('item action registry', () => {
     return found;
   };
 
-  it('offers copy for text and download for binaries, both marked as demo', () => {
-    expect(primaryQuickAction(item('it-note-standup'), dev)).toMatchObject({ id: 'copy', availability: 'demo' });
-    expect(primaryQuickAction(item('it-log-build'), dev)).toMatchObject({ id: 'download', availability: 'demo' });
+  it('offers only working actions: copy for text, no copy/download for synthetic binaries', () => {
+    expect(primaryQuickAction(item('it-note-standup'), dev)).toMatchObject({ id: 'copy' });
+    // Fixture binaries carry no data, so neither copy nor download is offered.
+    expect(primaryQuickAction(item('it-log-build'), dev)).toBeUndefined();
     expect(itemActions(item('it-voice-arch'), dev).map((a) => a.id)).not.toContain('copy');
+    expect(itemActions(item('it-voice-arch'), dev).map((a) => a.id)).not.toContain('download');
   });
 
-  it('only offers the composer for textual items and reveal outside the own space', () => {
+  it('only offers the editor for textual items, reveal outside the own space and delete for own items', () => {
     expect(itemActions(item('it-prompt-review'), dev).map((a) => a.id)).toContain('open-composer');
     expect(itemActions(item('it-moodboard'), design).map((a) => a.id)).not.toContain('open-composer');
     expect(itemActions(item('it-moodboard'), dev).map((a) => a.id)).toContain('reveal-in-space');
     expect(itemActions(item('it-moodboard'), design).map((a) => a.id)).not.toContain('reveal-in-space');
+    expect(itemActions(item('it-prompt-review'), dev).map((a) => a.id)).not.toContain('delete');
+    const own = { ...item('it-note-standup'), id: 'it-local-1', origin: 'local' as const };
+    expect(itemActions(own, dev).at(-1)).toMatchObject({ id: 'delete', danger: true });
+  });
+
+  it('favourite toggles its label', () => {
+    expect(itemActions(item('it-prompt-review'), dev).find((a) => a.id === 'favorite')?.label).toBe('Aus Favoriten entfernen');
+    expect(itemActions(item('it-note-standup'), dev).find((a) => a.id === 'favorite')?.label).toBe('Zu Favoriten');
   });
 
   it('builds plain-text excerpts from Markdown', () => {

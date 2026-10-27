@@ -1,6 +1,6 @@
 import { usePreview } from '../../app/context';
 import { Icon, type IconName } from '../../components/Icon';
-import { focusCapture } from '../capture/SmartCapture';
+import { focusCapture, pickFiles } from '../capture/SmartCapture';
 
 type EmptyVariant = 'space-empty' | 'collection-empty' | 'unavailable';
 
@@ -9,7 +9,7 @@ const copy: Record<EmptyVariant, { icon: IconName; title: string; text: string }
   'space-empty': {
     icon: 'inbox',
     title: 'Dieser Space ist noch leer',
-    text: 'Dein erster Inhalt erscheint hier, sobald er sicher gespeichert ist. In der Vorschau wird noch nichts gespeichert.',
+    text: 'Kopiere etwas und drücke hier ⌘V – Text, Links, Screenshots und Dateien landen sofort als Karte in diesem Space.',
   },
   'collection-empty': {
     icon: 'layers',
@@ -25,7 +25,7 @@ const copy: Record<EmptyVariant, { icon: IconName; title: string; text: string }
 
 /** Three optional quick starts (D-026): shortcuts into the existing capture / recorder flows, no separate system. */
 function QuickStarts() {
-  const { dispatch, notify } = usePreview();
+  const { dispatch } = usePreview();
   return (
     <div className="cb-empty__starts" role="group" aria-label="Schnellstart">
       <button type="button" className="cb-empty__start" onClick={focusCapture}>
@@ -35,13 +35,10 @@ function QuickStarts() {
       <button
         type="button"
         className="cb-empty__start"
-        onClick={() => {
-          focusCapture();
-          notify('Demo: Dateien können per Drag & Drop auf die Capture Bar gezogen werden; die Vorschau übernimmt sie nicht.');
-        }}
+        onClick={pickFiles}
       >
         <Icon name="paperclip" size={16} />
-        Datei ablegen
+        Datei hinzufügen
       </button>
       <button type="button" className="cb-empty__start" onClick={() => dispatch({ type: 'setRecorderOpen', open: true })}>
         <Icon name="mic" size={16} />

@@ -1,6 +1,6 @@
 import { useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { usePreview } from '../../app/context';
-import { densityPreference, sidebarPreference, themePreference, viewPreference, type PreferenceDefinition, type Preferences } from '../../app/preferences';
+import { densityPreference, themePreference, viewPreference, type PreferenceDefinition, type Preferences } from '../../app/preferences';
 import type { SettingsSection } from '../../app/state';
 import { DemoBadge } from '../../components/DemoBadge';
 import { Dialog } from '../../components/Dialog';
@@ -54,24 +54,27 @@ function SectionContent({ section }: { section: SettingsSection }) {
       return (
         <>
           <PreferenceRow definition={themePreference} index={0} />
-          <PreferenceRow definition={sidebarPreference} index={1} />
-          <PreferenceRow definition={densityPreference} index={2} />
-          <PreferenceRow definition={viewPreference} index={3} />
-          <PendingRow label="Sprache" index={4}>
+          <PreferenceRow definition={densityPreference} index={1} />
+          <PreferenceRow definition={viewPreference} index={2} />
+          <PendingRow label="Sprache" index={3}>
             Deutsch. Weitere Sprachen folgen.
           </PendingRow>
-          <p className="cb-settings__note" style={step(5)}>
+          <p className="cb-settings__note" style={step(4)}>
             <Icon name="info" size={16} />
-            Änderungen gelten nur für diese Sitzung und werden nicht gespeichert.
+            Darstellung wird auf diesem Gerät gemerkt. Standard ist das helle Design.
           </p>
         </>
       );
     case 'data':
       return (
         <>
-          <PendingRow label="Speicherort" index={0}>
-            Die Vorschau zeigt synthetische Beispieldaten und speichert nichts.
-          </PendingRow>
+          <div className="cb-settings__row" style={step(0)}>
+            <p className="cb-settings__label">Speicherort</p>
+            <p className="cb-settings__hint">
+              Eingefügte Inhalte werden lokal in diesem Browser gespeichert (IndexedDB) und bleiben nach dem Neuladen erhalten.
+              Die Beispielinhalte sind synthetisch. Die bisherige CopyBoard-App und ihre Daten bleiben unberührt.
+            </p>
+          </div>
           <PendingRow label="Konto & Cloud" index={1}>
             Keine Anmeldung und keine Synchronisierung in der Vorschau.
           </PendingRow>
@@ -90,7 +93,7 @@ function SectionContent({ section }: { section: SettingsSection }) {
             Gesperrte Inhalte und PIN-Entsperrung folgen später.
           </PendingRow>
           <PendingRow label="Datenschutz" index={2}>
-            Keine Netzwerkverbindungen, keine Zwischenablage, keine Dateien.
+            Keine Netzwerkverbindungen. Die Zwischenablage wird nur beim Einfügen durch dich gelesen.
           </PendingRow>
         </>
       );

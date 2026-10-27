@@ -10,8 +10,11 @@ describe('React preview renders', () => {
   it('renders the shell for the default space', () => {
     const html = renderToStaticMarkup(<App library={fixtureLibrary} />);
     expect(html).toContain('class="cb-app"');
-    expect(html).toContain('data-sidebar="dynamic"');
-    expect(html).toContain('aria-label="Seitenleiste"');
+    expect(html).toContain('data-theme="light"');
+    expect(html).toContain('aria-label="Navigation"');
+    // Dock at rest: only the active space is the switcher; the others live in the (closed, inert) flyout.
+    expect(html).toMatch(/aria-label="Space: Entwicklung\. Space wechseln"/);
+    expect(html).toContain('class="cb-paste-catcher"');
     expect(html).toContain('id="cb-main"');
     expect(html).toMatch(/<h1[^>]*>Entwicklung<\/h1>/);
     expect(html).toContain('aria-label="Schnellzugriff"');

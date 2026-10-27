@@ -3,12 +3,27 @@ import { usePreview } from '../../app/context';
 import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { useScrollFade } from '../../components/motion';
-import type { Item } from '../../domain/types';
+import { useObjectUrl } from '../../components/useObjectUrl';
+import type { AudioItem, Item } from '../../domain/types';
 import { ImageSwatch, Waveform } from '../grid/ItemPreview';
 import { tileOpenButtonId } from '../grid/ItemTile';
 import { itemActions } from '../items/item-actions';
-import { formatDateTime, formatDuration, formatSize, kindIcon, kindLabel, spaceColorVar } from '../items/item-meta';
+import { formatDateTime, formatDuration, formatSize, kindIcon, kindLabel, linkParts, spaceColorVar } from '../items/item-meta';
 import { useRunItemAction } from '../items/useItemActions';
+
+function AudioContent({ item }: { item: AudioItem }) {
+  const url = useObjectUrl(item.asset?.blob);
+  return (
+    <div className="cb-inspector__audio">
+      <Waveform item={item} className="cb-waveform cb-waveform--large" />
+      {item.asset ? (
+        url && <audio className="cb-inspector__player" controls preload="metadata" src={url} />
+      ) : (
+        <p>Dauer {formatDuration(item.durationSec)} · Beispielinhalt ohne Audiodaten</p>
+      )}
+    </div>
+  );
+}
 
 function InspectorContent({ item }: { item: Item }) {
   switch (item.kind) {
@@ -21,12 +36,22 @@ function InspectorContent({ item }: { item: Item }) {
           <code>{item.body}</code>
         </pre>
       );
+    case 'link': {
+      const { host, path } = linkParts(item.url);
+      return (
+        <p className="cb-inspector__link">
+          <span className="cb-inspector__link-host">{host}</span>
+          <span className="cb-inspector__link-url">{item.url}</span>
+          {path && <span className="cb-visually-hidden">{path}</span>}
+        </p>
+      );
+    }
     case 'image':
       return (
         <figure className="cb-inspector__figure">
           <ImageSwatch item={item} className="cb-inspector__image" />
           <figcaption>
-            {item.width} × {item.height} px · synthetische Vorschau
+            {item.width} × {item.height} px{item.asset ? ` · ${formatSize(item.asset.blob.size)}` : ' · synthetische Vorschau'}
           </figcaption>
         </figure>
       );
@@ -37,17 +62,16 @@ function InspectorContent({ item }: { item: Item }) {
           <dd>{item.fileName}</dd>
           <dt>Größe</dt>
           <dd>{formatSize(item.sizeBytes)}</dd>
+          {item.asset && (
+            <>
+              <dt>Typ</dt>
+              <dd>{item.asset.mimeType}</dd>
+            </>
+          )}
         </dl>
       );
     case 'audio':
-      return (
-        <div className="cb-inspector__audio">
-          <Waveform item={item} className="cb-waveform cb-waveform--large" />
-          <p>
-            Dauer {formatDuration(item.durationSec)} · Wiedergabe in der Vorschau nicht verfügbar
-          </p>
-        </div>
-      );
+      return <AudioContent item={item} />;
   }
 }
 
@@ -220,12 +244,12 @@ export function Inspector({ item, leaving, width, onWidthChange }: InspectorProp
               <button
                 key={action.id}
                 type="button"
-                className={`cb-button ${i === 0 ? 'cb-button--primary' : 'cb-button--secondary'}`}
+                className={`cb-button ${i === 0 ? 'cb-button--primary' : action.danger ? 'cb-button--danger' : 'cb-button--secondary'}`}
+                aria-pressed={action.id === 'favorite' ? item.favorite : undefined}
                 onClick={() => runAction(action, item)}
               >
                 <Icon name={action.icon} size={16} />
                 <span>{action.label}</span>
-                {action.availability === 'demo' && <span className="cb-demo-badge">Demo</span>}
               </button>
             ))}
           </div>

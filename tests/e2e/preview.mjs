@@ -1,5 +1,6 @@
-// React preview suite (Run B): the read-only preview at /preview.html boots, its core interactions work on desktop and phone,
-// and at runtime it touches no storage, no network beyond its own static assets, no clipboard, no microphone and no drop data.
+// React app suite: the app at /preview.html boots, its core interactions work on desktop and phone, Universal Paste captures
+// real clipboard data into the local IndexedDB store (and survives a reload), and at runtime it touches no legacy storage, no
+// network beyond its own static assets and no microphone. Clipboard and drag data are read only in the tests that paste/drop.
 // Every test runs in a fresh Chromium context; all requests outside the app origin are aborted and recorded.
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -70,6 +71,7 @@ async function openPreview(opts = {}) {
     hasTouch: !!opts.touch,
     isMobile: !!opts.touch,
     colorScheme: opts.colorScheme || 'light',
+    permissions: opts.clipboard ? ['clipboard-read', 'clipboard-write'] : [],
     reducedMotion: opts.reducedMotion || 'no-preference',
     locale: 'de-DE',
     timezoneId: 'Europe/Berlin',
@@ -92,10 +94,11 @@ async function openPreview(opts = {}) {
   });
   await page.goto(PAGE, { waitUntil: 'load' });
   await page.waitForSelector('.cb-app .cb-tile');
-  const clean = async () => {
+  // indexedDB is the app's own store and always allowed; anything else must be allowed per test.
+  const clean = async (allow = []) => {
     const hits = await page.evaluate(() => window.__cbHits);
     const problems = [
-      ...hits.map((h) => `api:${h}`),
+      ...hits.filter((h) => h !== 'indexedDB' && !allow.some((a) => h.startsWith(a))).map((h) => `api:${h}`),
       ...foreign.map((u) => `foreign:${u}`),
       // The dev server's own HMR client is not preview code.
       ...apiRequests.filter((u) => !(DEV && /\/@vite\/|token=/.test(u))).map((u) => `request:${u}`),
@@ -111,33 +114,49 @@ const h1 = (page) => page.$eval('#cb-workspace-title', (e) => e.textContent);
 const tileIds = (page) => page.$$eval('.cb-grid .cb-tile', (els) => els.map((e) => e.dataset.itemId));
 const focusedId = (page) => page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName);
 const settle = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+// Dock navigation: spaces live in the flyout of the active-space switcher, collections and utilities in the folded section.
+async function gotoSpace(page, name) {
+  await page.hover('.cb-space-switch__trigger');
+  await page.click(`.cb-spaces-flyout__item[title="${name}"]`);
+  await page.mouse.move(900, 600);
+}
+async function dockItem(page, title) {
+  await page.hover('.cb-navdock');
+  await page.click(`.cb-navdock__item[title="${title}"]`);
+  await page.mouse.move(900, 600);
+}
+const tileCount = (page) => page.$$eval('.cb-grid .cb-tile', (els) => els.length);
 
 test('P1', 'preview boots as the React shell without errors, storage or network', async ({ page, clean }) => {
   const status = await page.$eval('#preview-root', (e) => e.dataset.previewStatus);
   const shell = await page.evaluate(() => ({
-    sidebar: !!document.querySelector('aside.cb-sidebar'),
+    dock: !!document.querySelector('aside.cb-navdock-rail'),
     main: !!document.querySelector('main#cb-main'),
     capture: !!document.querySelector('#cb-capture-input'),
     tiles: document.querySelectorAll('.cb-grid .cb-tile').length,
     theme: document.querySelector('.cb-app')?.dataset.theme,
   }));
   const problems = await clean();
-  const ok = status === 'react-foundation' && shell.sidebar && shell.main && shell.capture && shell.tiles === 6 && shell.theme === 'light' && !problems.length;
+  const storage = await page.$eval('#preview-root', (e) => e.dataset.storage);
+  const ok = status === 'local-capture' && storage === 'local' && shell.dock && shell.main && shell.capture && shell.tiles === 6 && shell.theme === 'light' && !problems.length;
   return { ok, observed: `status=${status}, ${JSON.stringify(shell)}, problems=${problems.join(' | ') || '-'}` };
 });
 
-test('P2', 'spaces switch via sidebar; active space is marked and content changes', async ({ page, clean }) => {
+test('P2', 'spaces switch via the dock flyout; only the active space stays visible; content changes', async ({ page, clean }) => {
   const before = await tileIds(page);
-  await page.click('.cb-sidebar .cb-nav__item[title="Design"]');
+  const restingFlyout = await page.$eval('.cb-spaces-flyout', (e) => getComputedStyle(e).visibility);
+  await gotoSpace(page, 'Design');
+  await page.waitForTimeout(450);
   const title = await h1(page);
   const after = await tileIds(page);
-  const current = await page.$$eval('.cb-sidebar [aria-current="page"]', (els) => els.map((e) => e.title));
-  await page.click('.cb-sidebar .cb-nav__item[title="Favoriten"]');
+  const current = [await page.$eval('.cb-space-switch__trigger', (e) => e.title)];
+  const closedAfter = await page.$eval('.cb-space-switch', (e) => !e.hasAttribute('data-open'));
+  await dockItem(page, 'Favoriten');
   const favTitle = await h1(page);
   const chips = await page.$$eval('.cb-grid .cb-space-chip', (els) => els.length);
   const problems = await clean();
-  const ok = title === 'Design' && after.length === 4 && !after.some((id) => before.includes(id)) && current.join() === 'Design' && favTitle === 'Favoriten' && chips > 0 && !problems.length;
-  return { ok, observed: `title=${title}, tiles=${after.length}, current=${current}, favorites chips=${chips}, problems=${problems.length}` };
+  const ok = restingFlyout === 'hidden' && closedAfter && title === 'Design' && after.length === 4 && !after.some((id) => before.includes(id)) && current.join() === 'Design' && favTitle === 'Favoriten' && chips > 0 && !problems.length;
+  return { ok, observed: `flyout at rest=${restingFlyout}, closes after choice=${closedAfter}, title=${title}, tiles=${after.length}, current=${current}, favorites chips=${chips}, problems=${problems.join(' | ') || '-'}` };
 });
 
 test('P3', 'grid/list and density switch keep the order and share one preference state', async ({ page, clean }) => {
@@ -147,7 +166,7 @@ test('P3', 'grid/list and density switch keep the order and share one preference
   const listOrder = await tileIds(page);
   await page.click('.cb-view-controls [role="radio"]:has-text("Kompakt")');
   const density = await page.$eval('.cb-grid', (e) => e.dataset.density);
-  await page.click('.cb-sidebar .cb-nav__item[title="Einstellungen"]');
+  await dockItem(page, 'Einstellungen');
   await page.waitForSelector('dialog[open] .cb-settings');
   const inStudio = await page.$$eval('dialog[open] [role="radio"][aria-checked="true"]', (els) => els.map((e) => e.textContent.trim() || e.getAttribute('aria-label')));
   await page.keyboard.press('Escape');
@@ -207,9 +226,9 @@ test('P5', 'search palette finds fixtures, opens the inspector without switching
   return { ok, observed: `selected="${selected}", inspector=${inspected}, space stays=${space}, reveal=${revealed}, command view=${view}, empty="${empty}", problems=${problems.length}` };
 });
 
-test('P6', 'composer opens from the inspector with source/preview/split and safe Markdown preview', async ({ page, clean }) => {
+test('P6', 'editor opens from the inspector with source/preview/split, safe preview, one close control top right', async ({ page, clean }) => {
   await page.click('.cb-tile[data-item-id="it-prompt-review"] .cb-tile__open');
-  await page.click('.cb-inspector button:has-text("Im Composer öffnen")');
+  await page.click('.cb-inspector button:has-text("Bearbeiten")');
   await page.waitForSelector('.cb-composer');
   const mode = await page.$eval('.cb-composer', (e) => e.dataset.mode);
   const panes = await page.$$eval('.cb-composer__pane', (els) => els.length);
@@ -221,15 +240,23 @@ test('P6', 'composer opens from the inspector with source/preview/split and safe
   await page.click('.cb-composer [role="radio"]:has-text("Vorschau")');
   const previewOnly = await page.$$eval('.cb-composer__pane', (els) => els.length);
   const rail = !!(await page.$('.cb-rail'));
-  await page.click('[aria-label="Zurück zum Inspector"]');
+  // Header: no back arrow; while the rail is open only the rail's own ✕ controls it; close sits at the far right.
+  const header = await page.$eval('.cb-composer__header', (h) => ({
+    back: !!h.querySelector('[aria-label*="Zurück"]'),
+    railToggle: !!h.querySelector('[aria-label*="Kontextleiste"]'),
+    lastIsClose: h.lastElementChild?.getAttribute('aria-label') === 'Editor schließen',
+  }));
+  await page.click('[aria-label="Kontextleiste schließen"]');
+  const reopen = await page.$$eval('.cb-composer__header [aria-label="Kontextleiste einblenden"]', (els) => els.length);
+  await page.click('[aria-label="Editor schließen"]');
   await page.waitForSelector('.cb-inspector');
   const problems = await clean();
-  const ok = mode === 'split' && panes === 2 && inspectorHidden && previewH1 === 'Code-Review' && /nicht gespeichert/.test(status) && !injected.img && !injected.xss && previewOnly === 1 && rail && !problems.length;
-  return { ok, observed: `mode=${mode}, panes=${panes}->${previewOnly}, rail=${rail}, status="${status}", injected=${JSON.stringify(injected)}` };
+  const ok = mode === 'split' && panes === 2 && inspectorHidden && previewH1 === 'Code-Review' && /nicht gespeichert/.test(status) && !injected.img && !injected.xss && previewOnly === 1 && rail && !header.back && !header.railToggle && header.lastIsClose && reopen === 1 && !problems.length;
+  return { ok, observed: `mode=${mode}, panes=${panes}->${previewOnly}, rail=${rail}, header=${JSON.stringify(header)}, reopen buttons=${reopen}, status="${status}", injected=${JSON.stringify(injected)}` };
 });
 
 test('P7', 'recorder shell shows demo states and never requests the microphone', async ({ page, clean }) => {
-  await page.click('[aria-label="Aufnahme öffnen (Demo)"]');
+  await page.click('[aria-label="Aufnahme öffnen"]');
   await page.waitForSelector('.cb-recorder');
   const start = await page.$eval('.cb-recorder button:has-text("Starten")', (e) => e.disabled);
   await page.click('[aria-label="Session-Panel ausklappen"]');
@@ -237,7 +264,7 @@ test('P7', 'recorder shell shows demo states and never requests the microphone',
   const status = await page.$eval('.cb-recorder', (e) => e.dataset.status);
   const label = await page.$eval('.cb-recorder__status', (e) => e.textContent);
   // Recorder survives navigation (D-008).
-  await page.click('.cb-sidebar .cb-nav__item[title="Kunden"]');
+  await gotoSpace(page, 'Kunden');
   const persists = !!(await page.$('.cb-recorder'));
   await page.click('[aria-label="Recorder schließen"]');
   const closed = !(await page.$('.cb-recorder'));
@@ -246,69 +273,144 @@ test('P7', 'recorder shell shows demo states and never requests the microphone',
   return { ok, observed: `start disabled=${start}, status=${status}, label="${label}", persists across spaces=${persists}, problems=${problems.join(' | ') || '-'}` };
 });
 
-test('P8', 'capture, drop, attachments and copy are demo-only: no card, no clipboard, no file access', async ({ page, clean }) => {
-  const before = await tileIds(page);
-  await page.fill('#cb-capture-input', 'Synthetischer Testtext');
-  await page.click('.cb-capture button:has-text("Hinzufügen")');
-  const n1 = await page.$eval('.cb-notice p', (e) => e.textContent);
-  await page.evaluate(() => {
-    const zone = document.querySelector('.cb-capture');
-    const dt = new DataTransfer();
-    dt.items.add(new File(['geheim'], 'privat.txt', { type: 'text/plain' }));
-    window.__cbHits.length = 0; // the test itself just used DataTransfer.items
-    zone.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-    zone.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+test('P8', 'Universal Paste: ⌘V on the board stores text, URL and a screenshot; all survive a reload', { clipboard: true }, async ({ page, clean }) => {
+  const before = await tileCount(page);
+  const paste = async (write) => {
+    await page.evaluate(write);
+    await page.evaluate(() => (window.__cbHits.length = 0)); // the test itself used the clipboard API to prepare data
+    await page.mouse.click(1100, 860); // empty board area: nothing editable has focus
+    await page.keyboard.press('ControlOrMeta+V');
+    await page.waitForSelector('.cb-notice[data-tone="success"]');
+    const message = await page.$eval('.cb-notice p', (e) => e.textContent);
+    await page.click('[aria-label="Hinweis schließen"]');
+    return message;
+  };
+  const n1 = await paste(() => navigator.clipboard.writeText('Synthetischer Testtext aus der Zwischenablage'));
+  const n2 = await paste(() => navigator.clipboard.writeText('https://example.org/copyboard'));
+  const n3 = await paste(async () => {
+    const canvas = new OffscreenCanvas(64, 40);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#e8590c';
+    ctx.fillRect(0, 0, 64, 40);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': await canvas.convertToBlob({ type: 'image/png' }) })]);
   });
-  const n2 = await page.$eval('.cb-notice p', (e) => e.textContent);
-  await page.hover('.cb-tile[data-item-id="it-note-standup"]');
-  await page.click('.cb-tile[data-item-id="it-note-standup"] .cb-tile__actions button');
-  const n3 = await page.$eval('.cb-notice p', (e) => e.textContent);
-  const after = await tileIds(page);
-  const kept = await page.$eval('#cb-capture-input', (e) => e.value);
-  const problems = await clean();
-  const ok = /nichts gespeichert/.test(n1) && /nicht übernommen/.test(n2) && /Zwischenablage wurde nicht verändert/.test(n3) && after.join() === before.join() && kept === 'Synthetischer Testtext' && !problems.length;
-  return { ok, observed: `notices="${n1}" / "${n2}" / "${n3}", tiles unchanged=${after.join() === before.join()}, problems=${problems.join(' | ') || '-'}` };
+  const kinds = await page.$$eval('.cb-grid .cb-tile', (els) => els.slice(0, 3).map((e) => e.dataset.kind));
+  const problems = await clean(['DataTransfer.']);
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  await page.waitForFunction(() => document.querySelector('.cb-tile[data-kind="image"] img')?.naturalWidth > 0);
+  const after = await tileCount(page);
+  const kindsAfter = await page.$$eval('.cb-grid .cb-tile', (els) => els.slice(0, 3).map((e) => e.dataset.kind));
+  const pixels = await page.$eval('.cb-tile[data-kind="image"] img', (e) => `${e.naturalWidth}x${e.naturalHeight}`);
+  const ok = /Text gespeichert/.test(n1) && /Link gespeichert/.test(n2) && /Bild gespeichert/.test(n3) && kinds.join() === 'image,link,text' && after === before + 3 && kindsAfter.join() === kinds.join() && pixels === '64x40' && !problems.length;
+  return { ok, observed: `notices="${n1}" / "${n2}" / "${n3}", top kinds=${kinds}, tiles ${before}->${after} after reload, image ${pixels}, problems=${problems.join(' | ') || '-'}` };
 });
 
-test('P9', 'theme light/dark/system and sidebar modes are session-only preferences', async ({ page, clean, context }) => {
-  await page.click('[aria-label="Erscheinungsbild"]');
-  await page.click('.cb-popover__panel [role="radio"]:has-text("Dunkel")');
-  const dark = await page.$eval('.cb-app', (e) => e.dataset.theme);
+test('P9', 'paste keeps native behaviour in editable fields; capture bar, drop and context menu paste save locally', { clipboard: true }, async ({ page, clean }) => {
+  const before = await tileCount(page);
+  await page.evaluate(() => navigator.clipboard.writeText('nur ins Feld'));
+  await page.click('#cb-capture-input');
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.click('.cb-search-trigger');
+  await page.waitForSelector('dialog[open] .cb-palette__input');
+  await page.keyboard.press('ControlOrMeta+V');
+  const searchValue = await page.$eval('.cb-palette__input', (e) => e.value);
   await page.keyboard.press('Escape');
-  await page.click('.cb-sidebar [aria-label="Seitenleiste"][aria-expanded]');
-  await page.click('.cb-popover__panel [role="radio"]:has-text("Immer ausgefahren")');
-  await page.mouse.move(900, 500);
-  await settle(page);
-  await page.waitForTimeout(350);
-  const expanded = await page.$eval('.cb-app', (e) => ({ mode: e.dataset.sidebar, width: document.querySelector('.cb-sidebar').getBoundingClientRect().width }));
-  // System follows the OS preference.
-  const sys = await context.newPage();
-  await sys.emulateMedia({ colorScheme: 'dark' });
-  await sys.goto(PAGE);
-  await sys.waitForSelector('.cb-app');
-  const systemDark = await sys.$eval('.cb-app', (e) => e.dataset.theme);
-  const reloadDefaults = await sys.$eval('.cb-app', (e) => e.dataset.sidebar);
-  await sys.close();
-  const problems = await clean();
-  const ok = dark === 'dark' && expanded.mode === 'expanded' && expanded.width >= 240 && systemDark === 'dark' && reloadDefaults === 'dynamic' && !problems.length;
-  return { ok, observed: `theme=${dark}, sidebar=${JSON.stringify(expanded)}, system(dark OS)=${systemDark}, new page sidebar=${reloadDefaults} (no persistence)` };
+  const captureValue = await page.$eval('#cb-capture-input', (e) => e.value);
+  const unchanged = (await tileCount(page)) === before;
+  // capture bar: explicit "Hinzufügen" saves what was typed/pasted
+  await page.click('.cb-capture button:has-text("Hinzufügen")');
+  await page.waitForSelector('.cb-notice[data-tone="success"]');
+  // drop a file onto the board
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File(['synthetisch'], 'notiz.csv', { type: 'text/csv' }));
+    const target = document.querySelector('.cb-grid');
+    target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  });
+  await page.waitForSelector('.cb-tile[data-kind="file"] >> text=notiz.csv');
+  // context menu → Einfügen (async Clipboard API with granted permission)
+  await page.evaluate(() => navigator.clipboard.writeText('# Aus dem Kontextmenü\n\n- eins\n- zwei'));
+  await page.mouse.click(1100, 860, { button: 'right' });
+  await page.waitForSelector('.cb-context-menu');
+  const firstEntry = await page.$eval('.cb-context-menu [role="menuitem"]', (e) => e.textContent);
+  await page.click('.cb-context-menu [role="menuitem"]:has-text("Einfügen")');
+  await page.waitForSelector('.cb-tile[data-kind="markdown"] >> text=Aus dem Kontextmenü');
+  const after = await tileCount(page);
+  const problems = await clean(['DataTransfer.', 'clipboard.']);
+  const ok = searchValue === 'nur ins Feld' && captureValue === 'nur ins Feld' && unchanged && /Einfügen/.test(firstEntry) && after === before + 3 && !problems.length;
+  return { ok, observed: `search="${searchValue}", capture="${captureValue}", no card from field paste=${unchanged}, menu first="${firstEntry}", tiles ${before}->${after}, problems=${problems.join(' | ') || '-'}` };
 });
 
-test('P10', 'dynamic sidebar expands as overlay without moving the workspace', async ({ page, clean }) => {
+test('P14', 'context menus: board and card menus, keyboard, Escape; favourite and delete with undo work and persist', { clipboard: true }, async ({ page, clean }) => {
+  await page.mouse.click(1100, 860, { button: 'right' });
+  await page.waitForSelector('.cb-context-menu');
+  const inViewport = await page.$eval('.cb-context-menu', (e) => { const r = e.getBoundingClientRect(); return r.right <= innerWidth && r.bottom <= innerHeight; });
+  await page.keyboard.press('ArrowDown');
+  const active = await page.$eval('.cb-context-menu [data-active]', (e) => e.textContent);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.cb-context-menu', { state: 'detached' });
+  // favourite a fixture card via its menu
+  await page.click('.cb-tile[data-item-id="it-note-standup"] .cb-tile__open', { button: 'right' });
+  const entries = await page.$$eval('.cb-context-menu [role="menuitem"]', (els) => els.map((e) => e.textContent));
+  await page.click('.cb-context-menu [role="menuitem"]:has-text("Zu Favoriten")');
+  await page.waitForSelector('.cb-tile[data-item-id="it-note-standup"] .cb-tile__favorite');
+  // own item: paste, delete, undo
+  await page.evaluate(() => navigator.clipboard.writeText('Wird gelöscht und wiederhergestellt'));
+  await page.mouse.click(1100, 860);
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.waitForSelector('.cb-tile[data-kind="text"] >> text=Wird gelöscht');
+  const own = await page.$eval('.cb-grid .cb-tile', (e) => e.dataset.itemId);
+  await page.click(`.cb-tile[data-item-id="${own}"] .cb-tile__open`, { button: 'right' });
+  await page.click('.cb-context-menu [role="menuitem"]:has-text("Löschen")');
+  await page.waitForSelector(`.cb-tile[data-item-id="${own}"]`, { state: 'detached' });
+  await page.click('.cb-notice__action:has-text("Rückgängig")');
+  await page.waitForSelector(`.cb-tile[data-item-id="${own}"]`);
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  const persisted = await page.evaluate((id) => ({ fav: !!document.querySelector('.cb-tile[data-item-id="it-note-standup"] .cb-tile__favorite'), own: !!document.querySelector(`.cb-tile[data-item-id="${id}"]`) }), own);
+  // native menu stays in editable fields
+  await page.click('#cb-capture-input', { button: 'right' });
+  const customInField = !!(await page.$('.cb-context-menu'));
+  const problems = await clean(['DataTransfer.', 'clipboard.']);
+  const ok = inViewport && /Neuer Eintrag/.test(active) && entries[0] === 'Öffnen' && !entries.includes('Löschen') && persisted.fav && persisted.own && !customInField && !problems.length;
+  return { ok, observed: `menu in viewport=${inViewport}, ArrowDown→"${active}", fixture entries=${entries.join('/')}, persisted=${JSON.stringify(persisted)}, custom menu in field=${customInField}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P15', 'light by default even with a dark OS; an explicit theme choice persists', { colorScheme: 'dark' }, async ({ page, clean }) => {
+  const initial = await page.$eval('.cb-app', (e) => e.dataset.theme);
+  await dockItem(page, 'Dunkles Design');
+  await page.waitForTimeout(150);
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  const reloaded = await page.$eval('.cb-app', (e) => e.dataset.theme);
+  const problems = await clean();
+  const ok = initial === 'light' && reloaded === 'dark' && !problems.length;
+  return { ok, observed: `dark OS first start=${initial}, after choosing dark + reload=${reloaded}` };
+});
+
+test('P10', 'dock is compact and centred on its core; it grows up and down around the core as an overlay', async ({ page, clean }) => {
+  const box = () => page.$eval('.cb-navdock', (e) => { const r = e.getBoundingClientRect(); return { w: r.width, h: r.height, top: r.top, bottom: r.bottom }; });
+  const core = () => page.$eval('.cb-navdock__core', (e) => { const r = e.getBoundingClientRect(); return Math.round(r.top + r.height / 2); });
   const x0 = await page.$eval('#cb-main', (e) => e.getBoundingClientRect().left);
-  await page.hover('.cb-sidebar');
-  await page.waitForTimeout(500);
-  const panel = await page.$eval('.cb-sidebar__panel', (e) => e.getBoundingClientRect().width);
+  const rest = await box();
+  const coreRest = await core();
+  await page.hover('.cb-space-switch__trigger');
+  await page.waitForTimeout(800);
+  const open = await box();
+  const coreOpen = await core();
+  const flyout = await page.$eval('.cb-space-switch', (e) => e.hasAttribute('data-open'));
   const x1 = await page.$eval('#cb-main', (e) => e.getBoundingClientRect().left);
   const problems = await clean();
-  const ok = panel >= 240 && x0 === x1 && !problems.length;
-  return { ok, observed: `panel width on hover=${panel}, workspace left ${x0} -> ${x1}` };
+  const ok = rest.h < 260 && rest.w <= 64 && open.w >= 220 && open.top < rest.top && open.bottom > rest.bottom && Math.abs(coreRest - 450) <= 1 && coreRest === coreOpen && flyout && x0 === x1 && !problems.length;
+  return { ok, observed: `rest=${JSON.stringify(rest)}, open=${JSON.stringify(open)}, core centre ${coreRest} -> ${coreOpen}, flyout open=${flyout}, workspace left ${x0} -> ${x1}` };
 });
 
 test('P11', 'empty space shows the living empty state; sessions show "not available"', async ({ page, clean }) => {
-  await page.click('.cb-sidebar .cb-nav__item[title="Ideen"]');
+  await gotoSpace(page, 'Ideen');
   const empty = await page.$eval('.cb-empty', (e) => e.dataset.variant + ':' + e.querySelector('h2').textContent);
-  await page.click('.cb-sidebar .cb-nav__item[title="Sessions"]');
+  await dockItem(page, 'Sessions');
   const sessions = await page.$eval('.cb-empty', (e) => e.dataset.variant);
   const problems = await clean();
   const ok = empty === 'space-empty:Dieser Space ist noch leer' && sessions === 'unavailable' && !problems.length;
@@ -317,7 +419,7 @@ test('P11', 'empty space shows the living empty state; sessions show "not availa
 
 test('P12', 'phone: dock, spaces drawer, full-screen search and inspector, no horizontal overflow', { viewport: PHONE, touch: true }, async ({ page, clean }) => {
   const layout = await page.evaluate(() => ({
-    sidebar: getComputedStyle(document.querySelector('.cb-sidebar')).display,
+    sidebar: getComputedStyle(document.querySelector('.cb-navdock-rail')).display,
     dock: [...document.querySelectorAll('.cb-dock__button')].map((b) => b.textContent),
     overflow: document.documentElement.scrollWidth > innerWidth || document.querySelector('#cb-main').scrollWidth > document.querySelector('#cb-main').clientWidth,
   }));
@@ -345,13 +447,14 @@ test('P12', 'phone: dock, spaces drawer, full-screen search and inspector, no ho
   return { ok, observed: `${JSON.stringify(layout)}, drawer->${title}, palette w=${paletteWidth}, inspector=${JSON.stringify(inspector)}, capture focus=${captureFocused}, recorder above dock=${recorder <= dockTop}` };
 });
 
-test('P13', 'reduced motion: no transitions, no ambient drift', { reducedMotion: 'reduce' }, async ({ page, clean }) => {
+test('P13', 'reduced motion: no transitions; the photographic scene is static', { reducedMotion: 'reduce' }, async ({ page, clean }) => {
   const motion = await page.evaluate(() => ({
     tile: getComputedStyle(document.querySelector('.cb-tile__open')).transitionDuration,
-    orb: getComputedStyle(document.querySelector('.cb-ambient__orb')).animationName,
+    scene: getComputedStyle(document.querySelector('.cb-scene__photo')).animationName,
+    photo: getComputedStyle(document.querySelector('.cb-scene__photo')).backgroundImage.includes('ambient-orange'),
   }));
   const problems = await clean();
-  const ok = motion.tile.split(',').every((d) => parseFloat(d) === 0) && motion.orb === 'none' && !problems.length;
+  const ok = motion.tile.split(',').every((d) => parseFloat(d) === 0) && motion.scene === 'none' && motion.photo && !problems.length;
   return { ok, observed: JSON.stringify(motion) };
 });
 

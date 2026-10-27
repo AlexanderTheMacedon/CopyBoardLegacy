@@ -1,5 +1,5 @@
 /*
- * CopyBoard 2 design tokens — Glass Experience WOW v2 (builds on Run C · Soft Studio / Mist & Lavender).
+ * CopyBoard 2 design tokens — Orange Ambient Glass (builds on Glass Experience WOW v2).
  *   primitives (--cb-p-*) → semantic (--cb-*) → material (--cb-glass-*) → component (--cb-card-*, …).
  * Material system: every surface is one of four glass tiers over the same ambient scene —
  *   thin    chips, segmented tracks, small controls   (most transparent, light blur)
@@ -18,22 +18,27 @@
 }
 
 .cb-app {
-  /* --- Primitives: Mist & Lavender brand study (D-013) --- */
-  --cb-p-mist: #f6f4fb;
-  --cb-p-lilac: #c9b8ff;
-  --cb-p-orchid: #e4bdf6;
-  --cb-p-periwinkle: #b3bdff;
-  --cb-p-iris: #6e5fcb;
-  --cb-p-iris-deep: #4f41a8;
-  --cb-p-graphite: #27223a;
-  --cb-p-ember: #ffd4bd;
+  /* --- Primitives: Orange Ambient Glass. Warm neutrals carry the UI; orange/amber is light and accent, never fill. --- */
+  --cb-p-paper: #fffaf5;
+  --cb-p-sand: #f6ebe0;
+  --cb-p-amber: #ffb36b;
+  --cb-p-orange: #f07a2a;
+  --cb-p-ember: #c84f0a;
+  --cb-p-rust: #8f3606;
+  --cb-p-graphite: #2a1c12;
+  /* legacy primitive names still referenced by feature styles, mapped into the warm palette */
+  --cb-p-lilac: var(--cb-p-amber);
+  --cb-p-orchid: #ffc999;
+  --cb-p-periwinkle: #f4a46a;
+  --cb-p-iris: var(--cb-p-ember);
+  --cb-p-mist: var(--cb-p-paper);
 
-  /* --- Space identity colours (D-018/D-031): ambient tint and small markers only, never status --- */
-  --cb-space-lavender: #b9a3f3;
-  --cb-space-sky: #9fc5ec;
-  --cb-space-sage: #b1d6b8;
-  --cb-space-peach: #f3c6a3;
-  --cb-space-rose: #f0b1c6;
+  /* --- Space identity colours (D-018/D-031): small markers only, never status; tuned to sit calmly on warm glass --- */
+  --cb-space-lavender: #a996e6;
+  --cb-space-sky: #82b4dc;
+  --cb-space-sage: #8fc29d;
+  --cb-space-peach: #f2a66e;
+  --cb-space-rose: #ea98ae;
 
   /* --- Spacing (Blueprint 04 §2.1) --- */
   --cb-space-1: 4px;
@@ -46,16 +51,18 @@
   --cb-space-10: 40px;
   --cb-space-12: 48px;
 
-  /* --- Radius hierarchy (D-014): one nested squircle family. Inner radius = outer radius − inset. --- */
+  /* --- Squircle geometry: one family of soft rounded rectangles, no capsules.
+         Nested surfaces use inner = outer − inset (e.g. track − thumb, card − preview). --- */
   --cb-squircle-boost: 1;
-  --cb-radius-control-sm: calc(10px * var(--cb-squircle-boost));
-  --cb-radius-control: calc(14px * var(--cb-squircle-boost));
-  --cb-radius-card: calc(22px * var(--cb-squircle-boost));
-  --cb-radius-panel: calc(28px * var(--cb-squircle-boost));
-  --cb-radius-sheet: calc(34px * var(--cb-squircle-boost));
-  --cb-radius-pill: 999px;
-  /* Track + thumb of segmented controls and chip rows share one inset */
-  --cb-track-inset: 4px;
+  --cb-radius-xs: calc(6px * var(--cb-squircle-boost));
+  --cb-radius-control-sm: calc(9px * var(--cb-squircle-boost));
+  --cb-radius-control: calc(12px * var(--cb-squircle-boost));
+  --cb-radius-card: calc(20px * var(--cb-squircle-boost));
+  --cb-radius-panel: calc(26px * var(--cb-squircle-boost));
+  --cb-radius-sheet: calc(32px * var(--cb-squircle-boost));
+  /* former capsule radius: deliberately a control radius now, so no control can turn into a pill */
+  --cb-radius-pill: var(--cb-radius-control-sm);
+  --cb-track-inset: 3px;
 
   /* --- Typography: Soft Editorial (D-016). System stack until the font licence gate. --- */
   --cb-font-ui: system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -83,7 +90,6 @@
   --cb-dur-overlay: 340ms;
   --cb-dur-exit: 190ms;
   --cb-dur-expressive: 440ms;
-  --cb-dur-ambient: 48s;
   --cb-stagger: 26ms;
   --cb-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --cb-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
@@ -95,174 +101,184 @@
   /* physical springs (damped, sampled); browsers without linear() fall back to their default curve */
   --cb-spring: linear(0, 0.0384, 0.1311, 0.2511, 0.3797, 0.5045, 0.618, 0.7163, 0.7981, 0.8638, 0.9146, 0.9525, 0.9797, 0.9981, 1.0098, 1.0164, 1.0194, 1.0199, 1.0187, 1.0167, 1.0142, 1.0117, 1.0092, 1.0071, 1.0052, 1.0036, 1.0024, 1.0015, 1);
   --cb-spring-bouncy: linear(0, 0.0396, 0.1386, 0.271, 0.4167, 0.5607, 0.6927, 0.8066, 0.8996, 0.9711, 1.0226, 1.0564, 1.0755, 1.0831, 1.0821, 1.0752, 1.0649, 1.053, 1.0408, 1.0293, 1.0193, 1.0109, 1.0043, 0.9994, 0.9961, 0.9941, 0.9932, 0.9931, 0.9935, 0.9943, 0.9952, 0.9962, 1);
-  --cb-hover-lift: -4px;
+  --cb-hover-lift: -3px;
   --cb-settle-scale: 1.018;
   --cb-enter-shift: 14px;
 
   /* --- Layout --- */
   --cb-float: 12px; /* distance of floating panels to the window edge */
-  --cb-rail-w: 60px;
-  --cb-sidebar-w: 260px;
+  --cb-dock-w: 60px;
+  --cb-dock-open-w: 228px;
   --cb-inspector-w: 400px;
   --cb-rail-context-w: 300px;
   --cb-toolbar-h: 64px;
   --cb-dock-h: 68px;
-  --cb-ambient-h: 520px;
   --cb-safe-bottom: env(safe-area-inset-bottom, 0px);
   --cb-safe-top: env(safe-area-inset-top, 0px);
   --cb-content-max: 1320px;
   --cb-gutter: clamp(16px, 3.2vw, 44px);
 
-  /* --- Focus (Blueprint 04 §5.1) --- */
+  /* --- Focus (Blueprint 04 §5.1): one ring, never stacked with halos or borders --- */
   --cb-focus-width: 2px;
   --cb-focus-offset: 2px;
+
+  /* --- Background asset: the photographic orange line structure (Ryunosuke Kikuno, Unsplash) --- */
+  --cb-scene-photo: url('../assets/ambient-orange.jpg');
 }
 
-/* --- Semantic colours + glass materials: light --- */
+/* --- Semantic colours + glass materials: light (primary design state) --- */
 .cb-app,
 .cb-app[data-theme='light'] {
   color-scheme: light;
-  --cb-surface-canvas: #f3f0fa;
-  --cb-surface-base: #ffffff;
-  --cb-surface-subtle: #f3f0f9;
-  --cb-surface-hover: #ece6f8;
-  --cb-surface-selected: #e6ddfb;
-  --cb-surface-inverse: #241f36;
-  --cb-text-primary: #221d35;
-  --cb-text-secondary: #5a536e;
-  --cb-text-tertiary: #7a7390;
-  --cb-text-on-inverse: #e9e4f6;
-  --cb-border-subtle: #e4def0;
-  --cb-border-strong: #cfc6e2;
-  --cb-accent: #6a5ad0;
-  --cb-accent-hover: #5747bd;
-  --cb-accent-soft: #ebe5fd;
-  --cb-accent-glow: rgb(122 101 240 / 0.38);
+  --cb-surface-canvas: #f4e6d8;
+  --cb-surface-base: #fffaf5;
+  --cb-surface-subtle: #faf1e8;
+  --cb-surface-hover: #f5e6d8;
+  --cb-surface-selected: #fcdcc2;
+  --cb-surface-inverse: #2a1c12;
+  --cb-paper: #fffcf9;
+  --cb-text-primary: #26180f;
+  --cb-text-secondary: #5c4636;
+  --cb-text-tertiary: #87705f;
+  --cb-text-on-inverse: #fbefe4;
+  --cb-border-subtle: #ecdccd;
+  --cb-border-strong: #dcc3ad;
+  /* accent as text/icon on warm glass (≥ 4.5:1) and as fill under white text */
+  --cb-accent: #b9480a;
+  --cb-accent-hover: #9c3c07;
+  --cb-accent-fill: linear-gradient(180deg, #f07a2a, #cf540c);
+  --cb-accent-fill-hover: linear-gradient(180deg, #e46e1f, #bb4a09);
+  --cb-accent-soft: #fde4cf;
+  --cb-accent-glow: rgb(236 110 30 / 0.34);
   --cb-on-accent: #ffffff;
-  --cb-focus-ring: #5a4bb9;
-  --cb-status-success: #1f6e52;
-  --cb-status-warning: #8a5a14;
-  --cb-status-error: #a8334d;
-  --cb-status-info: #3e5fab;
-  --cb-status-warning-soft: #fbf1dc;
-  --cb-status-error-soft: #fbe3e8;
-  --cb-logo-a: #5b49d6;
-  --cb-logo-b: #a48cff;
+  --cb-focus-ring: #c2410c;
+  --cb-status-success: #24704f;
+  --cb-status-warning: #8a5410;
+  --cb-status-error: #b02c3e;
+  --cb-status-info: #31609e;
+  --cb-status-success-soft: #e1f2e8;
+  --cb-status-warning-soft: #fbefd8;
+  --cb-status-error-soft: #fbe2e2;
+  --cb-logo-a: #e2600f;
+  --cb-logo-b: #ffab5e;
 
-  /* Ambient scene (D-019/D-031) */
-  --cb-scene-base: linear-gradient(168deg, #f1edfb 0%, #ece8fa 38%, #f4eff9 72%, #f6f0f5 100%);
-  --cb-orb-lilac: #cdbcff;
-  --cb-orb-orchid: #ebc2f7;
-  --cb-orb-periwinkle: #b6c0ff;
-  --cb-orb-iris: #a394f4;
-  --cb-orb-warm: #ffd9c4;
-  --cb-bokeh: rgb(255 255 255 / 0.55);
-  --cb-bokeh-tint: rgb(196 178 255 / 0.32);
-  --cb-ambient-opacity: 0.82;
-  --cb-ambient-wash: color-mix(in srgb, var(--cb-p-lilac) 26%, transparent);
+  /* Scene: the photo with a warm neutral veil — calmer behind content (left), more of the light lines to the right */
+  --cb-scene-veil: linear-gradient(102deg, rgb(255 247 239 / 0.82) 0%, rgb(255 244 234 / 0.62) 34%, rgb(255 240 228 / 0.36) 68%, rgb(255 236 220 / 0.18) 100%);
+  --cb-scene-bleed: radial-gradient(70% 55% at 78% 8%, rgb(255 205 150 / 0.42), transparent 70%);
+  --cb-scene-vignette: radial-gradient(130% 120% at 50% 40%, transparent 55%, rgb(120 46 6 / 0.16) 100%);
+  --cb-scene-blur: 1.5px;
+  --cb-scene-fallback: #ef8a45;
+  --cb-orb-lilac: #ffc68f;
+  --cb-orb-orchid: #ffd6b0;
+  --cb-orb-periwinkle: #ffb27a;
+  --cb-orb-iris: #f08a3c;
+  --cb-orb-warm: #ffd3a8;
 
-  /* Glass materials */
-  --cb-glass-thin: rgb(255 255 255 / 0.46);
-  --cb-glass-regular: rgb(255 255 255 / 0.62);
-  --cb-glass-thick: rgb(250 248 255 / 0.78);
-  --cb-glass-solid: rgb(255 255 255 / 0.92);
-  --cb-glass-hover: rgb(255 255 255 / 0.74);
-  --cb-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0) 46%);
-  --cb-glass-rim: rgb(255 255 255 / 0.78);
-  --cb-glass-rim-soft: rgb(255 255 255 / 0.5);
-  --cb-glass-hairline: rgb(92 76 150 / 0.11);
-  --cb-glass-lit: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(255 255 255 / 0.28);
-  --cb-glass-saturate: 1.7;
+  /* Glass materials: warm white frost over the photo */
+  --cb-glass-thin: rgb(255 249 243 / 0.5);
+  --cb-glass-regular: rgb(255 250 245 / 0.66);
+  --cb-glass-thick: rgb(255 249 243 / 0.8);
+  --cb-glass-solid: rgb(255 252 248 / 0.94);
+  --cb-glass-hover: rgb(255 255 255 / 0.72);
+  --cb-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0) 44%);
+  --cb-glass-rim: rgb(255 255 255 / 0.72);
+  --cb-glass-rim-soft: rgb(255 255 255 / 0.46);
+  --cb-glass-hairline: rgb(120 60 20 / 0.11);
+  /* one lit top edge; the rim is the border, so no second inner contour */
+  --cb-glass-lit: inset 0 1px 0 rgb(255 255 255 / 0.85);
+  --cb-glass-saturate: 1.45;
   --cb-blur-thin: 14px;
-  --cb-blur-regular: 24px;
+  --cb-blur-regular: 26px;
   --cb-blur-thick: 40px;
-  --cb-divider: linear-gradient(90deg, transparent, rgb(92 76 150 / 0.14) 18%, rgb(92 76 150 / 0.14) 82%, transparent);
+  --cb-divider: linear-gradient(90deg, transparent, rgb(120 60 20 / 0.14) 16%, rgb(120 60 20 / 0.14) 84%, transparent);
 
-  /* legacy material aliases (used across features) now point into the glass system */
   --cb-frosted-popover: var(--cb-glass-thick);
   --cb-frosted-floating: var(--cb-glass-regular);
   --cb-frosted-sticky: var(--cb-glass-regular);
   --cb-blur-popover: var(--cb-blur-thick);
   --cb-blur-sticky: var(--cb-blur-regular);
 
-  --cb-backdrop: rgb(36 26 72 / 0.26);
-  --cb-shadow-color: 62 46 128;
-  --cb-shadow-1: 0 1px 2px rgb(var(--cb-shadow-color) / 0.06), 0 4px 14px -4px rgb(var(--cb-shadow-color) / 0.1);
-  --cb-shadow-2: 0 2px 4px rgb(var(--cb-shadow-color) / 0.05), 0 14px 34px -10px rgb(var(--cb-shadow-color) / 0.2);
-  --cb-shadow-3: 0 4px 12px rgb(var(--cb-shadow-color) / 0.06), 0 28px 60px -18px rgb(var(--cb-shadow-color) / 0.28);
-  --cb-shadow-4: 0 10px 28px rgb(var(--cb-shadow-color) / 0.1), 0 50px 110px -28px rgb(var(--cb-shadow-color) / 0.4);
-  --cb-scroll-thumb: rgb(92 76 150 / 0.34);
-  --cb-scroll-thumb-idle: rgb(92 76 150 / 0.14);
-  --cb-code-bg: #241f38;
-  --cb-code-text: #ddd6f6;
-  --cb-code-muted: #8c82b4;
+  --cb-backdrop: rgb(60 26 6 / 0.24);
+  --cb-shadow-color: 110 48 10;
+  --cb-shadow-1: 0 1px 2px rgb(var(--cb-shadow-color) / 0.06), 0 4px 12px -6px rgb(var(--cb-shadow-color) / 0.12);
+  --cb-shadow-2: 0 1px 3px rgb(var(--cb-shadow-color) / 0.06), 0 12px 28px -14px rgb(var(--cb-shadow-color) / 0.22);
+  --cb-shadow-3: 0 2px 8px rgb(var(--cb-shadow-color) / 0.06), 0 24px 52px -24px rgb(var(--cb-shadow-color) / 0.3);
+  --cb-shadow-4: 0 8px 24px rgb(var(--cb-shadow-color) / 0.08), 0 44px 96px -36px rgb(var(--cb-shadow-color) / 0.42);
+  --cb-scroll-thumb: rgb(120 60 20 / 0.36);
+  --cb-scroll-thumb-idle: rgb(120 60 20 / 0.14);
+  --cb-code-bg: #2b1b12;
+  --cb-code-text: #f7e4d4;
+  --cb-code-muted: #b48c70;
 }
 
-/* --- Semantic colours + glass materials: dark — graphite/aubergine studio with controlled violet light (D-031) --- */
+/* --- Semantic colours + glass materials: dark (manual option) — smoked amber glass over a dimmed photo --- */
 .cb-app[data-theme='dark'] {
   color-scheme: dark;
-  --cb-surface-canvas: #110e1a;
-  --cb-surface-base: #1d1929;
-  --cb-surface-subtle: #251f33;
-  --cb-surface-hover: #2e2840;
-  --cb-surface-selected: #3a3058;
-  --cb-surface-inverse: #f3effa;
-  --cb-text-primary: #f4f0fb;
-  --cb-text-secondary: #c4bcd6;
-  --cb-text-tertiary: #978fae;
-  --cb-text-on-inverse: #27223a;
-  --cb-border-subtle: #322b46;
-  --cb-border-strong: #4a4262;
-  --cb-accent: #b6a5ff;
-  --cb-accent-hover: #cbbdff;
-  --cb-accent-soft: #2f284b;
-  --cb-accent-glow: rgb(150 128 255 / 0.4);
-  --cb-on-accent: #1b1630;
-  --cb-focus-ring: #c9bbff;
-  --cb-status-success: #83dbb5;
+  --cb-surface-canvas: #150d08;
+  --cb-surface-base: #21150e;
+  --cb-surface-subtle: #2a1b12;
+  --cb-surface-hover: #352318;
+  --cb-surface-selected: #4a2b16;
+  --cb-surface-inverse: #fbefe4;
+  --cb-paper: #1d130d;
+  --cb-text-primary: #fbf1e8;
+  --cb-text-secondary: #dcc6b4;
+  --cb-text-tertiary: #a88f7c;
+  --cb-text-on-inverse: #2a1c12;
+  --cb-border-subtle: #3a281c;
+  --cb-border-strong: #573c29;
+  --cb-accent: #ffa261;
+  --cb-accent-hover: #ffba88;
+  --cb-accent-fill: linear-gradient(180deg, #ffab6b, #f0832f);
+  --cb-accent-fill-hover: linear-gradient(180deg, #ffbb85, #f69445);
+  --cb-accent-soft: #432612;
+  --cb-accent-glow: rgb(255 140 60 / 0.32);
+  --cb-on-accent: #2a1206;
+  --cb-focus-ring: #ffb27a;
+  --cb-status-success: #86d9b0;
   --cb-status-warning: #f6c979;
-  --cb-status-error: #ff9eb0;
-  --cb-status-info: #a0bfff;
-  --cb-status-warning-soft: #3a3020;
-  --cb-status-error-soft: #45222c;
-  --cb-logo-a: #9d8bff;
-  --cb-logo-b: #e2d9ff;
+  --cb-status-error: #ff9e9e;
+  --cb-status-info: #9ec0f5;
+  --cb-status-success-soft: #193226;
+  --cb-status-warning-soft: #3a2c18;
+  --cb-status-error-soft: #45221f;
+  --cb-logo-a: #ff9a4d;
+  --cb-logo-b: #ffd2a8;
 
-  --cb-scene-base: linear-gradient(168deg, #15111f 0%, #110e1a 45%, #140f1c 100%);
-  --cb-orb-lilac: #5b45c9;
-  --cb-orb-orchid: #8a4fc0;
-  --cb-orb-periwinkle: #3f4fc4;
-  --cb-orb-iris: #6f5be0;
-  --cb-orb-warm: #8a4a52;
-  --cb-bokeh: rgb(214 200 255 / 0.12);
-  --cb-bokeh-tint: rgb(150 120 255 / 0.16);
-  --cb-ambient-opacity: 0.55;
-  --cb-ambient-wash: color-mix(in srgb, #5e4bc8 18%, transparent);
+  --cb-scene-veil: linear-gradient(102deg, rgb(18 10 6 / 0.9) 0%, rgb(20 11 6 / 0.8) 40%, rgb(22 12 6 / 0.62) 100%);
+  --cb-scene-bleed: radial-gradient(70% 55% at 78% 8%, rgb(255 140 50 / 0.16), transparent 70%);
+  --cb-scene-vignette: radial-gradient(130% 120% at 50% 40%, transparent 50%, rgb(0 0 0 / 0.4) 100%);
+  --cb-scene-fallback: #1c100a;
+  --cb-orb-lilac: #a2501a;
+  --cb-orb-orchid: #8a4518;
+  --cb-orb-periwinkle: #b55a1c;
+  --cb-orb-iris: #c86424;
+  --cb-orb-warm: #7a3a14;
 
-  --cb-glass-thin: rgb(44 38 64 / 0.42);
-  --cb-glass-regular: rgb(34 29 50 / 0.58);
-  --cb-glass-thick: rgb(26 22 39 / 0.8);
-  --cb-glass-solid: rgb(29 25 41 / 0.94);
-  --cb-glass-hover: rgb(48 41 70 / 0.66);
-  --cb-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0) 46%);
-  --cb-glass-rim: rgb(255 255 255 / 0.1);
-  --cb-glass-rim-soft: rgb(255 255 255 / 0.06);
-  --cb-glass-hairline: rgb(255 255 255 / 0.08);
-  --cb-glass-lit: inset 0 1px 0 rgb(255 255 255 / 0.1), inset 0 -1px 0 rgb(255 255 255 / 0.02);
-  --cb-glass-saturate: 1.5;
-  --cb-divider: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.09) 18%, rgb(255 255 255 / 0.09) 82%, transparent);
+  --cb-glass-thin: rgb(48 31 21 / 0.46);
+  --cb-glass-regular: rgb(36 23 15 / 0.62);
+  --cb-glass-thick: rgb(28 18 12 / 0.82);
+  --cb-glass-solid: rgb(31 20 13 / 0.95);
+  --cb-glass-hover: rgb(62 41 27 / 0.66);
+  --cb-glass-sheen: linear-gradient(180deg, rgb(255 230 210 / 0.06), rgb(255 255 255 / 0) 44%);
+  --cb-glass-rim: rgb(255 220 190 / 0.12);
+  --cb-glass-rim-soft: rgb(255 220 190 / 0.07);
+  --cb-glass-hairline: rgb(255 220 190 / 0.09);
+  --cb-glass-lit: inset 0 1px 0 rgb(255 230 210 / 0.08);
+  --cb-glass-saturate: 1.3;
+  --cb-divider: linear-gradient(90deg, transparent, rgb(255 220 190 / 0.1) 16%, rgb(255 220 190 / 0.1) 84%, transparent);
 
-  --cb-backdrop: rgb(6 4 14 / 0.56);
+  --cb-backdrop: rgb(8 4 2 / 0.56);
   --cb-shadow-color: 0 0 0;
-  --cb-shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px -4px rgb(0 0 0 / 0.35);
-  --cb-shadow-2: 0 2px 4px rgb(0 0 0 / 0.3), 0 14px 34px -10px rgb(0 0 0 / 0.55);
-  --cb-shadow-3: 0 4px 12px rgb(0 0 0 / 0.3), 0 28px 60px -18px rgb(0 0 0 / 0.65);
-  --cb-shadow-4: 0 10px 28px rgb(0 0 0 / 0.4), 0 50px 110px -28px rgb(0 0 0 / 0.75);
-  --cb-scroll-thumb: rgb(220 210 255 / 0.3);
-  --cb-scroll-thumb-idle: rgb(220 210 255 / 0.1);
-  --cb-code-bg: #14111d;
-  --cb-code-text: #ddd6f3;
-  --cb-code-muted: #7e74a6;
+  --cb-shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px -6px rgb(0 0 0 / 0.35);
+  --cb-shadow-2: 0 1px 3px rgb(0 0 0 / 0.3), 0 12px 28px -14px rgb(0 0 0 / 0.55);
+  --cb-shadow-3: 0 2px 8px rgb(0 0 0 / 0.3), 0 24px 52px -24px rgb(0 0 0 / 0.65);
+  --cb-shadow-4: 0 8px 24px rgb(0 0 0 / 0.4), 0 44px 96px -36px rgb(0 0 0 / 0.75);
+  --cb-scroll-thumb: rgb(255 220 190 / 0.3);
+  --cb-scroll-thumb-idle: rgb(255 220 190 / 0.1);
+  --cb-code-bg: #160d08;
+  --cb-code-text: #f3dfcf;
+  --cb-code-muted: #9a7a62;
 }
 
 /* --- Density (D-032, Blueprint 04 §4.1): discrete steps, same grid system --- */
@@ -289,37 +305,17 @@
   --cb-row-min-h: 48px;
 }
 
-/* --- Real squircle silhouettes where supported (D-014); border-radius stays the fallback --- */
+/* --- Continuous squircle corners where supported (corner-shape); border-radius stays the fallback geometry.
+   Squircles read smaller than circular arcs at the same radius, hence the boost. --- */
 @supports (corner-shape: squircle) {
   .cb-app {
-    --cb-squircle-boost: 1.35;
+    --cb-squircle-boost: 1.4;
   }
-  .cb-squircle,
-  .cb-tile__open,
-  .cb-tile__preview,
-  .cb-capture,
-  .cb-capture__lead,
-  .cb-inspector,
-  .cb-inspector__image,
-  .cb-inspector__content,
-  .cb-dialog__panel,
-  .cb-popover__panel,
-  .cb-recorder,
-  .cb-dock,
-  .cb-button,
-  .cb-icon-button,
-  .cb-segmented--segmented,
-  .cb-segmented--segmented .cb-glider,
-  .cb-nav__swatch,
-  .cb-brand-mark,
-  .cb-empty__art,
-  .cb-palette__icon,
-  .cb-palette__glider,
-  .cb-settings__glider,
-  .cb-settings__row,
-  .cb-rail__slot,
-  .cb-notice,
-  .cb-search-trigger {
+  .cb-app :where(*),
+  .cb-app :where(*)::before,
+  .cb-app :where(*)::after,
+  .cb-context-menu,
+  .cb-dialog__panel {
     corner-shape: squircle;
   }
 }

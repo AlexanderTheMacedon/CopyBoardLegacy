@@ -1,4 +1,4 @@
-import type { ItemId, ItemKind, Location } from '../domain/types';
+import type { ItemId, ItemKind, Location, SpaceId } from '../domain/types';
 import { defaultPreferences, type Preferences } from './preferences';
 
 // Volatile UI state of the preview (navigation, selection, layers, preferences). Lives only in React memory.
@@ -13,6 +13,8 @@ export type BoardFilter = 'all' | 'favorites' | ItemKind;
 
 export interface UiState {
   readonly location: Location;
+  /** Last visited space: target of captures made while a global collection is open. */
+  readonly lastSpaceId: SpaceId | null;
   readonly filter: BoardFilter;
   /** Item shown in the Inspector (detail context, D-004). */
   readonly inspectedItemId: ItemId | null;
@@ -39,15 +41,16 @@ export type UiAction =
   | { type: 'setRecorderOpen'; open: boolean }
   | { type: 'setPreference'; patch: Partial<Preferences> };
 
-export const createInitialState = (location: Location): UiState => ({
+export const createInitialState = (location: Location, prefs: Preferences = defaultPreferences): UiState => ({
   location,
+  lastSpaceId: location.type === 'space' ? location.spaceId : null,
   filter: 'all',
   inspectedItemId: null,
   composerItemId: null,
   overlay: null,
   settingsSection: 'general',
   recorderOpen: false,
-  prefs: defaultPreferences,
+  prefs,
 });
 
 const sameLocation = (a: Location, b: Location): boolean =>
@@ -58,7 +61,15 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
     case 'navigate':
       // Navigation owns the collection; detail context belongs to the old collection and closes. Recorder keeps running (D-008).
       if (sameLocation(state.location, action.location)) return state.overlay === 'spaces-drawer' ? { ...state, overlay: null } : state;
-      return { ...state, location: action.location, filter: 'all', inspectedItemId: null, composerItemId: null, overlay: null };
+      return {
+        ...state,
+        location: action.location,
+        lastSpaceId: action.location.type === 'space' ? action.location.spaceId : state.lastSpaceId,
+        filter: 'all',
+        inspectedItemId: null,
+        composerItemId: null,
+        overlay: null,
+      };
     case 'setFilter':
       return { ...state, filter: action.filter };
     case 'inspect':

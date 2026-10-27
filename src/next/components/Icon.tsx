@@ -152,6 +152,14 @@ const paths = {
     </>
   ),
   bolt: <path d="M13 3 5 13.5h6L10.5 21 19 10.5h-6Z" />,
+  link: <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1" />,
+  trash: <path d="M4.5 7h15M10 4h4M6.5 7l.9 11.2a2 2 0 0 0 2 1.8h5.2a2 2 0 0 0 2-1.8L17.5 7M10.25 11v5M13.75 11v5" />,
+  clipboard: (
+    <>
+      <rect x="8.5" y="3.5" width="7" height="3.5" rx="1.25" />
+      <path d="M15.5 5.25h1.25a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H7.25a2 2 0 0 1-2-2V7.25a2 2 0 0 1 2-2H8.5" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof paths;
