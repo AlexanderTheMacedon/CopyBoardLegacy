@@ -199,6 +199,8 @@
 
 .cb-tile {
   position: relative;
+  /* own stacking context: the merge back plate (::before, z −1) stays behind this card, never behind the scene */
+  isolation: isolate;
   /* reveal: cards settle into the grid with a capped stagger (M-12, Blueprint 03 §4.4 rule 5) */
   animation: cb-appear var(--cb-dur-expressive) var(--cb-spring) backwards;
   animation-delay: calc(var(--i, 0) * var(--cb-stagger) + 90ms);
@@ -223,7 +225,7 @@
     border-color var(--cb-dur-hover) var(--cb-ease-out), --cb-light var(--cb-dur-standard) var(--cb-ease-out);
 }
 .cb-app[data-theme='dark'] .cb-tile__open {
-  background: radial-gradient(420px circle at var(--cb-light-x, 50%) var(--cb-light-y, 0%), rgb(255 190 140 / calc(var(--cb-light) * 0.1)), transparent 60%),
+  background: radial-gradient(420px circle at var(--cb-light-x, 50%) var(--cb-light-y, 0%), rgb(255 255 255 / calc(var(--cb-light) * 0.08)), transparent 60%),
     var(--cb-glass-sheen), var(--cb-glass-regular);
 }
 /* edge light: the rim brightens where the pointer is */
@@ -504,7 +506,7 @@
 .cb-preview--code {
   display: flex;
   flex-direction: column;
-  background: radial-gradient(120% 80% at 100% 0%, rgb(255 140 60 / 0.16), transparent 60%), var(--cb-code-bg);
+  background: radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--cb-hue) 18%, transparent), transparent 60%), var(--cb-code-bg);
   color: var(--cb-code-text);
   overflow: hidden;
 }
@@ -861,8 +863,9 @@
   }
 }
 .cb-empty__title {
-  font: var(--cb-text-section);
-  letter-spacing: var(--cb-tracking-heading);
+  font: var(--cb-text-editorial);
+  font-size: 38px;
+  letter-spacing: -0.01em;
 }
 .cb-empty__text {
   max-width: 46ch;

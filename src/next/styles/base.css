@@ -1,4 +1,21 @@
-/* Base layer: reset, typography defaults, focus and accessibility utilities, shared keyframes. */
+/* Base layer: fonts, reset, typography defaults, focus and accessibility utilities, scene, shared keyframes. */
+
+/* Instrument Serif (Google Fonts, SIL OFL 1.1), self-hosted: no third-party request. Latin subset covers German
+   umlauts, ß and typographic quotes; `swap` shows the serif fallback until the face is ready. */
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/instrument-serif-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/instrument-serif-italic-latin.woff2') format('woff2');
+}
 
 *,
 *::before,
@@ -13,8 +30,8 @@ body {
 }
 
 body {
-  /* warm sand while the app boots; light is the default regardless of the OS theme */
-  background: #f4e6d8;
+  /* cool mist while the app boots; light is the default regardless of the OS theme */
+  background: #e9eef3;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -32,12 +49,13 @@ body {
   color: var(--cb-text-primary);
   font: var(--cb-text-body);
   font-feature-settings: 'cv11', 'ss01', 'calt';
-  transition: background-color var(--cb-dur-expressive) var(--cb-ease-out), color var(--cb-dur-expressive) var(--cb-ease-out);
+  transition: background-color var(--cb-dur-expressive) var(--cb-ease-out), color var(--cb-dur-expressive) var(--cb-ease-out),
+    --cb-hue 700ms var(--cb-ease-out);
   scrollbar-color: var(--cb-scroll-thumb-idle) transparent;
   scrollbar-width: thin;
 }
-/* --- Scene: the orange photograph behind every glass surface. First child of the app; every shell layer after it is
-   positioned, so it paints above the scene in tree order. ------------------------------------------------------------ */
+/* --- Scene: the photograph behind every glass surface. First child of the app; every shell layer after it is
+   positioned, so it paints above the scene in tree order. Two photo layers crossfade (AmbientScene.tsx). ---------- */
 .cb-scene {
   position: fixed;
   inset: 0;
@@ -45,20 +63,99 @@ body {
   overflow: hidden;
   pointer-events: none;
   background: var(--cb-scene-fallback);
+  --cb-scene-blur: 7px;
+}
+.cb-scene[data-blur='clear'] {
+  --cb-scene-blur: 0px;
+}
+.cb-scene[data-blur='deep'] {
+  --cb-scene-blur: 22px;
 }
 .cb-scene__photo {
   position: absolute;
   /* overscan hides the soft edge of the blur */
-  inset: -24px;
+  inset: calc(var(--cb-scene-blur) * -3 - 8px);
   background: var(--cb-scene-photo) 62% 42% / cover no-repeat;
-  filter: blur(var(--cb-scene-blur)) saturate(1.06);
-  transition: filter var(--cb-dur-expressive) var(--cb-ease-out);
+  background-size: cover;
+  filter: blur(var(--cb-scene-blur)) var(--cb-scene-filter);
+  opacity: 0;
+  /* a slow settle from a slight zoom while the photo fades in: cinematic, but only during the change */
+  transform: scale(1.045);
+  transition: opacity var(--cb-dur-scene) var(--cb-ease-in-out), transform calc(var(--cb-dur-scene) * 2.6) var(--cb-ease-glide),
+    filter var(--cb-dur-expressive) var(--cb-ease-out);
+}
+.cb-scene__photo[data-front] {
+  opacity: 1;
+  transform: none;
+}
+.cb-scene[data-still] .cb-scene__photo {
+  transition-property: opacity, filter;
+}
+/* calm gradient mode: no photo, a soft light field tinted by the identity hue */
+.cb-scene[data-mode='gradient'] .cb-scene__photo {
+  background: radial-gradient(70% 60% at 82% 12%, color-mix(in oklab, var(--cb-hue) 30%, transparent), transparent 70%),
+    radial-gradient(60% 70% at 8% 92%, color-mix(in srgb, var(--cb-orb-periwinkle) 70%, transparent), transparent 70%),
+    linear-gradient(160deg, var(--cb-surface-subtle), var(--cb-surface-canvas));
+  filter: none;
 }
 .cb-scene__veil {
   position: absolute;
   inset: 0;
   background: var(--cb-scene-bleed), var(--cb-scene-vignette), var(--cb-scene-veil);
-  transition: opacity var(--cb-dur-expressive) var(--cb-ease-out);
+  transition: opacity var(--cb-dur-scene) var(--cb-ease-in-out);
+}
+.cb-scene[data-mode='gradient'] .cb-scene__veil {
+  opacity: 0.4;
+}
+
+/* Photo credit: a quiet label in the lower corner, fully legible on hover/focus. */
+.cb-scene-credit {
+  position: fixed;
+  z-index: 1;
+  right: calc(var(--cb-float) + 4px);
+  bottom: calc(var(--cb-float) + var(--cb-safe-bottom));
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: var(--cb-radius-control-sm);
+  color: rgb(255 255 255 / 0.86);
+  font: var(--cb-text-caption);
+  text-decoration: none;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 0.45);
+  opacity: 0.62;
+  animation: cb-credit-in 1.6s var(--cb-ease-out) backwards;
+  transition: opacity var(--cb-dur-hover) var(--cb-ease-out), background-color var(--cb-dur-hover) var(--cb-ease-out);
+}
+.cb-scene-credit:is(:hover, :focus-visible) {
+  opacity: 1;
+  background: rgb(0 0 0 / 0.22);
+  backdrop-filter: blur(10px);
+}
+.cb-scene-credit__place {
+  font-family: var(--cb-font-display);
+  font-size: 15px;
+  font-style: italic;
+  letter-spacing: 0.005em;
+}
+.cb-scene-credit__by {
+  font-size: 11px;
+  opacity: 0.8;
+}
+/* the credit yields to every panel that claims the corner */
+.cb-app:is([data-detail='inspector'], [data-detail='composer'], [data-folder], [data-dragging]) .cb-scene-credit {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (max-width: 599.98px) {
+  .cb-scene-credit {
+    display: none;
+  }
+}
+@keyframes cb-credit-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* --- Overlay-style scrollbars: thin, invisible at rest, visible on hover and while scrolling ---------------------- */

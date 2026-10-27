@@ -8,12 +8,22 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 export type Density = 'comfort' | 'standard' | 'compact';
 /** `grid` = card grid, `list` = card rows, `files` = Finder-style file list. */
 export type ViewMode = 'grid' | 'list' | 'files';
+/** Background: curated national-park photography, the former orange line photo, or a calm gradient without a photo. */
+export type SceneMode = 'nature' | 'ambient' | 'gradient';
+export type SceneSlideshow = 'on' | 'off';
+export type SceneBlur = 'clear' | 'soft' | 'deep';
+/** `system` follows the OS setting; `reduced` collapses motion in the app regardless of it. */
+export type MotionMode = 'system' | 'reduced';
 
 export interface Preferences {
   readonly theme: ThemeMode;
   readonly density: Density;
   readonly view: ViewMode;
   readonly sort: SortMode;
+  readonly scene: SceneMode;
+  readonly slideshow: SceneSlideshow;
+  readonly sceneBlur: SceneBlur;
+  readonly motion: MotionMode;
 }
 
 /** Light is the primary design state: first start is always light, never derived from the OS theme. */
@@ -22,6 +32,10 @@ export const defaultPreferences: Preferences = {
   density: 'standard',
   view: 'grid',
   sort: 'newest',
+  scene: 'nature',
+  slideshow: 'on',
+  sceneBlur: 'soft',
+  motion: 'system',
 };
 
 export interface PreferenceOption<V extends string> {
@@ -77,6 +91,44 @@ export const sortPreference: PreferenceDefinition<'sort'> = {
   ],
 };
 
+export const scenePreference: PreferenceDefinition<'scene'> = {
+  key: 'scene',
+  label: 'Hintergrund',
+  options: [
+    { value: 'nature', label: 'Natur', icon: 'mountain' },
+    { value: 'ambient', label: 'Lichtlinien', icon: 'sparkles' },
+    { value: 'gradient', label: 'Verlauf', icon: 'droplet' },
+  ],
+};
+
+export const slideshowPreference: PreferenceDefinition<'slideshow'> = {
+  key: 'slideshow',
+  label: 'Bildwechsel',
+  options: [
+    { value: 'on', label: 'Wechselnd' },
+    { value: 'off', label: 'Fest' },
+  ],
+};
+
+export const sceneBlurPreference: PreferenceDefinition<'sceneBlur'> = {
+  key: 'sceneBlur',
+  label: 'Unschärfe',
+  options: [
+    { value: 'clear', label: 'Klar' },
+    { value: 'soft', label: 'Weich' },
+    { value: 'deep', label: 'Tief' },
+  ],
+};
+
+export const motionPreference: PreferenceDefinition<'motion'> = {
+  key: 'motion',
+  label: 'Bewegung',
+  options: [
+    { value: 'system', label: 'Wie System' },
+    { value: 'reduced', label: 'Reduziert' },
+  ],
+};
+
 const pick = <V extends string>(value: unknown, options: readonly PreferenceOption<V>[]): V | undefined =>
   options.find((o) => o.value === value)?.value;
 
@@ -87,5 +139,9 @@ export function restorePreferences(saved: Partial<Record<keyof Preferences, unkn
     density: pick(saved?.density, densityPreference.options) ?? defaultPreferences.density,
     view: pick(saved?.view, viewPreference.options) ?? defaultPreferences.view,
     sort: pick(saved?.sort, sortPreference.options) ?? defaultPreferences.sort,
+    scene: pick(saved?.scene, scenePreference.options) ?? defaultPreferences.scene,
+    slideshow: pick(saved?.slideshow, slideshowPreference.options) ?? defaultPreferences.slideshow,
+    sceneBlur: pick(saved?.sceneBlur, sceneBlurPreference.options) ?? defaultPreferences.sceneBlur,
+    motion: pick(saved?.motion, motionPreference.options) ?? defaultPreferences.motion,
   };
 }

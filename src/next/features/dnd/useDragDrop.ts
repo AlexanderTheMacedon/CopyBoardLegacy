@@ -1,44 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import { usePreview } from '../../app/context';
 import { beginDrag, currentDrag, endDrag, INTERNAL_TYPE, isInternalDrag, subscribeDrag, type DragPayload } from '../../data/dnd';
-import { isFolderId, type Placement } from '../../domain/types';
+import type { Placement } from '../../domain/types';
+import { absorbGhost, holdGhostHover, returnGhost, startGhost } from './drag-ghost';
 
 /**
  * Native drag and drop for cards and folders. The payload lives in data/dnd.ts; the DataTransfer only carries a marker
- * type, so external file drops (AppShell) and internal moves never get confused. Keyboard and touch users reach the same
- * operations through the selection bar, context menus and the move dialog.
+ * type, so external file drops (AppShell) and internal moves never get confused. The visual (lifted card miniature,
+ * stack, absorb/return motion) is drag-ghost.ts. Keyboard and touch users reach the same operations through the
+ * selection bar, context menus and the move dialog.
  */
 
-const GHOST_MAX = 3;
-
-/** Builds the drag image: a small stack of glass cards with the first title and a count badge. */
-function makeGhost(titles: readonly string[], count: number): HTMLElement {
-  const ghost = document.createElement('div');
-  ghost.className = 'cb-drag-ghost';
-  ghost.setAttribute('aria-hidden', 'true');
-  for (let i = Math.min(count, GHOST_MAX) - 1; i >= 1; i--) {
-    const layer = document.createElement('span');
-    layer.className = 'cb-drag-ghost__layer';
-    layer.style.setProperty('--n', String(i));
-    ghost.appendChild(layer);
-  }
-  const card = document.createElement('span');
-  card.className = 'cb-drag-ghost__card';
-  card.textContent = titles[0] ?? '';
-  ghost.appendChild(card);
-  if (count > 1) {
-    const badge = document.createElement('span');
-    badge.className = 'cb-drag-ghost__badge';
-    badge.textContent = String(count);
-    ghost.appendChild(badge);
-  }
-  document.body.appendChild(ghost);
-  return ghost;
-}
-
 /** Makes an entry (item or folder) draggable; a selected entry drags the whole selection. */
-export function useDraggableEntry(id: string, placement: Placement | undefined, title: string) {
-  const { state, library } = usePreview();
+export function useDraggableEntry(id: string, placement: Placement | undefined) {
+  const { state } = usePreview();
   const [dragging, setDragging] = useState(false);
 
   const onDragStart = useCallback(
@@ -47,17 +22,16 @@ export function useDraggableEntry(id: string, placement: Placement | undefined, 
       const ids = state.selectedIds.includes(id) ? state.selectedIds : [id];
       event.dataTransfer.setData(INTERNAL_TYPE, ids.join(','));
       event.dataTransfer.effectAllowed = 'move';
-      const titles = ids.map((entry) => (isFolderId(entry) ? library.getFolder(entry)?.name : library.getItem(entry)?.title)).filter((t): t is string => !!t);
-      const ghost = makeGhost(titles[0] === title ? titles : [title, ...titles], ids.length);
-      event.dataTransfer.setDragImage(ghost, 24, 22);
-      requestAnimationFrame(() => ghost.remove());
+      startGhost(event.nativeEvent, event.currentTarget, ids.length);
       beginDrag({ ids, from: placement });
       setDragging(true);
     },
-    [id, placement, state.selectedIds, library, title],
+    [id, placement, state.selectedIds],
   );
 
   const onDragEnd = useCallback(() => {
+    // a drop target that accepted the payload has already absorbed the ghost; anything else glides home
+    returnGhost();
     endDrag();
     setDragging(false);
   }, []);
@@ -73,10 +47,12 @@ export interface DropTargetOptions {
   armDelay?: number;
   /** Called when the pointer rests on the target (e.g. to open a flyout or spring-load a folder). */
   onHover?: () => void;
+  /** How the target receives the dragged card: `merge` (card on card → new folder) or `into` (folder, space, crumb). */
+  effect?: 'merge' | 'into';
 }
 
 /** Drop-target behaviour for a card, folder, breadcrumb or space. Bubbling stops at the innermost accepting target. */
-export function useDropTarget({ accepts, onDrop, armDelay = 0, onHover }: DropTargetOptions) {
+export function useDropTarget({ accepts, onDrop, armDelay = 0, onHover, effect = 'into' }: DropTargetOptions) {
   const [over, setOver] = useState(false);
   const [armed, setArmed] = useState(armDelay === 0);
   const timer = useRef(0);
@@ -90,6 +66,8 @@ export function useDropTarget({ accepts, onDrop, armDelay = 0, onHover }: DropTa
   }, [armDelay]);
 
   useEffect(() => subscribeDrag((payload) => !payload && reset()), [reset]);
+  // the carried card aims for this target while it hovers here
+  useEffect(() => (over ? holdGhostHover() : undefined), [over]);
 
   const wanted = (event: DragEvent): DragPayload | null => {
     const payload = currentDrag();
@@ -133,7 +111,9 @@ export function useDropTarget({ accepts, onDrop, armDelay = 0, onHover }: DropTa
     event.preventDefault();
     event.stopPropagation();
     const ready = armed;
+    const target = event.currentTarget;
     reset();
+    if (ready) absorbGhost(target, effect);
     endDrag();
     if (ready) onDrop(payload);
   };

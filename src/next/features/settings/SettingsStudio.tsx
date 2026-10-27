@@ -1,6 +1,17 @@
 import { useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { usePreview } from '../../app/context';
-import { densityPreference, sortPreference, themePreference, viewPreference, type PreferenceDefinition, type Preferences } from '../../app/preferences';
+import {
+  densityPreference,
+  motionPreference,
+  sceneBlurPreference,
+  scenePreference,
+  slideshowPreference,
+  sortPreference,
+  themePreference,
+  viewPreference,
+  type PreferenceDefinition,
+  type Preferences,
+} from '../../app/preferences';
 import type { SettingsSection } from '../../app/state';
 import { DemoBadge } from '../../components/DemoBadge';
 import { Dialog } from '../../components/Dialog';
@@ -8,6 +19,7 @@ import { Icon, type IconName } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { useGlider, useScrollFade } from '../../components/motion';
 import { SegmentedControl } from '../../components/SegmentedControl';
+import { scenes } from '../shell/scenes';
 
 const sections: readonly { id: SettingsSection; label: string; icon: IconName }[] = [
   { id: 'general', label: 'Allgemein & Darstellung', icon: 'palette' },
@@ -17,10 +29,10 @@ const sections: readonly { id: SettingsSection; label: string; icon: IconName }[
 
 const step = (i: number) => ({ '--i': i }) as CSSProperties;
 
-function PreferenceRow<K extends keyof Preferences>({ definition, index }: { definition: PreferenceDefinition<K>; index: number }) {
+function PreferenceRow<K extends keyof Preferences>({ definition, index, disabled = false }: { definition: PreferenceDefinition<K>; index: number; disabled?: boolean }) {
   const { state, dispatch } = usePreview();
   return (
-    <div className="cb-settings__row" style={step(index)}>
+    <div className="cb-settings__row" style={step(index)} data-disabled={disabled || undefined} inert={disabled}>
       <p className="cb-settings__label">{definition.label}</p>
       <SegmentedControl
         label={definition.label}
@@ -48,21 +60,53 @@ function PendingRow({ label, index, children }: { label: string; index: number; 
   );
 }
 
+/** Photographers of the nature backgrounds, linked to their Unsplash pages. */
+function SceneCredits({ index }: { index: number }) {
+  return (
+    <div className="cb-settings__row cb-settings__credits" style={step(index)}>
+      <p className="cb-settings__label">Fotografien</p>
+      <ul className="cb-credits">
+        {scenes.map((scene) => (
+          <li key={scene.id}>
+            <span className="cb-credits__thumb" style={{ backgroundImage: `url(${scene.src})` }} aria-hidden="true" />
+            <span className="cb-credits__text">
+              <span className="cb-credits__place">
+                {scene.place} · {scene.park}
+              </span>
+              <a href={scene.url} target="_blank" rel="noreferrer noopener">
+                {scene.photographer} auf Unsplash
+              </a>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="cb-settings__hint">Lokal mitgeliefert unter der Unsplash-Lizenz. Es werden keine Bilder aus dem Netz nachgeladen.</p>
+    </div>
+  );
+}
+
 function SectionContent({ section }: { section: SettingsSection }) {
+  const { state } = usePreview();
+  const nature = state.prefs.scene === 'nature';
   switch (section) {
     case 'general':
       return (
         <>
           <PreferenceRow definition={themePreference} index={0} />
-          <PreferenceRow definition={densityPreference} index={1} />
-          <PreferenceRow definition={viewPreference} index={2} />
-          <PreferenceRow definition={sortPreference} index={3} />
-          <PendingRow label="Sprache" index={4}>
+          <PreferenceRow definition={scenePreference} index={1} />
+          <PreferenceRow definition={slideshowPreference} index={2} disabled={!nature} />
+          <PreferenceRow definition={sceneBlurPreference} index={3} disabled={state.prefs.scene === 'gradient'} />
+          <PreferenceRow definition={motionPreference} index={4} />
+          <PreferenceRow definition={densityPreference} index={5} />
+          <PreferenceRow definition={viewPreference} index={6} />
+          <PreferenceRow definition={sortPreference} index={7} />
+          <PendingRow label="Sprache" index={8}>
             Deutsch. Weitere Sprachen folgen.
           </PendingRow>
-          <p className="cb-settings__note" style={step(5)}>
+          {nature && <SceneCredits index={9} />}
+          <p className="cb-settings__note" style={step(10)}>
             <Icon name="info" size={16} />
-            Darstellung wird auf diesem Gerät gemerkt. Standard ist das helle Design. Spaces können eigene Voreinstellungen haben.
+            Darstellung wird auf diesem Gerät gemerkt. Standard ist das helle Design mit wechselnden Naturmotiven. Bei reduzierter Bewegung bleibt das Hintergrundbild stehen. Spaces können eigene Voreinstellungen haben.
           </p>
         </>
       );

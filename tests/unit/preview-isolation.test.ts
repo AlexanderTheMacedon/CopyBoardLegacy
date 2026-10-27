@@ -27,6 +27,8 @@ describe('React app is isolated from the legacy data path and the network', () =
     // Paste/drop events hand their data straight to data/clipboard.ts#readTransfer.
     { pattern: /\bclipboardData\b/, files: ['src/next/features/shell/AppShell.tsx', 'src/next/features/capture/SmartCapture.tsx'] },
     { pattern: /type=["']file["']/, files: ['src/next/features/capture/SmartCapture.tsx'] },
+    // Photo credits of the bundled nature backgrounds: attribution links only (user-clicked, never fetched by the app).
+    { pattern: /https:\/\/unsplash\.com\/photos\//, files: ['src/next/features/shell/scenes.ts'] },
   ];
 
   const forbidden = [
@@ -43,7 +45,7 @@ describe('React app is isolated from the legacy data path and the network', () =
     /WebSocket/,
     /EventSource/,
     /sendBeacon/,
-    /https?:\/\//,
+    /https?:\/\/(?!unsplash\.com\/photos\/)/,
     // device access that stays out of scope (microphone, file system handles)
     /getUserMedia|mediaDevices|MediaRecorder/,
     /\bFileReader\b/,

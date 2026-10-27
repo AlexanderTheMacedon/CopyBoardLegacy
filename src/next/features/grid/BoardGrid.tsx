@@ -1,4 +1,6 @@
-import { useMemo, type PointerEvent } from 'react';
+import { useMemo, useRef, type PointerEvent } from 'react';
+import { useLayoutMotion } from '../../components/motion';
+import { takeSpawnOrigin } from '../dnd/drag-ghost';
 import { usePreview } from '../../app/context';
 import type { BoardFilter } from '../../app/state';
 import type { Folder, Item, Placement } from '../../domain/types';
@@ -35,14 +37,18 @@ export const useOrderedIds = (folders: readonly Folder[], items: readonly Item[]
 /**
  * One level of content in three presentations: ordered card grid without masonry (D-005), card list (D-023) or the
  * Finder-style file list. Folders come first. The grid is keyed by view, density and filter so a presentation change
- * replays the "settle into the grid" reveal (M-12); ids, order and selection are untouched by that remount.
+ * replays the "settle into the grid" reveal (M-12); ids, order and selection are untouched by that remount. Within one
+ * presentation, entries glide to their new places (useLayoutMotion) and a folder made by a merge grows out of its card.
  */
 export function BoardGrid({ folders, items, filter, label, placement, selection, showSpace = false }: BoardGridProps) {
   const { state } = usePreview();
   const { view, density } = state;
+  const listRef = useRef<HTMLUListElement>(null);
+  useLayoutMotion(listRef, { takeSpawn: takeSpawnOrigin, spawnSelector: '.cb-tile--folder' });
   if (view === 'files') return <FileList folders={folders} items={items} label={label} placement={placement} selection={selection} showSpace={showSpace} />;
   return (
     <ul
+      ref={listRef}
       key={`${view}-${density}-${filter}`}
       className="cb-grid"
       data-view={view}

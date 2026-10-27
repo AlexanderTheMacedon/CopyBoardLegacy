@@ -532,18 +532,27 @@
   color: var(--cb-code-text);
   background: var(--cb-code-bg);
 }
-.cb-kind[data-kind='markdown'],
-.cb-kind[data-kind='text'] {
-  color: var(--cb-accent);
-  background: color-mix(in srgb, var(--cb-accent-soft) 85%, transparent);
+.cb-kind:is([data-kind='text'], [data-kind='markdown'], [data-kind='link'], [data-kind='file'], [data-kind='audio'], [data-kind='image']) {
+  color: color-mix(in oklab, var(--cb-kind-tint) 78%, var(--cb-text-primary));
+  background: color-mix(in srgb, var(--cb-kind-tint) 13%, transparent);
 }
-.cb-kind[data-kind='image'] {
-  color: var(--cb-status-info);
-  background: color-mix(in srgb, var(--cb-status-info) 12%, transparent);
+.cb-kind[data-kind='text'] {
+  --cb-kind-tint: var(--cb-kind-text);
+}
+.cb-kind[data-kind='markdown'] {
+  --cb-kind-tint: var(--cb-kind-markdown);
+}
+.cb-kind[data-kind='link'] {
+  --cb-kind-tint: var(--cb-kind-link);
+}
+.cb-kind[data-kind='file'] {
+  --cb-kind-tint: var(--cb-kind-file);
 }
 .cb-kind[data-kind='audio'] {
-  color: var(--cb-status-error);
-  background: color-mix(in srgb, var(--cb-status-error) 10%, transparent);
+  --cb-kind-tint: var(--cb-kind-audio);
+}
+.cb-kind[data-kind='image'] {
+  --cb-kind-tint: var(--cb-kind-image);
 }
 
 /* --- Notices: polite; "success" only after a confirmed local commit --- */

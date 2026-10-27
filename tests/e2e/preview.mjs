@@ -448,13 +448,19 @@ test('P12', 'phone: dock, spaces drawer, full-screen search and inspector, no ho
 });
 
 test('P13', 'reduced motion: no transitions; the photographic scene is static', { reducedMotion: 'reduce' }, async ({ page, clean }) => {
-  const motion = await page.evaluate(() => ({
-    tile: getComputedStyle(document.querySelector('.cb-tile__open')).transitionDuration,
-    scene: getComputedStyle(document.querySelector('.cb-scene__photo')).animationName,
-    photo: getComputedStyle(document.querySelector('.cb-scene__photo')).backgroundImage.includes('ambient-orange'),
-  }));
+  const motion = await page.evaluate(() => {
+    const photo = document.querySelector('.cb-scene__photo[data-front]');
+    return {
+      tile: getComputedStyle(document.querySelector('.cb-tile__open')).transitionDuration,
+      scene: getComputedStyle(photo).animationName,
+      fade: getComputedStyle(photo).transitionDuration,
+      still: document.querySelector('.cb-scene').hasAttribute('data-still'),
+      photo: /\.jpg/.test(getComputedStyle(photo).backgroundImage),
+    };
+  });
   const problems = await clean();
-  const ok = motion.tile.split(',').every((d) => parseFloat(d) === 0) && motion.scene === 'none' && motion.photo && !problems.length;
+  const zero = (list) => list.split(',').every((d) => parseFloat(d) === 0);
+  const ok = zero(motion.tile) && zero(motion.fade) && motion.scene === 'none' && motion.still && motion.photo && !problems.length;
   return { ok, observed: JSON.stringify(motion) };
 });
 
@@ -530,7 +536,7 @@ test('P17', 'spaces: create with icon and colour, rename, per-space view default
   await page.fill('#cb-space-name', 'Projekte');
   await page.fill('dialog[open] .cb-iconpicker__search input', 'rakete');
   await page.click('dialog[open] .cb-iconpicker__option[title="Rakete"]');
-  await page.click('dialog[open] [aria-label="Minze"]');
+  await page.click('dialog[open] [aria-label="Türkis"]');
   await page.click('dialog[open] [role="radiogroup"][aria-label="Bevorzugte Ansicht"] [role="radio"]:has-text("Dateien")');
   await page.click('dialog[open] button:has-text("Erstellen")');
   await page.waitForSelector('dialog[open]', { state: 'detached' });

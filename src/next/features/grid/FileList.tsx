@@ -45,7 +45,7 @@ function FolderRow({ folder, placement, selection, showSpace }: { folder: Folder
   const sub = library.listChildren({ spaceId: folder.spaceId, folderId: folder.id }).folders.length;
   const space = library.getSpace(folder.spaceId);
   const color = folder.color ?? space?.color;
-  const drag = useDraggableEntry(folder.id, placement, folder.name);
+  const drag = useDraggableEntry(folder.id, placement);
   const drop = useDropTarget({
     accepts: (payload: DragPayload) => !payload.ids.includes(folder.id) && !payload.ids.some((id) => isFolderId(id) && library.descendantFolders(id).some((f) => f.id === folder.id)),
     onDrop: (payload) => void entries.move(payload.ids, { spaceId: folder.spaceId, folderId: folder.id }),
@@ -107,7 +107,7 @@ function ItemRow({ item, placement, selection, showSpace }: { item: Item; placem
   const { state, dispatch, library, freshIds } = usePreview();
   const checked = selection?.selected.has(item.id) ?? false;
   const space = library.getSpace(item.spaceId);
-  const drag = useDraggableEntry(item.id, placement, item.title);
+  const drag = useDraggableEntry(item.id, placement);
   const open = (event: MouseEvent) => {
     if (selection?.onEntryClick(item.id, event)) return;
     dispatch({ type: 'inspect', itemId: item.id });

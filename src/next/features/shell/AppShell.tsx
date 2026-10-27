@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type R
 import { isEditableTarget, useMediaQuery } from '../../app/hooks';
 import { useInspectedItem, usePreview } from '../../app/context';
 import { usePresence, useScrollFade } from '../../components/motion';
+import { spaceColorVar } from '../../components/SpaceIcon';
 import { readTransfer, transferHasFiles } from '../../data/clipboard';
 import { isInternalDrag } from '../../data/dnd';
 import { useCapture } from '../capture/useCapture';
@@ -84,7 +85,7 @@ function useUniversalPaste(catcherRef: RefObject<HTMLTextAreaElement | null>) {
  * design run can style every state without touching component logic.
  */
 export function AppShell({ children }: { children?: ReactNode }) {
-  const { state, dispatch } = usePreview();
+  const { state, dispatch, library } = usePreview();
   const workspaceRef = useRef<HTMLElement>(null);
   const catcherRef = useRef<HTMLTextAreaElement>(null);
   const capture = useCapture();
@@ -101,6 +102,9 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const dragActive = useDragActive();
   const folderOpen = !!state.openFolderId && !state.composerItemId;
   useScrollFade(workspaceRef);
+  // Identity hue: the active space's colour re-lights every accent; global collections keep the brand ember.
+  const activeSpace = state.location.type === 'space' ? library.getSpace(state.location.spaceId) : undefined;
+  const hue = activeSpace ? spaceColorVar(activeSpace.color) : undefined;
 
   useEffect(() => {
     // Global search shortcut (H-02: Cmd/Ctrl+K is only *proposed*). Editable fields keep their native shortcuts.
@@ -137,6 +141,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
     <div
       className="cb-app"
       data-theme={theme}
+      data-motion={state.prefs.motion === 'reduced' ? 'reduced' : undefined}
+      style={hue ? ({ '--cb-hue': hue } as CSSProperties) : undefined}
       data-detail={detail}
       data-recorder={state.recorderOpen || undefined}
       data-dropping={dropping || undefined}

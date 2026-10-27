@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { usePreview } from '../../app/context';
 import { densityPreference, viewPreference } from '../../app/preferences';
 import type { BoardFilter } from '../../app/state';
@@ -6,7 +6,7 @@ import { Icon, type IconName } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { Popover } from '../../components/Popover';
 import { SegmentedControl, type SegmentOption } from '../../components/SegmentedControl';
-import { SpaceGlyph, spaceColorVar } from '../../components/SpaceIcon';
+import { SpaceGlyph } from '../../components/SpaceIcon';
 import { sortModes } from '../../domain/sort';
 import type { CollectionId, Placement, Space } from '../../domain/types';
 import { focusCapture } from '../capture/SmartCapture';
@@ -153,13 +153,14 @@ export function WorkspaceHeader({ title, space, collectionId, filters, filter, o
     scrollRoot.current?.scrollTo({ top: 0 });
   }, [scrollRoot, locationKey]);
 
-  const tint = space ? spaceColorVar(space.color) : 'var(--cb-accent)';
   const filterActive = filter !== 'all';
   const showFilters = !!filters && state.filtersVisible;
 
   return (
     <>
-      {/* Direct child of the scroll container so `position: sticky` holds for the whole board. */}
+      {/* Direct child of the scroll container so `position: sticky` holds for the whole board. The row itself is click-through;
+          only the island is a surface: at rest it is the quiet search cluster, collapsed it becomes a compact floating glass
+          island that gains the board identity — never a full-width bar. */}
       <div className="cb-toolbar" data-collapsed={collapsed || undefined}>
         <IconButton
           icon="menu"
@@ -167,26 +168,44 @@ export function WorkspaceHeader({ title, space, collectionId, filters, filter, o
           className="cb-toolbar__menu"
           onClick={() => dispatch({ type: 'openOverlay', overlay: 'spaces-drawer' })}
         />
-        <div className="cb-toolbar__context" aria-hidden={!collapsed}>
-          <span className="cb-toolbar__dot" style={{ background: tint }} />
-          <p className="cb-toolbar__title">{title}</p>
-          {countLabel && <span className="cb-toolbar__count">{countLabel}</span>}
+        <div className="cb-toolbar__island">
+          <div className="cb-toolbar__context" aria-hidden={!collapsed} inert={!collapsed}>
+            <div className="cb-toolbar__context-inner">
+              <button
+                type="button"
+                className="cb-toolbar__identity"
+                title="Nach oben"
+                onClick={() => scrollRoot.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              >
+                {space ? (
+                  <SpaceGlyph icon={space.icon} name={space.name} color={space.color} size={28} className="cb-toolbar__glyph" />
+                ) : (
+                  <span className="cb-toolbar__glyph cb-glyph cb-glyph--collection" style={{ '--cb-glyph-size': '28px' } as CSSProperties}>
+                    <Icon name={collectionId ? collectionIcon[collectionId] : 'layers'} size={15} />
+                  </span>
+                )}
+                <span className="cb-toolbar__title">{title}</span>
+                {countLabel && <span className="cb-toolbar__count">{countLabel}</span>}
+              </button>
+              <span className="cb-toolbar__sep" aria-hidden="true" />
+            </div>
+          </div>
+          <button
+            type="button"
+            className="cb-search-trigger"
+            onClick={() => dispatch({ type: 'openOverlay', overlay: 'search' })}
+            aria-keyshortcuts="Control+K Meta+K"
+          >
+            <Icon name="search" size={18} />
+            <span className="cb-search-trigger__label">Suchen</span>
+            <kbd className="cb-search-trigger__kbd">{shortcutHint()}</kbd>
+          </button>
+          <IconButton icon="plus" label="Erfassen" className="cb-toolbar__capture" onClick={focusCapture} />
+          <span className="cb-toolbar__theme">
+            <ThemeQuickPreference />
+          </span>
+          <TrustIndicator />
         </div>
-        <button
-          type="button"
-          className="cb-search-trigger"
-          onClick={() => dispatch({ type: 'openOverlay', overlay: 'search' })}
-          aria-keyshortcuts="Control+K Meta+K"
-        >
-          <Icon name="search" size={18} />
-          <span className="cb-search-trigger__label">Suchen</span>
-          <kbd className="cb-search-trigger__kbd">{shortcutHint()}</kbd>
-        </button>
-        <IconButton icon="plus" label="Erfassen" className="cb-toolbar__capture" onClick={focusCapture} />
-        <span className="cb-toolbar__theme">
-          <ThemeQuickPreference />
-        </span>
-        <TrustIndicator />
       </div>
 
       <header className="cb-hero" data-filters={showFilters || undefined}>
@@ -199,7 +218,7 @@ export function WorkspaceHeader({ title, space, collectionId, filters, filter, o
               aria-label={`${space.name}: Space-Einstellungen öffnen`}
               onClick={() => dispatch({ type: 'openModal', modal: { kind: 'space-edit', spaceId: space.id } })}
             >
-              <SpaceGlyph icon={space.icon} name={space.name} color={space.color} size={44} className="cb-hero__glyph" />
+              <SpaceGlyph icon={space.icon} name={space.name} color={space.color} size={52} className="cb-hero__glyph" />
               <h1 className="cb-hero__title" id="cb-workspace-title">
                 {title}
               </h1>
@@ -209,7 +228,7 @@ export function WorkspaceHeader({ title, space, collectionId, filters, filter, o
             <div className="cb-hero__identity cb-hero__identity--static">
               {collectionId && (
                 <span className="cb-hero__glyph cb-glyph cb-glyph--collection" aria-hidden="true">
-                  <Icon name={collectionIcon[collectionId]} size={22} />
+                  <Icon name={collectionIcon[collectionId]} size={26} />
                 </span>
               )}
               <h1 className="cb-hero__title" id="cb-workspace-title">

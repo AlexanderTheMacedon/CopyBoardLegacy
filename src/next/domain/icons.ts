@@ -52,6 +52,7 @@ export const lucideIcons: readonly IconEntry[] = [
   lucide('gift', 'Geschenk', 'feier', 'geburtstag', 'überraschung'),
   lucide('coffee', 'Kaffee', 'pause', 'café', 'morgen'),
   lucide('home', 'Zuhause', 'privat', 'haus', 'familie'),
+  lucide('mountain', 'Berg', 'natur', 'wandern', 'outdoor', 'gipfel', 'park'),
   lucide('leaf', 'Blatt', 'natur', 'garten', 'grün', 'nachhaltig'),
   lucide('sunrise', 'Sonnenaufgang', 'morgen', 'tag', 'routine'),
   lucide('globe', 'Globus', 'welt', 'web', 'international', 'reise'),
@@ -204,14 +205,14 @@ export function suggestIcon(name: string): SpaceIcon | undefined {
 }
 
 export const spaceColorLabel: Record<SpaceColor, string> = {
-  peach: 'Pfirsich',
-  amber: 'Bernstein',
+  sky: 'Elektrisch Blau',
+  lavender: 'Violett',
+  sage: 'Smaragd',
   coral: 'Koralle',
+  peach: 'Mandarine',
   rose: 'Rosé',
-  plum: 'Pflaume',
-  lavender: 'Lavendel',
-  sky: 'Himmel',
-  mint: 'Minze',
-  sage: 'Salbei',
-  slate: 'Schiefer',
+  amber: 'Gold',
+  mint: 'Türkis',
+  slate: 'Graphit',
+  plum: 'Magenta',
 };

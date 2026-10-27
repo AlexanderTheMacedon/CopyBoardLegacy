@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { parseIcon } from '../domain/icons';
+import { parseIcon, suggestIcon } from '../domain/icons';
 import type { SpaceColor, SpaceIcon } from '../domain/types';
 import { Icon } from './Icon';
 
@@ -8,7 +8,7 @@ export const spaceColorVar = (color: SpaceColor): string => `var(--cb-space-${co
 
 interface SpaceGlyphProps {
   icon?: SpaceIcon;
-  /** Fallback when there is no icon: the first letter of the name. */
+  /** Fallback when there is no icon: an icon suggested by the name, else an editorial monogram. */
   name: string;
   color?: SpaceColor;
   /** Outer size of the tinted swatch in px. */
@@ -23,7 +23,7 @@ interface SpaceGlyphProps {
  * the header, dialogs and the file views; size scales the swatch and the glyph together.
  */
 export function SpaceGlyph({ icon, name, color, size = 30, className, bare = false }: SpaceGlyphProps) {
-  const parsed = parseIcon(icon);
+  const parsed = parseIcon(icon ?? suggestIcon(name));
   const style = { '--cb-swatch': color ? spaceColorVar(color) : undefined, '--cb-glyph-size': `${size}px` } as CSSProperties;
   const glyph =
     parsed?.kind === 'lucide' ? (
@@ -33,7 +33,7 @@ export function SpaceGlyph({ icon, name, color, size = 30, className, bare = fal
         {parsed.char}
       </span>
     ) : (
-      <span className="cb-glyph__initial" style={{ fontSize: Math.round(size * 0.44) }}>
+      <span className="cb-glyph__initial" style={{ fontSize: Math.round(size * 0.62) }}>
         {name.trim().slice(0, 1).toUpperCase() || '·'}
       </span>
     );

@@ -82,7 +82,7 @@ export function FolderTile({ folder, index, placement, selection }: FolderTilePr
   const total = library.folderItems(folder.id).length;
   const checked = selection?.selected.has(folder.id) ?? false;
   const color = folder.color ?? library.getSpace(folder.spaceId)?.color;
-  const drag = useDraggableEntry(folder.id, placement, folder.name);
+  const drag = useDraggableEntry(folder.id, placement);
   const drop = useDropTarget({
     accepts: (payload: DragPayload) => !payload.ids.includes(folder.id) && !payload.ids.some((id) => isFolderId(id) && library.descendantFolders(id).some((f) => f.id === folder.id)),
     onDrop: (payload) => void entries.move(payload.ids, { spaceId: folder.spaceId, folderId: folder.id }),

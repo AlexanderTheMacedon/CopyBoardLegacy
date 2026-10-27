@@ -294,6 +294,8 @@ const paths = {
   stack: <path d="M4 7.5h16v3H4ZM4 13.5h16v3H4ZM7 4.5h10" />,
   sunrise: <path d="M12 3v3M4.5 11.5 6 13M19.5 11.5 18 13M3 17h18M7.5 17a4.5 4.5 0 0 1 9 0M9 6.5 12 3.5l3 3" />,
   plane: <path d="M20.5 15.5 13 11V5.5a1 1 0 0 0-2 0V11l-7.5 4.5v2l7.5-2.5v3.5l-2 1.5v1.5l3-1 3 1V20l-2-1.5V15l7.5 2.5Z" />,
+  mountain: <path d="M3 19.5 9.2 8.8a1 1 0 0 1 1.7 0l2.6 4.5M8 19.5l5.6-8.3a1 1 0 0 1 1.7 0L21 19.5ZM3 19.5h18M7.6 12.2l1.4 1.3 1.6-1.6" />,
+  droplet: <path d="M12 3.5c3.4 4 5.5 7.2 5.5 10a5.5 5.5 0 0 1-11 0c0-2.8 2.1-6 5.5-10ZM9.5 14.5a2.6 2.6 0 0 0 2.5 2.5" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof paths;

@@ -1,10 +1,11 @@
-import type { CSSProperties, MouseEvent } from 'react';
+import { useRef, type CSSProperties, type MouseEvent } from 'react';
 import { usePreview } from '../../app/context';
 import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { Popover } from '../../components/Popover';
 import type { DragPayload } from '../../data/dnd';
 import { isFolderId, type Item, type Placement } from '../../domain/types';
+import { setSpawnOrigin } from '../dnd/drag-ghost';
 import { useDraggableEntry, useDropTarget } from '../dnd/useDragDrop';
 import { itemActions, primaryQuickAction } from '../items/item-actions';
 import { formatDate, kindIcon, kindLabel, spaceColorVar } from '../items/item-meta';
@@ -44,13 +45,18 @@ export function ItemTile({ item, index, showSpace, placement, selection }: ItemT
   const quick = primaryQuickAction(item, state.location);
   const actions = itemActions(item, state.location, { organize: !!placement || state.location.type === 'collection' });
   const space = library.getSpace(item.spaceId);
-  const drag = useDraggableEntry(item.id, placement, item.title);
+  const tileRef = useRef<HTMLLIElement>(null);
+  const drag = useDraggableEntry(item.id, placement);
   const drop = useDropTarget({
     accepts: (payload: DragPayload) => !!placement && !payload.ids.includes(item.id) && payload.ids.every((id) => !isFolderId(id)),
     onDrop: (payload) => {
-      if (placement) void entries.createFolderWith([...payload.ids, item.id], placement);
+      if (!placement) return;
+      // the new folder grows out of this card's place (BoardGrid layout motion)
+      setSpawnOrigin(tileRef.current?.getBoundingClientRect() ?? null);
+      void entries.createFolderWith([...payload.ids, item.id], placement);
     },
     armDelay: MERGE_ARM_MS,
+    effect: 'merge',
   });
 
   const onOpen = (event: MouseEvent) => {
@@ -60,6 +66,7 @@ export function ItemTile({ item, index, showSpace, placement, selection }: ItemT
 
   return (
     <li
+      ref={tileRef}
       className="cb-tile"
       data-kind={item.kind}
       data-selected={inspected || undefined}
