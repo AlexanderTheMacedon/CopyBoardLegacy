@@ -80,7 +80,7 @@ describe('item building', () => {
 
 describe('preferences', () => {
   it('restore stored values and fall back to light defaults', () => {
-    expect(restorePreferences(undefined)).toEqual({ theme: 'light', density: 'standard', view: 'grid' });
-    expect(restorePreferences({ theme: 'dark', density: 'bogus', sidebarMode: 'expanded' } as never)).toEqual({ theme: 'dark', density: 'standard', view: 'grid' });
+    expect(restorePreferences(undefined)).toEqual({ theme: 'light', density: 'standard', view: 'grid', sort: 'newest' });
+    expect(restorePreferences({ theme: 'dark', density: 'bogus', sidebarMode: 'expanded' } as never)).toEqual({ theme: 'dark', density: 'standard', view: 'grid', sort: 'newest' });
   });
 });

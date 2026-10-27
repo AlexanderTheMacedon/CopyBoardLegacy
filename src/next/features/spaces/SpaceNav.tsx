@@ -2,8 +2,8 @@ import type { CSSProperties } from 'react';
 import { usePreview } from '../../app/context';
 import { Icon, type IconName } from '../../components/Icon';
 import { useGlider } from '../../components/motion';
+import { SpaceGlyph, spaceColorVar } from '../../components/SpaceIcon';
 import type { CollectionId, Location } from '../../domain/types';
-import { spaceColorVar } from '../items/item-meta';
 
 const collectionIcon: Record<CollectionId, IconName> = {
   all: 'layers',
@@ -18,7 +18,7 @@ const collectionIcon: Record<CollectionId, IconName> = {
  * moves between the active entries of both lists and carries the active space colour as its glow.
  */
 export function SpaceNav({ idPrefix }: { idPrefix: string }) {
-  const { state, dispatch, library, notify } = usePreview();
+  const { state, dispatch, library } = usePreview();
   const { location } = state;
   const go = (next: Location) => dispatch({ type: 'navigate', location: next });
   const indexStyle = (i: number) => ({ '--i': i }) as CSSProperties;
@@ -29,7 +29,7 @@ export function SpaceNav({ idPrefix }: { idPrefix: string }) {
   const activeTint = activeSpace ? spaceColorVar(activeSpace.color) : 'var(--cb-accent)';
 
   return (
-    <nav ref={navRef} className="cb-nav" aria-label="Spaces und Schnellzugriff" style={{ '--cb-active-tint': activeTint } as CSSProperties}>
+    <nav ref={navRef} className="cb-nav" aria-label="Spaces und Schnellzugriff" data-cb-context="spaces" style={{ '--cb-active-tint': activeTint } as CSSProperties}>
       <span className="cb-glider cb-nav__glider" aria-hidden="true" />
       <h2 className="cb-nav__heading" id={`${idPrefix}-spaces`}>
         Deine Spaces
@@ -46,12 +46,11 @@ export function SpaceNav({ idPrefix }: { idPrefix: string }) {
                 className="cb-nav__item"
                 aria-current={active ? 'page' : undefined}
                 title={space.name}
+                data-space-id={space.id}
                 style={{ ...indexStyle(i), '--cb-swatch': spaceColorVar(space.color) } as CSSProperties}
                 onClick={() => go({ type: 'space', spaceId: space.id })}
               >
-                <span className="cb-nav__swatch" aria-hidden="true">
-                  {space.name.slice(0, 1)}
-                </span>
+                <SpaceGlyph icon={space.icon} name={space.name} color={space.color} size={32} className="cb-nav__swatch" />
                 <span className="cb-nav__label">{space.name}</span>
                 <span className="cb-nav__count" aria-label={`${count} Inhalte`}>
                   {count}
@@ -64,9 +63,9 @@ export function SpaceNav({ idPrefix }: { idPrefix: string }) {
           <button
             type="button"
             className="cb-nav__item cb-nav__item--muted"
-            title="Neuer Space (Demo)"
+            title="Neuer Space"
             style={indexStyle(index++)}
-            onClick={() => notify('Demo: Neue Spaces können in der Vorschau noch nicht angelegt werden.')}
+            onClick={() => dispatch({ type: 'openModal', modal: { kind: 'space-new' } })}
           >
             <span className="cb-nav__icon" aria-hidden="true">
               <Icon name="plus" />

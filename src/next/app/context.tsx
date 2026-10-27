@@ -1,6 +1,6 @@
 import { createContext, useContext, type Dispatch, type ReactNode } from 'react';
 import type { ReadOnlyLibrary } from '../domain/library';
-import type { Item, ItemId, Space } from '../domain/types';
+import type { Folder, Item, ItemId, Placement, Space } from '../domain/types';
 import type { UiAction, UiState } from './state';
 import type { Workspace } from './workspace';
 
@@ -46,11 +46,26 @@ export function useActiveSpace(): Space | undefined {
   return state.location.type === 'space' ? library.getSpace(state.location.spaceId) : undefined;
 }
 
-/** Space that receives new captures: the open space, else the last visited one, else the first. */
+/** The folder open in the folder window, if any (and still existing). */
+export function useOpenFolder(): Folder | undefined {
+  const { state, library } = usePreview();
+  return state.openFolderId ? library.getFolder(state.openFolderId) : undefined;
+}
+
+/** Space that receives new captures: the open folder's space, else the open space, else the last visited one, else the first. */
 export function useCaptureSpace(): Space | undefined {
   const { state, library } = usePreview();
-  const id = state.location.type === 'space' ? state.location.spaceId : state.lastSpaceId;
+  const folder = useOpenFolder();
+  const id = folder?.spaceId ?? (state.location.type === 'space' ? state.location.spaceId : state.lastSpaceId);
   return (id ? library.getSpace(id) : undefined) ?? library.spaces[0];
+}
+
+/** Where new captures and new folders land: inside the open folder, else on the capture space's board. */
+export function useCapturePlacement(): Placement | undefined {
+  const space = useCaptureSpace();
+  const folder = useOpenFolder();
+  if (!space) return undefined;
+  return { spaceId: space.id, folderId: folder && folder.spaceId === space.id ? folder.id : null };
 }
 
 export function useInspectedItem(): Item | undefined {

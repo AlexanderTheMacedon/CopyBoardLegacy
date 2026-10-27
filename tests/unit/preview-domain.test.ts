@@ -71,7 +71,8 @@ describe('palette commands', () => {
   it('are filtered by query and never destructive', () => {
     const commands = paletteCommands(fixtureLibrary);
     expect(filterCommands(commands, 'liste').map((c) => c.id)).toEqual(['view-list']);
-    expect(commands.every((c) => ['navigate', 'setPreference', 'openSettings'].includes(c.action.type))).toBe(true);
+    // Dialog-opening commands (new space) only open a form; nothing in the palette mutates data by itself.
+    expect(commands.every((c) => ['navigate', 'setPreference', 'openSettings', 'openModal'].includes(c.action.type))).toBe(true);
   });
 });
 

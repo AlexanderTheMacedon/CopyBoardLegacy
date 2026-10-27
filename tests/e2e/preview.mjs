@@ -458,6 +458,138 @@ test('P13', 'reduced motion: no transitions; the photographic scene is static', 
   return { ok, observed: JSON.stringify(motion) };
 });
 
+// Workspace run (folders, selection, drag & drop, spaces): every change is written to the local store and survives a reload.
+const dragTo = async (page, fromSel, toSel) => {
+  const a = await (await page.$(fromSel)).boundingBox();
+  const b = await (await page.$(toSel)).boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(a.x + a.width / 2 + 24, a.y + 24, { steps: 4 });
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 });
+  await page.waitForTimeout(380); // merge targets arm after a short dwell
+  await page.mouse.up();
+};
+
+test('P16', 'card on card creates a folder; selection + drop on folder moves; folder window, undo and reload keep the data', async ({ page, clean }) => {
+  await dragTo(page, '.cb-tile[data-item-id="it-note-standup"]', '.cb-tile[data-item-id="it-snippet-debounce"] .cb-tile__open');
+  await page.waitForSelector('.cb-tile--folder');
+  const created = await page.$eval('.cb-notice p', (e) => e.textContent);
+  const boardAfterMerge = await tileCount(page);
+  // multi-select with the check and Shift, then drop the selection on the folder
+  await page.hover('.cb-tile[data-item-id="it-shot-error"]');
+  await page.click('.cb-tile[data-item-id="it-shot-error"] .cb-tile__check');
+  await page.click('.cb-tile[data-item-id="it-log-build"] .cb-tile__open', { modifiers: ['Shift'] });
+  const selCount = await page.$eval('.cb-selbar__num', (e) => e.textContent);
+  await dragTo(page, '.cb-tile[data-item-id="it-shot-error"]', '.cb-tile--folder .cb-tile__open');
+  await page.waitForFunction(() => !document.querySelector('.cb-selbar'));
+  const boardAfterMove = await tileCount(page);
+  // the folder window shows the four entries; a subfolder can be created inside; Escape closes it
+  await page.click('.cb-tile--folder .cb-tile__open');
+  await page.waitForSelector('.cb-folder-window');
+  const inFolder = await page.$$eval('.cb-folder-window .cb-tile', (els) => els.length);
+  const crumbs = await page.$$eval('.cb-crumb__label', (els) => els.map((e) => e.textContent));
+  await page.click('.cb-folder-window [aria-label="Neuer Unterordner"]');
+  await page.fill('#cb-folder-name', 'Unterordner');
+  await page.click('dialog[open] button:has-text("Erstellen")');
+  await page.waitForSelector('.cb-folder-window .cb-tile--folder');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.cb-folder-window', { state: 'detached' });
+  // delete the folder with its contents via its menu → confirmation → undo restores it
+  await page.click('.cb-tile--folder .cb-tile__open', { button: 'right' });
+  await page.click('.cb-context-menu [role="menuitem"]:has-text("Ordner löschen")');
+  await page.waitForSelector('dialog[open] button:has-text("Löschen")');
+  const confirmText = await page.$eval('dialog[open] .cb-form__text', (e) => e.textContent);
+  await page.click('dialog[open] .cb-button--danger-solid');
+  await page.waitForSelector('.cb-tile--folder', { state: 'detached' });
+  // the four entries are fixtures: they are never deleted and fall back to the board until undo re-creates the folder
+  const afterDelete = await tileCount(page);
+  await page.click('.cb-notice__action:has-text("Rückgängig")');
+  await page.waitForSelector('.cb-tile--folder');
+  const problems = await clean();
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  const reloaded = { tiles: await tileCount(page), folders: await page.$$eval('.cb-tile--folder .cb-tile__meta', (els) => els.map((e) => e.textContent)) };
+  const ok =
+    /Ordner mit 2 Einträgen/.test(created) &&
+    boardAfterMerge === 5 &&
+    selCount === '2' &&
+    boardAfterMove === 3 &&
+    inFolder === 4 &&
+    crumbs.join('›') === 'Entwicklung›Neuer Ordner' &&
+    /Der Ordner enthält 4 Inhalte/.test(confirmText) && /4 Beispielinhalte bleiben/.test(confirmText) &&
+    afterDelete === 6 &&
+    reloaded.tiles === 3 &&
+    /4 Inhalte · 1 Ordner/.test(reloaded.folders.join()) &&
+    !problems.length;
+  return { ok, observed: `created="${created}", board 6->${boardAfterMerge}->${boardAfterMove}, selected=${selCount}, folder shows ${inFolder}, crumbs=${crumbs.join('›')}, confirm="${confirmText.trim()}", after delete=${afterDelete}, reload=${JSON.stringify(reloaded)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P17', 'spaces: create with icon and colour, rename, per-space view default, ⌘V into an open folder; everything persists', { clipboard: true }, async ({ page, clean }) => {
+  await page.hover('.cb-space-switch__trigger');
+  await page.click('.cb-spaces-flyout__item--new >> text=Neuer Space');
+  await page.fill('#cb-space-name', 'Projekte');
+  await page.fill('dialog[open] .cb-iconpicker__search input', 'rakete');
+  await page.click('dialog[open] .cb-iconpicker__option[title="Rakete"]');
+  await page.click('dialog[open] [aria-label="Minze"]');
+  await page.click('dialog[open] [role="radiogroup"][aria-label="Bevorzugte Ansicht"] [role="radio"]:has-text("Dateien")');
+  await page.click('dialog[open] button:has-text("Erstellen")');
+  await page.waitForSelector('dialog[open]', { state: 'detached' });
+  const title = await h1(page);
+  const empty = await page.$eval('.cb-empty', (e) => e.dataset.variant);
+  // the new space opens in its preferred view; the global preference stays grid
+  const viewPref = await page.$eval('[role="radiogroup"][aria-label="Ansicht"] [aria-checked="true"]', (e) => e.getAttribute('aria-label'));
+  await gotoSpace(page, 'Entwicklung');
+  const viewBack = await page.$eval('[role="radiogroup"][aria-label="Ansicht"] [aria-checked="true"]', (e) => e.getAttribute('aria-label'));
+  // rename + icon of a fixture space through the header identity
+  await page.click('.cb-hero__identity');
+  await page.fill('#cb-space-name', 'Dev');
+  await page.click('dialog[open] .cb-iconpicker__tab:has-text("Emoji")');
+  await page.click('dialog[open] .cb-iconpicker__option[title="Entwicklung"]');
+  await page.click('dialog[open] button:has-text("Speichern")');
+  await page.waitForSelector('dialog[open]', { state: 'detached' });
+  const renamed = await h1(page);
+  const dockTitle = await page.$eval('.cb-space-switch__trigger', (e) => e.title);
+  // a folder created from the header; ⌘V while it is open stores the text inside the folder
+  await page.click('[aria-label="Neuer Ordner"]');
+  await page.fill('#cb-folder-name', 'Eingang');
+  await page.click('dialog[open] button:has-text("Erstellen")');
+  await page.waitForSelector('dialog[open]', { state: 'detached' });
+  await page.click('[aria-label="Hinweis schließen"]');
+  await page.click('.cb-tile--folder .cb-tile__open');
+  await page.waitForSelector('.cb-folder-window');
+  await page.waitForTimeout(500); // the window grows out of the tile; a click during that motion would hit the veil
+  await page.evaluate(() => navigator.clipboard.writeText('Notiz direkt in den Ordner'));
+  await page.evaluate(() => (window.__cbHits.length = 0));
+  await page.mouse.click(700, 600);
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.waitForSelector('.cb-notice[data-tone="success"]');
+  const pasted = await page.$eval('.cb-notice p', (e) => e.textContent);
+  await page.waitForSelector('.cb-folder-window .cb-tile[data-kind="text"]');
+  const problems = await clean(['DataTransfer.']);
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  const after = {
+    title: await h1(page),
+    folderMeta: await page.$eval('.cb-tile--folder .cb-tile__meta', (e) => e.textContent),
+    spaces: await page.$$eval('.cb-spaces-flyout__item[title]', (els) => els.map((e) => e.title)),
+    emoji: await page.$eval('.cb-space-switch__trigger .cb-glyph__emoji', (e) => e.textContent),
+  };
+  const ok =
+    title === 'Projekte' &&
+    empty === 'space-empty' &&
+    viewPref === 'Dateien' &&
+    viewBack === 'Raster' &&
+    renamed === 'Dev' &&
+    dockTitle === 'Dev' &&
+    /Text gespeichert · Dev › Eingang/.test(pasted) &&
+    after.title === 'Dev' &&
+    /1 Inhalt/.test(after.folderMeta) &&
+    after.spaces.join() === 'Dev,Design,Kunden,Ideen,Projekte' &&
+    after.emoji === '🧑‍💻' &&
+    !problems.length;
+  return { ok, observed: `new space=${title}/${empty}/${viewPref} then ${viewBack}, renamed=${renamed}/${dockTitle}, paste="${pasted}", reload=${JSON.stringify(after)}, problems=${problems.join(' | ') || '-'}` };
+});
+
 browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 for (const t of tests) {
   const t0 = Date.now();

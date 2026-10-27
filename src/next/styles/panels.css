@@ -253,7 +253,9 @@
   display: flex;
   flex-direction: column;
   height: calc(100% - var(--cb-float) * 2);
-  margin: var(--cb-float) var(--cb-float) var(--cb-float) 0;
+  /* The stage already clears the resting dock's body; the panel keeps its own float gap on every side, so the editor
+     never touches the dock's right edge (root cause of the "dock sticks to the editor" bug: margin-left was 0). */
+  margin: var(--cb-float);
   border-radius: var(--cb-radius-panel);
   background: var(--cb-glass-sheen), var(--cb-glass-thick);
   backdrop-filter: blur(var(--cb-blur-thick)) saturate(var(--cb-glass-saturate));
@@ -984,6 +986,22 @@
 }
 .cb-palette__footer .cb-palette__scope {
   margin-left: auto;
+}
+
+/* --- Card dialog: compact glass card for workspace dialogs (space, folder, move, delete) -------------------------- */
+.cb-dialog--card {
+  margin: auto;
+}
+.cb-dialog--card .cb-dialog__panel {
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  border-radius: var(--cb-radius-sheet);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.cb-dialog--card .cb-dialog__panel:has([data-wide]) {
+  width: min(680px, calc(100vw - 24px));
 }
 
 /* --- Settings Studio: one glass sheet; navigation, selection and rows share the palette's material ------------------ */

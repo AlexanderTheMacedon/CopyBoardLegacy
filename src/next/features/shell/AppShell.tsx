@@ -3,9 +3,13 @@ import { isEditableTarget, useMediaQuery } from '../../app/hooks';
 import { useInspectedItem, usePreview } from '../../app/context';
 import { usePresence, useScrollFade } from '../../components/motion';
 import { readTransfer, transferHasFiles } from '../../data/clipboard';
+import { isInternalDrag } from '../../data/dnd';
 import { useCapture } from '../capture/useCapture';
 import { ContextMenu } from '../context-menu/ContextMenu';
 import { Composer } from '../composer/Composer';
+import { WorkspaceDialogs } from '../dialogs/WorkspaceDialogs';
+import { useDragActive } from '../dnd/useDragDrop';
+import { FolderLayer } from '../folders/FolderWindow';
 import { Inspector, INSPECTOR_DEFAULT_WIDTH } from '../inspector/Inspector';
 import { RecorderShell } from '../recorder/RecorderShell';
 import { SearchPalette } from '../search/SearchPalette';
@@ -94,6 +98,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const inspector = usePresence(detail === 'inspector' ? inspected : undefined, INSPECTOR_EXIT_MS);
   // Session-only width of the floating inspector (resize handle); never persisted.
   const [inspectorWidth, setInspectorWidth] = useState(INSPECTOR_DEFAULT_WIDTH);
+  const dragActive = useDragActive();
+  const folderOpen = !!state.openFolderId && !state.composerItemId;
   useScrollFade(workspaceRef);
 
   useEffect(() => {
@@ -109,9 +115,10 @@ export function AppShell({ children }: { children?: ReactNode }) {
   }, [dispatch, state.overlay]);
 
   // Dropping files (or dragged text) anywhere outside an editable field captures them, like a paste. Editable fields keep
-  // their native drop; the tab never navigates to a dropped file.
+  // their native drop; the tab never navigates to a dropped file. Internal drags (cards, folders) are handled by their
+  // drop targets and never show the file veil.
   const onDragOver = (event: DragEvent) => {
-    if (isEditableTarget(event.target)) return;
+    if (isEditableTarget(event.target) || isInternalDrag(event.dataTransfer)) return;
     event.preventDefault();
     if (!dropping && transferHasFiles(event.dataTransfer) && !modalOpen()) setDropping(true);
   };
@@ -120,7 +127,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   };
   const onDrop = (event: DragEvent) => {
     setDropping(false);
-    if (isEditableTarget(event.target)) return;
+    if (isEditableTarget(event.target) || isInternalDrag(event.dataTransfer)) return;
     event.preventDefault();
     if (modalOpen()) return;
     void capture(readTransfer(event.dataTransfer));
@@ -133,6 +140,9 @@ export function AppShell({ children }: { children?: ReactNode }) {
       data-detail={detail}
       data-recorder={state.recorderOpen || undefined}
       data-dropping={dropping || undefined}
+      data-dragging={dragActive || undefined}
+      data-folder={folderOpen || undefined}
+      data-selecting={state.selectedIds.length > 0 || undefined}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -144,9 +154,10 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <textarea ref={catcherRef} className="cb-paste-catcher" tabIndex={-1} aria-hidden="true" />
       <Dock />
       <div className="cb-stage" style={{ '--cb-inspector-w': `${inspectorWidth}px` } as CSSProperties}>
-        <main id="cb-main" ref={workspaceRef} className="cb-workspace cb-scroll" tabIndex={-1} aria-labelledby="cb-workspace-title">
+        <main id="cb-main" ref={workspaceRef} className="cb-workspace cb-scroll" tabIndex={-1} aria-labelledby="cb-workspace-title" data-cb-context="board" inert={folderOpen}>
           {state.composerItemId ? <Composer key={state.composerItemId} /> : <Board scrollRoot={workspaceRef} />}
         </main>
+        <FolderLayer />
         {inspector.value && detail !== 'composer' && (
           <Inspector item={inspector.value} leaving={inspector.leaving} width={inspectorWidth} onWidthChange={setInspectorWidth} />
         )}
@@ -160,6 +171,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <SearchPalette />
       <SettingsStudio />
       <SpacesDrawer />
+      <WorkspaceDialogs />
       {children}
     </div>
   );

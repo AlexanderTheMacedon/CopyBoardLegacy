@@ -20,8 +20,12 @@ describe('React preview renders', () => {
     expect(html).toContain('aria-label="Schnellzugriff"');
     for (const space of fixtureLibrary.spaces) expect(html).toContain(space.name);
     expect(html.match(/class="cb-tile"/g)).toHaveLength(6);
-    // Modal layers exist but mount no content until opened.
-    expect(html.match(/<dialog/g)).toHaveLength(3);
+    // Modal layers (search, settings, drawer, workspace dialogs) exist but mount no content until opened.
+    expect(html.match(/<dialog/g)).toHaveLength(4);
+    // Header tools: filter toggle, sort, view + density, new folder; filter chips stay folded by default.
+    expect(html).toContain('aria-label="Filter einblenden"');
+    expect(html).toContain('aria-label="Neuer Ordner"');
+    expect(html).toContain('class="cb-hero__filters-fold"');
     expect(html).not.toContain('cb-palette__input');
   });
 

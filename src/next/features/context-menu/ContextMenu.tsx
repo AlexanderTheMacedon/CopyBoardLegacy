@@ -1,14 +1,17 @@
 import { useEffect, useLayoutEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { usePreview } from '../../app/context';
+import { useCapturePlacement, usePreview } from '../../app/context';
 import { isEditableTarget } from '../../app/hooks';
 import { Icon, type IconName } from '../../components/Icon';
 import { useGlider, usePresence } from '../../components/motion';
 import { ClipboardAccessError, readSystemClipboard } from '../../data/clipboard';
-import type { Item } from '../../domain/types';
+import type { Folder, Item, Space } from '../../domain/types';
 import { focusCapture } from '../capture/SmartCapture';
 import { useCapture } from '../capture/useCapture';
+import { folderActions } from '../folders/folder-actions';
+import { useRunFolderAction } from '../folders/FolderTile';
 import { itemActions } from '../items/item-actions';
 import { useRunItemAction } from '../items/useItemActions';
+import { useEntryActions } from '../workspace/useEntryActions';
 
 interface Entry {
   readonly id: string;
@@ -25,6 +28,9 @@ interface MenuRequest {
   readonly x: number;
   readonly y: number;
   readonly itemId: string | null;
+  readonly folderId: string | null;
+  readonly spaceId: string | null;
+  readonly anchor: HTMLElement | null;
   readonly returnFocus: HTMLElement | null;
 }
 
@@ -32,11 +38,18 @@ const EXIT_MS = 160;
 const EDGE = 8;
 const isMac = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
 
-/** Board and card context menu (P0). Editable fields, the editor and selected text keep the browser's native menu. */
+/**
+ * One context menu for the board, the folder window, cards, folders, the selection and spaces (dock flyout, drawer).
+ * Every entry runs the same registry action or entry operation as the rest of the UI. Editable fields, the editor and
+ * selected text keep the browser's native menu.
+ */
 export function ContextMenu() {
   const { state, dispatch, library, notify } = usePreview();
   const capture = useCapture();
+  const placement = useCapturePlacement();
   const runAction = useRunItemAction();
+  const runFolder = useRunFolderAction();
+  const entriesOps = useEntryActions();
   const [request, setRequest] = useState<MenuRequest | null>(null);
   const shown = usePresence(request ?? undefined, EXIT_MS);
   const [active, setActive] = useState(0);
@@ -46,22 +59,25 @@ export function ContextMenu() {
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (!target?.closest('#cb-main') || target.closest('.cb-composer') || isEditableTarget(target)) return;
+      if (!target?.closest('[data-cb-context]') || target.closest('.cb-composer') || isEditableTarget(target)) return;
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed && selection.toString().trim()) return;
       event.preventDefault();
       const tile = target.closest<HTMLElement>('[data-item-id]');
+      const folder = target.closest<HTMLElement>('[data-folder-id]');
+      const space = target.closest<HTMLElement>('[data-space-id]');
+      const anchor = tile ?? folder ?? space;
       let { clientX: x, clientY: y } = event;
       // Keyboard (context-menu key, Shift+F10) reports no pointer position: anchor at the focused element.
       if (!x && !y) {
-        const rect = (tile ?? target).getBoundingClientRect();
+        const rect = (anchor ?? target).getBoundingClientRect();
         x = rect.left + Math.min(32, rect.width / 2);
         y = rect.top + Math.min(32, rect.height / 2);
       }
       const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setActive(0);
       setPosition(null);
-      setRequest({ x, y, itemId: tile?.dataset.itemId ?? null, returnFocus: focused });
+      setRequest({ x, y, itemId: tile?.dataset.itemId ?? null, folderId: folder?.dataset.folderId ?? null, spaceId: space?.dataset.spaceId ?? null, anchor, returnFocus: focused });
     };
     document.addEventListener('contextmenu', onContextMenu);
     return () => document.removeEventListener('contextmenu', onContextMenu);
@@ -120,6 +136,10 @@ export function ContextMenu() {
 
   const retained = shown.value;
   const item: Item | undefined = retained?.itemId ? library.getItem(retained.itemId) : undefined;
+  const folder: Folder | undefined = retained?.folderId && !item ? library.getFolder(retained.folderId) : undefined;
+  const space: Space | undefined = retained?.spaceId && !item && !folder ? library.getSpace(retained.spaceId) : undefined;
+  const selectionCount = state.selectedIds.length;
+  const inSelection = !!(item && state.selectedIds.includes(item.id)) || !!(folder && state.selectedIds.includes(folder.id));
 
   const pasteFromMenu = async () => {
     try {
@@ -134,30 +154,72 @@ export function ContextMenu() {
     }
   };
 
-  const entries: Entry[] = item
-    ? itemActions(item, state.location, { withOpen: true }).map((action) => ({
-        id: action.id,
-        label: action.label,
-        icon: action.icon,
-        danger: action.danger,
-        group: action.danger || action.id === 'favorite',
-        run: () => runAction(action, item),
-      }))
-    : [
-        { id: 'paste', label: 'Einfügen', icon: 'clipboard', shortcut: isMac() ? '⌘V' : 'Strg V', run: () => void pasteFromMenu() },
-        { id: 'new', label: 'Neuer Eintrag', icon: 'plus', run: () => requestAnimationFrame(focusCapture) },
-        { id: 'search', label: 'Suchen', icon: 'search', shortcut: isMac() ? '⌘K' : 'Strg K', group: true, run: () => dispatch({ type: 'openOverlay', overlay: 'search' }) },
-        state.prefs.view === 'grid'
-          ? { id: 'view', label: 'Als Liste anzeigen', icon: 'list', run: () => dispatch({ type: 'setPreference', patch: { view: 'list' } }) }
-          : { id: 'view', label: 'Als Raster anzeigen', icon: 'grid', run: () => dispatch({ type: 'setPreference', patch: { view: 'grid' } }) },
-        { id: 'settings', label: 'Einstellungen', icon: 'sliders', run: () => dispatch({ type: 'openSettings' }) },
-      ];
+  const selectAllShown = () => {
+    const root = retained?.anchor?.closest('[data-cb-context]') ?? document.querySelector('[data-cb-context="folder"]') ?? document.getElementById('cb-main');
+    const ids = [...(root?.querySelectorAll<HTMLElement>('[data-item-id], [data-folder-id]') ?? [])].map((el) => el.dataset.itemId ?? el.dataset.folderId ?? '').filter(Boolean);
+    dispatch({ type: 'setSelection', ids, anchor: null });
+  };
+
+  let entries: Entry[];
+  let title: string | undefined;
+  if (item) {
+    title = inSelection && selectionCount > 1 ? `${selectionCount} ausgewählt` : item.title;
+    entries = itemActions(item, state.location, { withOpen: true }).map((action) => ({
+      id: action.id,
+      label: action.label,
+      icon: action.icon,
+      danger: action.danger,
+      group: action.group,
+      run: () => runAction(action, item),
+    }));
+  } else if (folder) {
+    title = inSelection && selectionCount > 1 ? `${selectionCount} ausgewählt` : folder.name;
+    entries = folderActions(folder).map((action) => ({
+      id: action.id,
+      label: action.label,
+      icon: action.icon,
+      danger: action.danger,
+      group: action.group,
+      run: () => runFolder(action, folder, retained?.anchor),
+    }));
+  } else if (space) {
+    title = space.name;
+    entries = [
+      { id: 'open', label: 'Öffnen', icon: 'folderOpen', run: () => dispatch({ type: 'navigate', location: { type: 'space', spaceId: space.id } }) },
+      { id: 'edit', label: 'Bearbeiten …', icon: 'sliders', run: () => dispatch({ type: 'openModal', modal: { kind: 'space-edit', spaceId: space.id } }) },
+      { id: 'new-folder', label: 'Neuer Ordner', icon: 'folderPlus', run: () => dispatch({ type: 'openModal', modal: { kind: 'folder-new', placement: { spaceId: space.id, folderId: null } } }) },
+      { id: 'new-space', label: 'Neuer Space', icon: 'plus', group: true, run: () => dispatch({ type: 'openModal', modal: { kind: 'space-new' } }) },
+      ...(library.spaces.length > 1
+        ? [{ id: 'delete', label: 'Space löschen …', icon: 'trash' as const, danger: true, group: true, run: () => dispatch({ type: 'openModal', modal: { kind: 'space-delete', spaceId: space.id } }) }]
+        : []),
+    ];
+  } else {
+    const views: { view: 'grid' | 'list' | 'files'; label: string; icon: IconName }[] = [
+      { view: 'grid', label: 'Als Raster anzeigen', icon: 'grid' },
+      { view: 'list', label: 'Als Liste anzeigen', icon: 'list' },
+      { view: 'files', label: 'Als Dateien anzeigen', icon: 'table' },
+    ];
+    entries = [
+      { id: 'paste', label: 'Einfügen', icon: 'clipboard', shortcut: isMac() ? '⌘V' : 'Strg V', run: () => void pasteFromMenu() },
+      { id: 'new', label: 'Neuer Eintrag', icon: 'plus', run: () => requestAnimationFrame(focusCapture) },
+      ...(placement ? [{ id: 'new-folder', label: 'Neuer Ordner', icon: 'folderPlus' as const, run: () => entriesOps.openNewFolder(placement) }] : []),
+      { id: 'select-all', label: 'Alles auswählen', icon: 'checkSquare', shortcut: isMac() ? '⌘A' : 'Strg A', group: true, run: selectAllShown },
+      ...(selectionCount ? [{ id: 'clear', label: 'Auswahl aufheben', icon: 'squareDashed' as const, shortcut: 'Esc', run: () => dispatch({ type: 'clearSelection' }) }] : []),
+      { id: 'search', label: 'Suchen', icon: 'search', shortcut: isMac() ? '⌘K' : 'Strg K', group: true, run: () => dispatch({ type: 'openOverlay', overlay: 'search' }) },
+      ...views.filter((v) => v.view !== state.view).map((v) => ({ id: `view-${v.view}`, label: v.label, icon: v.icon, run: () => dispatch({ type: 'setPreference', patch: { view: v.view } }) })),
+      { id: 'filters', label: state.filtersVisible ? 'Filter ausblenden' : 'Filter einblenden', icon: 'filter', run: () => dispatch({ type: 'setFiltersVisible', visible: !state.filtersVisible }) },
+      ...(state.location.type === 'space'
+        ? [{ id: 'space', label: 'Space-Einstellungen', icon: 'sliders' as const, group: true, run: () => dispatch({ type: 'openModal', modal: { kind: 'space-edit', spaceId: (state.location as { spaceId: string }).spaceId } }) }]
+        : []),
+      { id: 'settings', label: 'Einstellungen', icon: 'sliders', group: state.location.type !== 'space', run: () => dispatch({ type: 'openSettings' }) },
+    ];
+  }
 
   if (!retained) return null;
 
   const activate = (entry: Entry) => {
     // Menu commands that move focus elsewhere (capture, dialogs) must not get it stolen back.
-    close(entry.id === 'open' || entry.id === 'copy' || entry.id === 'favorite' || entry.id === 'download');
+    close(entry.id === 'open' || entry.id === 'copy' || entry.id === 'favorite' || entry.id === 'download' || entry.id === 'select-all' || entry.id === 'clear');
     entry.run();
   };
 
@@ -190,7 +252,7 @@ export function ContextMenu() {
       ref={menuRef}
       className="cb-context-menu"
       role="menu"
-      aria-label={item ? `Aktionen für ${item.title}` : 'Board-Aktionen'}
+      aria-label={title ? `Aktionen für ${title}` : 'Board-Aktionen'}
       data-leaving={shown.leaving || undefined}
       inert={shown.leaving}
       style={style}
@@ -198,7 +260,7 @@ export function ContextMenu() {
       onContextMenu={(event) => event.preventDefault()}
     >
       <span className="cb-glider cb-context-menu__glider" data-danger={entries[active]?.danger || undefined} aria-hidden="true" />
-      {item && <p className="cb-context-menu__title">{item.title}</p>}
+      {title && <p className="cb-context-menu__title">{title}</p>}
       {entries.map((entry, index) => (
         <button
           key={entry.id}

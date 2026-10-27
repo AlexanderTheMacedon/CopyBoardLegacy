@@ -1,15 +1,19 @@
 import type { IconName } from '../components/Icon';
+import type { SortMode } from '../domain/types';
 
-// One preference model for Quick Preferences and Settings Studio (D-033). Explicit choices persist in the local store.
+// One preference model for Quick Preferences, the board header and the Settings Studio (D-033). Explicit choices persist
+// in the local store; a space can override view, density and sort with its own defaults.
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Density = 'comfort' | 'standard' | 'compact';
-export type ViewMode = 'grid' | 'list';
+/** `grid` = card grid, `list` = card rows, `files` = Finder-style file list. */
+export type ViewMode = 'grid' | 'list' | 'files';
 
 export interface Preferences {
   readonly theme: ThemeMode;
   readonly density: Density;
   readonly view: ViewMode;
+  readonly sort: SortMode;
 }
 
 /** Light is the primary design state: first start is always light, never derived from the OS theme. */
@@ -17,6 +21,7 @@ export const defaultPreferences: Preferences = {
   theme: 'light',
   density: 'standard',
   view: 'grid',
+  sort: 'newest',
 };
 
 export interface PreferenceOption<V extends string> {
@@ -57,6 +62,18 @@ export const viewPreference: PreferenceDefinition<'view'> = {
   options: [
     { value: 'grid', label: 'Raster', icon: 'grid' },
     { value: 'list', label: 'Liste', icon: 'list' },
+    { value: 'files', label: 'Dateien', icon: 'table' },
+  ],
+};
+
+export const sortPreference: PreferenceDefinition<'sort'> = {
+  key: 'sort',
+  label: 'Sortierung',
+  options: [
+    { value: 'newest', label: 'Neueste zuerst' },
+    { value: 'oldest', label: 'Älteste zuerst' },
+    { value: 'name', label: 'Name A–Z' },
+    { value: 'kind', label: 'Nach Art' },
   ],
 };
 
@@ -69,5 +86,6 @@ export function restorePreferences(saved: Partial<Record<keyof Preferences, unkn
     theme: pick(saved?.theme, themePreference.options) ?? defaultPreferences.theme,
     density: pick(saved?.density, densityPreference.options) ?? defaultPreferences.density,
     view: pick(saved?.view, viewPreference.options) ?? defaultPreferences.view,
+    sort: pick(saved?.sort, sortPreference.options) ?? defaultPreferences.sort,
   };
 }

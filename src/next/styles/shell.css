@@ -695,19 +695,19 @@
   height: 16px;
 }
 
-/* --- Board header: only the board name and its filter chips ----------------------------------------------------- */
+/* --- Board header: identity (glyph + name), a quiet tool cluster, filter chips folded below ------------------------ */
 .cb-hero {
   display: grid;
-  justify-items: start;
-  gap: 18px;
+  gap: 0;
   max-width: var(--cb-content-max);
   margin: 0 auto;
-  padding: var(--cb-space-5) var(--cb-gutter) var(--cb-space-6);
+  padding: var(--cb-space-5) var(--cb-gutter) var(--cb-space-5);
 }
-.cb-hero__heading {
+.cb-hero__row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  gap: var(--cb-space-4);
   min-width: 0;
   animation: cb-rise var(--cb-dur-expressive) var(--cb-ease-glide) backwards;
 }

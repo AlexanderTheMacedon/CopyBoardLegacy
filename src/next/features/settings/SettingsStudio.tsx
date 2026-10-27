@@ -1,6 +1,6 @@
 import { useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { usePreview } from '../../app/context';
-import { densityPreference, themePreference, viewPreference, type PreferenceDefinition, type Preferences } from '../../app/preferences';
+import { densityPreference, sortPreference, themePreference, viewPreference, type PreferenceDefinition, type Preferences } from '../../app/preferences';
 import type { SettingsSection } from '../../app/state';
 import { DemoBadge } from '../../components/DemoBadge';
 import { Dialog } from '../../components/Dialog';
@@ -56,12 +56,13 @@ function SectionContent({ section }: { section: SettingsSection }) {
           <PreferenceRow definition={themePreference} index={0} />
           <PreferenceRow definition={densityPreference} index={1} />
           <PreferenceRow definition={viewPreference} index={2} />
-          <PendingRow label="Sprache" index={3}>
+          <PreferenceRow definition={sortPreference} index={3} />
+          <PendingRow label="Sprache" index={4}>
             Deutsch. Weitere Sprachen folgen.
           </PendingRow>
-          <p className="cb-settings__note" style={step(4)}>
+          <p className="cb-settings__note" style={step(5)}>
             <Icon name="info" size={16} />
-            Darstellung wird auf diesem Gerät gemerkt. Standard ist das helle Design.
+            Darstellung wird auf diesem Gerät gemerkt. Standard ist das helle Design. Spaces können eigene Voreinstellungen haben.
           </p>
         </>
       );

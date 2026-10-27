@@ -6,7 +6,7 @@ interface DialogProps {
   onClose: () => void;
   labelledBy: string;
   /** Layout variant; styling lives in components.css. */
-  variant: 'palette' | 'sheet' | 'drawer';
+  variant: 'palette' | 'sheet' | 'drawer' | 'card';
   className?: string;
   children: ReactNode;
 }

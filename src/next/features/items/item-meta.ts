@@ -1,5 +1,6 @@
 import type { IconName } from '../../components/Icon';
-import type { Item, ItemKind, SpaceColor } from '../../domain/types';
+import type { Item, ItemKind } from '../../domain/types';
+export { spaceColorVar } from '../../components/SpaceIcon';
 
 export const kindLabel: Record<ItemKind, string> = {
   text: 'Text',
@@ -20,9 +21,6 @@ export const kindIcon: Record<ItemKind, IconName> = {
   file: 'file',
   audio: 'waveform',
 };
-
-/** CSS custom property holding the space identity colour (tokens.css). */
-export const spaceColorVar = (color: SpaceColor): string => `var(--cb-space-${color})`;
 
 const dateFormat = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: 'short', timeZone: 'Europe/Berlin' });
 const dateTimeFormat = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Berlin' });

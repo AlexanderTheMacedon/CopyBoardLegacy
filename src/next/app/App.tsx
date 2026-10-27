@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ReadOnlyLibrary } from '../domain/library';
 import type { ItemId, Location } from '../domain/types';
+import type { UiAction } from './state';
 import { AppShell } from '../features/shell/AppShell';
 import { NoticeRegion, type Notice } from '../features/shell/NoticeRegion';
 import { PreviewProvider, type NoticeOptions, type PreviewContextValue } from './context';
@@ -23,8 +24,17 @@ interface AppProps {
 export function App({ library: base, seed = { store: null }, initialLocation }: AppProps) {
   const workspace = useWorkspace(base, seed);
   const { library } = workspace;
-  const [state, dispatch] = useReducer(uiReducer, undefined, () =>
-    createInitialState(initialLocation ?? { type: 'space', spaceId: base.spaces[0]?.id ?? '' }, restorePreferences(workspace.savedPrefs)),
+  const [state, rawDispatch] = useReducer(uiReducer, undefined, () => {
+    const location = initialLocation ?? { type: 'space', spaceId: library.spaces[0]?.id ?? '' };
+    return createInitialState(location, restorePreferences(workspace.savedPrefs), location.type === 'space' ? library.getSpace(location.spaceId) : undefined);
+  });
+  // Navigating into a space applies that space's own view defaults; callers never have to look the space up.
+  const libraryRef = useRef(library);
+  libraryRef.current = library;
+  const dispatch = useCallback(
+    (action: UiAction) =>
+      rawDispatch(action.type === 'navigate' && action.location.type === 'space' && !action.space ? { ...action, space: libraryRef.current.getSpace(action.location.spaceId) } : action),
+    [],
   );
   const [notice, setNotice] = useState<Notice | null>(null);
   const [freshIds, setFreshIds] = useState<ReadonlySet<ItemId>>(() => new Set());

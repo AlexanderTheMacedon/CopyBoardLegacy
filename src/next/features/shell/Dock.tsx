@@ -4,9 +4,12 @@ import { useMediaQuery } from '../../app/hooks';
 import { BrandMark } from '../../components/BrandMark';
 import { Icon, type IconName } from '../../components/Icon';
 import { useGlider } from '../../components/motion';
-import type { CollectionId, Location, SpaceId } from '../../domain/types';
+import { SpaceGlyph, spaceColorVar } from '../../components/SpaceIcon';
+import { currentDrag } from '../../data/dnd';
+import type { CollectionId, Location, Space, SpaceId } from '../../domain/types';
 import { focusCapture } from '../capture/SmartCapture';
-import { spaceColorVar } from '../items/item-meta';
+import { useDropTarget } from '../dnd/useDragDrop';
+import { useEntryActions } from '../workspace/useEntryActions';
 
 const collectionIcon: Record<CollectionId, IconName> = {
   all: 'layers',
@@ -54,6 +57,35 @@ function DockButton({
   );
 }
 
+/** One space in the flyout: navigation target, drop target for cards and folders (moves them to that space's board). */
+function FlyoutSpace({ space, index, current, count, onChoose }: { space: Space; index: number; current: boolean; count: number; onChoose: () => void }) {
+  const entries = useEntryActions();
+  const drop = useDropTarget({
+    accepts: (payload) => !(payload.from.spaceId === space.id && payload.from.folderId === null),
+    onDrop: (payload) => void entries.move(payload.ids, { spaceId: space.id, folderId: null }),
+    armDelay: 60,
+  });
+  return (
+    <li style={{ '--i': index } as CSSProperties} data-drop={drop.over || undefined} {...drop.props}>
+      <button
+        type="button"
+        className="cb-spaces-flyout__item"
+        aria-current={current ? 'true' : undefined}
+        title={space.name}
+        data-space-id={space.id}
+        style={{ '--cb-swatch': spaceColorVar(space.color) } as CSSProperties}
+        onClick={onChoose}
+      >
+        <SpaceGlyph icon={space.icon} name={space.name} color={space.color} size={30} className="cb-space-switch__swatch" />
+        <span className="cb-spaces-flyout__name">{space.name}</span>
+        <span className="cb-spaces-flyout__count" aria-label={`${count} Inhalte`}>
+          {count}
+        </span>
+      </button>
+    </li>
+  );
+}
+
 /**
  * Space switcher of the dock: at rest only the active space is visible. Hover (with intent delay), keyboard focus or a tap
  * reveals all spaces in a floating glass list beside the dock; choosing one closes it again. The list is a child of the
@@ -93,6 +125,14 @@ function SpaceSwitcher() {
     triggerRef.current?.focus({ preventScroll: true });
   };
 
+  // Dragging a card over the switcher opens the list so every space becomes a drop target.
+  const onDragEnter = () => {
+    if (currentDrag()) {
+      clearTimeout(timer.current);
+      setOpen(true);
+    }
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const items = [...(event.currentTarget.querySelectorAll<HTMLButtonElement>('.cb-spaces-flyout__item'))];
     const index = items.indexOf(document.activeElement as HTMLButtonElement);
@@ -119,6 +159,10 @@ function SpaceSwitcher() {
       data-open={open || undefined}
       onPointerEnter={(event) => event.pointerType === 'mouse' && schedule(true)}
       onPointerLeave={(event) => event.pointerType === 'mouse' && schedule(false)}
+      onDragEnter={onDragEnter}
+      onDragLeave={(event) => {
+        if (currentDrag() && !event.currentTarget.contains(event.relatedTarget as Node | null)) schedule(false);
+      }}
       onKeyDown={onKeyDown}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
@@ -145,41 +189,53 @@ function SpaceSwitcher() {
           setOpen((v) => (event.detail > 0 && matchMedia('(hover: hover)').matches ? true : !v));
         }}
       >
-        <span className="cb-space-switch__swatch" aria-hidden="true">
-          {active.name.slice(0, 1)}
-        </span>
+        <SpaceGlyph icon={active.icon} name={active.name} color={active.color} size={30} className="cb-space-switch__swatch" />
         <span className="cb-navdock__label cb-space-switch__name">{active.name}</span>
         <Icon name="chevronRight" size={14} className="cb-space-switch__chevron" />
       </button>
-      <div id="cb-spaces-flyout" className="cb-spaces-flyout" role="group" aria-label="Spaces" inert={!open}>
+      <div id="cb-spaces-flyout" className="cb-spaces-flyout" role="group" aria-label="Spaces" inert={!open} data-cb-context="spaces">
         <p className="cb-spaces-flyout__title">Spaces</p>
         <ul ref={listRef} className="cb-spaces-flyout__list">
           <span className="cb-glider cb-spaces-flyout__glider" aria-hidden="true" />
-          {library.spaces.map((space, i) => {
-            const current = space.id === active.id;
-            const count = library.listItems({ type: 'space', spaceId: space.id }).length;
-            return (
-              <li key={space.id} style={{ '--i': i } as CSSProperties}>
-                <button
-                  type="button"
-                  className="cb-spaces-flyout__item"
-                  aria-current={current ? 'true' : undefined}
-                  title={space.name}
-                  style={{ '--cb-swatch': spaceColorVar(space.color) } as CSSProperties}
-                  onClick={() => choose(space.id)}
-                >
-                  <span className="cb-space-switch__swatch" aria-hidden="true">
-                    {space.name.slice(0, 1)}
-                  </span>
-                  <span className="cb-spaces-flyout__name">{space.name}</span>
-                  <span className="cb-spaces-flyout__count" aria-label={`${count} Inhalte`}>
-                    {count}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
+          {library.spaces.map((space, i) => (
+            <FlyoutSpace
+              key={space.id}
+              space={space}
+              index={i}
+              current={space.id === active.id}
+              count={library.listItems({ type: 'space', spaceId: space.id }).length}
+              onChoose={() => choose(space.id)}
+            />
+          ))}
         </ul>
+        <div className="cb-spaces-flyout__foot">
+          <button
+            type="button"
+            className="cb-spaces-flyout__item cb-spaces-flyout__item--new"
+            onClick={() => {
+              setOpen(false);
+              dispatch({ type: 'openModal', modal: { kind: 'space-new' } });
+            }}
+          >
+            <span className="cb-spaces-flyout__plus" aria-hidden="true">
+              <Icon name="plus" size={16} />
+            </span>
+            <span className="cb-spaces-flyout__name">Neuer Space</span>
+          </button>
+          <button
+            type="button"
+            className="cb-spaces-flyout__item cb-spaces-flyout__item--new"
+            onClick={() => {
+              setOpen(false);
+              dispatch({ type: 'openModal', modal: { kind: 'space-edit', spaceId: active.id } });
+            }}
+          >
+            <span className="cb-spaces-flyout__plus" aria-hidden="true">
+              <Icon name="sliders" size={16} />
+            </span>
+            <span className="cb-spaces-flyout__name">„{active.name}“ bearbeiten</span>
+          </button>
+        </div>
       </div>
     </div>
   );

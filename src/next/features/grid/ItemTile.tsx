@@ -1,42 +1,80 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, MouseEvent } from 'react';
 import { usePreview } from '../../app/context';
 import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { Popover } from '../../components/Popover';
-import type { Item } from '../../domain/types';
+import type { DragPayload } from '../../data/dnd';
+import { isFolderId, type Item, type Placement } from '../../domain/types';
+import { useDraggableEntry, useDropTarget } from '../dnd/useDragDrop';
 import { itemActions, primaryQuickAction } from '../items/item-actions';
 import { formatDate, kindIcon, kindLabel, spaceColorVar } from '../items/item-meta';
 import { useRunItemAction } from '../items/useItemActions';
+import type { Selection } from '../selection/useSelection';
+import { useEntryActions } from '../workspace/useEntryActions';
 import { ItemPreview } from './ItemPreview';
 
 export const tileOpenButtonId = (itemId: string) => `cb-tile-open-${itemId}`;
 
 /** Stagger cap: only the first dozen cards animate with a delay (Blueprint 03 §4.4 rule 5). */
 const STAGGER_CAP = 11;
+/** Dwell before a card accepts a merge drop (card on card → new folder): a quick pass never creates a folder by accident. */
+const MERGE_ARM_MS = 260;
+
+interface ItemTileProps {
+  item: Item;
+  index: number;
+  showSpace: boolean;
+  /** Level the card sits on; enables drag & drop. Collections (flat views) pass none. */
+  placement?: Placement;
+  selection?: Selection;
+}
 
 /**
  * One item in the Smart Grid or List (DS-C09/C10): identical action grammar in both layouts, only CSS differs.
  * The main button opens the Inspector; quick actions (Copy + "…" menu from the shared action registry, D-006) are siblings,
- * so there are no nested interactive elements.
+ * so there are no nested interactive elements. A check toggles the card into the selection; ⌘/Shift-clicks on the card
+ * do the same. Dragging a card onto another card creates a folder of both (after a short dwell).
  */
-export function ItemTile({ item, index, showSpace }: { item: Item; index: number; showSpace: boolean }) {
+export function ItemTile({ item, index, showSpace, placement, selection }: ItemTileProps) {
   const { state, dispatch, library, freshIds } = usePreview();
   const runAction = useRunItemAction();
-  const selected = state.inspectedItemId === item.id;
+  const entries = useEntryActions();
+  const inspected = state.inspectedItemId === item.id;
+  const checked = selection?.selected.has(item.id) ?? false;
   const quick = primaryQuickAction(item, state.location);
-  const actions = itemActions(item, state.location);
+  const actions = itemActions(item, state.location, { organize: !!placement || state.location.type === 'collection' });
   const space = library.getSpace(item.spaceId);
+  const drag = useDraggableEntry(item.id, placement, item.title);
+  const drop = useDropTarget({
+    accepts: (payload: DragPayload) => !!placement && !payload.ids.includes(item.id) && payload.ids.every((id) => !isFolderId(id)),
+    onDrop: (payload) => {
+      if (placement) void entries.createFolderWith([...payload.ids, item.id], placement);
+    },
+    armDelay: MERGE_ARM_MS,
+  });
+
+  const onOpen = (event: MouseEvent) => {
+    if (selection?.onEntryClick(item.id, event)) return;
+    dispatch({ type: 'inspect', itemId: item.id });
+  };
 
   return (
     <li
       className="cb-tile"
       data-kind={item.kind}
-      data-selected={selected || undefined}
+      data-selected={inspected || undefined}
+      data-checked={checked || undefined}
       data-fresh={freshIds.has(item.id) || undefined}
+      data-dragging={drag.dragging || undefined}
+      data-drop={drop.over ? (drop.armed ? 'merge' : 'near') : undefined}
       data-item-id={item.id}
       style={{ '--i': Math.min(index, STAGGER_CAP) } as CSSProperties}
+      draggable={drag.draggable || undefined}
+      onDragStart={drag.onDragStart}
+      onDragEnd={drag.onDragEnd}
+      {...drop.props}
     >
-      {selected && (
+      {inspected && (
         <span className="cb-tile__marker" aria-hidden="true">
           <Icon name="panelRight" size={14} />
         </span>
@@ -45,8 +83,8 @@ export function ItemTile({ item, index, showSpace }: { item: Item; index: number
         id={tileOpenButtonId(item.id)}
         type="button"
         className="cb-tile__open"
-        aria-current={selected ? 'true' : undefined}
-        onClick={() => dispatch({ type: 'inspect', itemId: item.id })}
+        aria-current={inspected ? 'true' : undefined}
+        onClick={onOpen}
       >
         <span className="cb-tile__preview">
           <ItemPreview item={item} />
@@ -72,6 +110,22 @@ export function ItemTile({ item, index, showSpace }: { item: Item; index: number
           </span>
         </span>
       </button>
+      {selection && (
+        <button
+          type="button"
+          className="cb-tile__check"
+          role="checkbox"
+          aria-checked={checked}
+          aria-label={`${item.title} auswählen`}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (event.shiftKey) selection.onEntryClick(item.id, event);
+            else selection.toggle(item.id);
+          }}
+        >
+          <Icon name="check" size={14} />
+        </button>
+      )}
       <div className="cb-tile__actions">
         {quick && (
           <IconButton
@@ -110,6 +164,10 @@ export function ItemTile({ item, index, showSpace }: { item: Item; index: number
           )}
         </Popover>
       </div>
+      <span className="cb-tile__drop-hint" aria-hidden="true">
+        <Icon name="folderPlus" size={16} />
+        Ordner erstellen
+      </span>
     </li>
   );
 }
