@@ -145,6 +145,7 @@ export function FolderWindow({ folder, leaving }: { folder: Folder; leaving: boo
           </label>
           <SortMenu />
           <ViewTools compact={phone} />
+          <IconButton icon="plus" label="Neu in diesem Ordner erstellen" className="cb-tool cb-tool--accent" onClick={() => dispatch({ type: 'openModal', modal: { kind: 'create' } })} />
           <IconButton icon="folderPlus" label="Neuer Unterordner" className="cb-tool cb-tool--accent" onClick={() => entries.openNewFolder(placement)} />
           <IconButton icon="x" label="Ordner schließen" className="cb-folder-window__close" onClick={close} />
         </div>

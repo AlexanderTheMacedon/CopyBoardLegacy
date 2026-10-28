@@ -11,6 +11,7 @@ import { textItemToDocument } from '../../domain/document';
 import { suggestIcon } from '../../domain/icons';
 import { wouldCycle } from '../../app/operations';
 import { isFolderId, isLocal, isLocalSpace, type Folder, type ItemId, type Placement, type Space, type SpaceColor, type SpaceIcon, type SpaceId, type SpacePrefs } from '../../domain/types';
+import { CreateForm } from '../capture/CreateDialog';
 import { useEntryActions } from '../workspace/useEntryActions';
 import { ColorPicker, IconPicker } from './pickers';
 
@@ -572,6 +573,8 @@ function ModalContent({ modal, onClose }: { modal: WorkspaceModal; onClose: () =
       return <ConfirmDeleteForm entryIds={modal.entryIds} onClose={onClose} />;
     case 'convert-to-document':
       return <ConvertToDocumentForm itemId={modal.itemId} onClose={onClose} />;
+    case 'create':
+      return <CreateForm titleId={TITLE_ID} onClose={onClose} />;
   }
 }
 

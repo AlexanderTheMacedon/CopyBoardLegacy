@@ -4,7 +4,8 @@ import { CodeEditor, type CodeHandle } from './CodeEditor';
 import type { EditorPrefs, HistoryState } from './editor-types';
 import { markdownCommands, markdownKeymap } from './markdown-commands';
 import { MarkdownPreview } from './MarkdownPreview';
-import { ToolButton, ToolGroup, ToolSeparator } from './Toolbar';
+import { shortcutLabel, ToolButton, ToolGroup, ToolSeparator } from './Toolbar';
+import { markdownTypesetting, selectionPill, type PillRenderer } from './writing-surface';
 
 export type MarkdownMode = 'source' | 'preview' | 'split';
 
@@ -19,7 +20,50 @@ interface MarkdownEditorProps {
   readonly onReady: (handle: CodeHandle | null) => void;
 }
 
-const extensions = [markdownKeymap];
+/** Icon paths of the pill (same drawings as the toolbar's icons); the pill lives in CodeMirror's tooltip layer, outside React. */
+const pillTools: { label: string; shortcut: string; d: string; run: (view: CodeHandle['view']) => boolean }[] = [
+  { label: 'Fett', shortcut: '⌘B', d: 'M7 4.5h6a3.5 3.5 0 0 1 0 7H7Zm0 7h7a3.75 3.75 0 0 1 0 7.5H7Z', run: markdownCommands.bold },
+  { label: 'Kursiv', shortcut: '⌘I', d: 'M10 4.5h7M7 19.5h7M14.5 4.5 9.5 19.5', run: markdownCommands.italic },
+  {
+    label: 'Durchgestrichen',
+    shortcut: '⇧⌘X',
+    d: 'M5 12h14M16.5 7.5c-.5-1.6-2.2-2.5-4.5-2.5-2.6 0-4.3 1.2-4.3 3 0 1.4 1 2.2 3 2.8M7.5 16.5c.6 1.6 2.3 2.5 4.6 2.5 2.7 0 4.4-1.2 4.4-3 0-.9-.4-1.5-1.1-2',
+    run: markdownCommands.strike,
+  },
+  { label: 'Inline-Code', shortcut: '⌘E', d: 'm8.5 8-4 4 4 4M15.5 8l4 4-4 4', run: markdownCommands.code },
+  {
+    label: 'Link',
+    shortcut: '⌘K',
+    d: 'M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1',
+    run: markdownCommands.link,
+  },
+];
+
+const SVG = 'http://www.w3.org/2000/svg';
+
+const renderPill: PillRenderer = (dom, view) => {
+  dom.setAttribute('role', 'toolbar');
+  dom.setAttribute('aria-label', 'Auswahl formatieren');
+  for (const tool of pillTools) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'cb-tool cb-pill__tool';
+    button.setAttribute('aria-label', tool.label);
+    button.title = `${tool.label} (${shortcutLabel(tool.shortcut)})`;
+    const svg = document.createElementNS(SVG, 'svg');
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: '16', height: '16', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }))
+      svg.setAttribute(k, v);
+    const path = document.createElementNS(SVG, 'path');
+    path.setAttribute('d', tool.d);
+    svg.append(path);
+    button.append(svg);
+    button.addEventListener('click', () => tool.run(view));
+    dom.append(button);
+  }
+  return () => dom.replaceChildren();
+};
+
+const extensions = [markdownKeymap, markdownTypesetting, selectionPill(renderPill)];
 
 /**
  * Markdown writing: CodeMirror source (canonical string, edited as text only) + safe live preview. The source view stays
@@ -60,6 +104,7 @@ export function MarkdownEditor({ initial, mode, readOnly, prefs, title, onChange
           tabSize={prefs.tabSize}
           lineNumbers={prefs.lineNumbers}
           ariaLabel="Markdown-Quelltext"
+          placeholder={readOnly ? undefined : 'Schreib los … # Überschrift, **fett**, - Liste'}
           title={title}
           extensions={extensions}
           onChange={handleChange}

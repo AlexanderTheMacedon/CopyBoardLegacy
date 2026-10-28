@@ -1,6 +1,5 @@
 import { usePreview } from '../../app/context';
 import { Icon, type IconName } from '../../components/Icon';
-import { focusCapture } from '../capture/SmartCapture';
 
 function DockButton({
   icon,
@@ -28,22 +27,19 @@ function DockButton({
  * contextual slot. Only rendered visibly on phones (CSS); every action opens the same domain as on desktop.
  */
 export function MobileDock() {
-  const { state, dispatch, notify } = usePreview();
+  const { state, dispatch } = usePreview();
 
-  const capture = () => {
-    if (state.composerItemId) {
-      notify('Erfassen ist wieder verfügbar, sobald der Composer geschlossen ist.');
-      return;
-    }
+  // "Neu" opens the one create sheet (new document, text, Markdown, code, note, recording, import), also from an open editor
+  const create = () => {
     if (state.inspectedItemId) dispatch({ type: 'closeInspector' });
-    requestAnimationFrame(focusCapture);
+    dispatch({ type: 'openModal', modal: { kind: 'create' } });
   };
 
   return (
     <nav className="cb-dock" aria-label="Schnellzugriff">
       <DockButton icon="spaces" label="Spaces" onClick={() => dispatch({ type: 'openOverlay', overlay: 'spaces-drawer' })} />
       <DockButton icon="search" label="Suche" onClick={() => dispatch({ type: 'openOverlay', overlay: 'search' })} />
-      <DockButton icon="plus" label="Erfassen" primary onClick={capture} />
+      <DockButton icon="plus" label="Neu" primary onClick={create} />
       <DockButton
         icon="mic"
         label="Aufnahme"

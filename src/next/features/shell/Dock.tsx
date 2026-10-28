@@ -7,7 +7,6 @@ import { useGlider } from '../../components/motion';
 import { SpaceGlyph, spaceColorVar } from '../../components/SpaceIcon';
 import { currentDrag } from '../../data/dnd';
 import type { CollectionId, Location, Space, SpaceId } from '../../domain/types';
-import { focusCapture } from '../capture/SmartCapture';
 import { useDropTarget } from '../dnd/useDragDrop';
 import { useEntryActions } from '../workspace/useEntryActions';
 
@@ -334,7 +333,7 @@ export function Dock() {
         <div ref={coreRef} className="cb-navdock__core">
           <SpaceSwitcher />
           <DockButton icon="search" label="Suchen" hint={shortcut('K')} index={4} onClick={run(() => dispatch({ type: 'openOverlay', overlay: 'search' }))} />
-          <DockButton icon="plus" label="Neuer Eintrag" index={5} onClick={run(() => requestAnimationFrame(focusCapture))} />
+          <DockButton icon="plus" label="Neu erstellen" index={5} onClick={run(() => dispatch({ type: 'openModal', modal: { kind: 'create' } }))} />
         </div>
         {/* The active collection stays visible at rest, so the current location is never hidden (outside the anchored core). */}
         {location.type === 'collection' && (

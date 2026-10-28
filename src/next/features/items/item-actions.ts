@@ -67,3 +67,30 @@ export function itemActions(item: Item, location: Location, { withOpen = false, 
 /** The single quick action shown on a card (hover/focus on desktop, always visible on touch). */
 export const primaryQuickAction = (item: Item, location: Location): ItemAction | undefined =>
   itemActions(item, location).find((a) => a.id === 'copy' || a.id === 'download');
+
+/** The Inspector's arrangement of the same registry actions: one primary, quick secondaries, an organise group, danger last. */
+export interface InspectorActionLayout {
+  readonly primary: ItemAction | undefined;
+  readonly quick: readonly ItemAction[];
+  readonly organize: readonly ItemAction[];
+  readonly danger: readonly ItemAction[];
+}
+
+const ORGANIZE: ReadonlySet<ItemActionId> = new Set(['move', 'new-folder', 'remove-from-folder', 'duplicate', 'reveal-in-space']);
+
+/**
+ * One clear primary action per content type: the writing studio for the user's own text card, editing for a document,
+ * otherwise the first core action (copy, download or open link). Copy always stays a visible quick action. Nothing is
+ * dropped: every registry action lands in exactly one tier.
+ */
+export function inspectorLayout(actions: readonly ItemAction[], item: Item): InspectorActionLayout {
+  const find = (id: ItemActionId) => actions.find((a) => a.id === id);
+  const primary = find('open-studio') ?? (item.kind === 'document' ? find('open-composer') : undefined) ?? actions.find((a) => !a.danger && !ORGANIZE.has(a.id) && a.id !== 'favorite');
+  const rest = actions.filter((a) => a !== primary);
+  return {
+    primary,
+    quick: rest.filter((a) => !a.danger && !ORGANIZE.has(a.id)),
+    organize: rest.filter((a) => !a.danger && ORGANIZE.has(a.id)),
+    danger: rest.filter((a) => a.danger),
+  };
+}

@@ -1,4 +1,4 @@
-import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
+import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap, startCompletion } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import {
   bracketMatching,
@@ -20,14 +20,15 @@ import {
   drawSelection,
   dropCursor,
   EditorView,
-  highlightActiveLine,
   highlightActiveLineGutter,
   highlightSpecialChars,
   keymap,
   lineNumbers,
+  placeholder,
   rectangularSelection,
 } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
+import { lineBand } from './writing-surface';
 
 // CodeMirror 6 configuration shared by the Code and the Markdown editor. Languages load lazily (own chunks); colours come
 // from CSS variables, so the editor follows the app's light/dark theme without a second theme object.
@@ -117,7 +118,9 @@ const highlight = HighlightStyle.define([
 ]);
 
 const theme = EditorView.theme({
-  '&': { height: '100%', color: 'var(--cb-text-primary)', backgroundColor: 'transparent', fontSize: 'var(--cb-editor-font, 14px)' },
+  // `&` also matches the tooltip container in the composer shell: only the editor itself fills its pane
+  '&': { color: 'var(--cb-text-primary)', backgroundColor: 'transparent', fontSize: 'var(--cb-editor-font, 14px)' },
+  '&.cm-editor': { height: '100%' },
   '&.cm-focused': { outline: 'none' },
   '.cm-scroller': { fontFamily: 'var(--cb-font-mono)', lineHeight: '1.7', overflow: 'auto' },
   '.cm-content': { padding: 'var(--cb-space-4) 0 var(--cb-space-8)', caretColor: 'var(--cb-accent)' },
@@ -126,7 +129,6 @@ const theme = EditorView.theme({
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
     backgroundColor: 'color-mix(in srgb, var(--cb-p-orange) 26%, transparent)',
   },
-  '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--cb-text-primary) 4%, transparent)' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--cb-text-secondary)' },
   '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--cb-text-tertiary)', border: 'none', paddingLeft: 'var(--cb-space-3)' },
   '.cm-lineNumbers .cm-gutterElement': { padding: '0 8px 0 4px', minWidth: '28px' },
@@ -152,8 +154,14 @@ const theme = EditorView.theme({
     color: 'var(--cb-text-primary)',
     overflow: 'hidden',
   },
-  '.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--cb-font-mono)', fontSize: '13px' },
+  '.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--cb-font-mono)', fontSize: '13px', maxHeight: '15em', padding: '4px' },
+  '.cm-tooltip-autocomplete > ul > li': { display: 'flex', alignItems: 'center', gap: '8px', minHeight: '28px', padding: '2px 10px 2px 6px', borderRadius: '7px', lineHeight: '1.3' },
   '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--cb-surface-selected)', color: 'var(--cb-text-primary)' },
+  '.cm-completionLabel': { flex: '1', minWidth: '0' },
+  '.cm-completionMatchedText': { textDecoration: 'none', fontWeight: '700', color: 'var(--cb-accent)' },
+  '.cm-completionDetail': { marginLeft: '12px', fontFamily: 'var(--cb-font-ui)', fontStyle: 'normal', fontSize: '11.5px', color: 'var(--cb-text-tertiary)' },
+  '.cm-completionInfo': { padding: '8px 10px', fontFamily: 'var(--cb-font-ui)', fontSize: '12.5px', maxWidth: '320px' },
+  '.cm-placeholder': { color: 'var(--cb-text-tertiary)', fontStyle: 'normal' },
   '.cm-panels': { backgroundColor: 'transparent', color: 'var(--cb-text-primary)' },
 });
 
@@ -164,6 +172,8 @@ export interface CodeFeatures {
   readonly lineNumbers: boolean;
   /** Markdown source: no fold gutter, no autocomplete popups while writing prose. */
   readonly prose?: boolean;
+  /** Shown while the document is empty (visual only, never part of the text). */
+  readonly placeholder?: string;
 }
 
 /** Compartments let the React wrapper reconfigure one concern at a time without recreating the view or losing history. */
@@ -188,6 +198,17 @@ export const tabsExt = (size: number): Extension => [EditorState.tabSize.of(size
 export const gutterExt = (on: boolean, prose: boolean): Extension => (on ? [lineNumbers(), highlightActiveLineGutter(), ...(prose ? [] : [foldGutter({ openText: '⌄', closedText: '›' })])] : []);
 export const readOnlyExt = (on: boolean): Extension => [EditorState.readOnly.of(on), EditorView.editable.of(!on)];
 
+/**
+ * Line endings are kept byte for byte: CodeMirror would otherwise read `\r\n` and `\r` as line breaks and write `\n` back.
+ * A text that already uses `\r` keeps its own separator (consistent CRLF stays CRLF, and Enter continues it); a mixed text
+ * keeps every character, with a lone `\r` shown as a control character. Texts without `\r` keep CodeMirror's default.
+ */
+export function lineSeparatorFor(text: string): Extension {
+  if (!text.includes('\r')) return [];
+  const crlf = !/\r(?!\n)|(?<!\r)\n/.test(text);
+  return EditorState.lineSeparator.of(crlf ? '\r\n' : '\n');
+}
+
 export function baseExtensions(c: Compartments, features: CodeFeatures, ariaLabel: string): Extension[] {
   const prose = !!features.prose;
   return [
@@ -207,10 +228,11 @@ export function baseExtensions(c: Compartments, features: CodeFeatures, ariaLabe
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     bracketMatching(),
     closeBrackets(),
-    ...(prose ? [] : [autocompletion()]),
+    ...(prose ? [] : [autocompletion({ icons: true }), keymap.of([{ key: 'Mod-i', run: startCompletion }])]),
     rectangularSelection(),
     crosshairCursor(),
-    highlightActiveLine(),
+    lineBand,
+    ...(features.placeholder ? [placeholder(features.placeholder)] : []),
     highlightSelectionMatches(),
     search({ top: true }),
     keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, ...(prose ? [] : completionKeymap), indentWithTab]),

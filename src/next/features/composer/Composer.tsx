@@ -4,7 +4,7 @@ import { usePreview } from '../../app/context';
 import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { SegmentedControl, type SegmentOption } from '../../components/SegmentedControl';
-import { newItemId } from '../../data/capture';
+import { NEW_ITEM_TITLES, newItemId } from '../../data/capture';
 import { ClipboardAccessError, writeTextToClipboard } from '../../data/clipboard';
 import { nativeExportType, type ExportType } from '../../data/image-render';
 import { DEFAULT_DOCUMENT_TITLE, documentOutline, documentText, sanitizeDocument, titleFromText, wordCount } from '../../domain/document';
@@ -16,6 +16,7 @@ import type { CodeHandle } from './CodeEditor';
 import { CodeEditor } from './CodeEditor';
 import { CodeToolbar } from './CodeToolbar';
 import { DocumentEditor, type DocumentHandle } from './DocumentEditor';
+import { EditorExplorer } from './EditorExplorer';
 import { DocumentToolbar } from './DocumentToolbar';
 import { downloadBlob, downloadText, normalizeEditorPrefs, type EditorHandle, type EditorPrefs, type HistoryState } from './editor-types';
 import { ImageStudio, ImageToolbar, type ImageHandle, type StudioTool } from './ImageStudio';
@@ -39,6 +40,21 @@ const modeOptions = (phone: boolean): SegmentOption<MarkdownMode>[] => [
 ];
 
 const step = (i: number) => ({ '--i': i }) as CSSProperties;
+
+/** The viewer's editor preferences of this session: a Canvas opened later (or switched to in the Explorer) starts from them. */
+let sessionPrefs: EditorPrefs | null = null;
+/** Explorer visibility of this session (desktop/tablet; on phones it opens on demand only). */
+let sessionExplorer = false;
+
+/** First non-empty line as a title; Markdown drops its heading and list marks. */
+function titleFromLine(text: string, markdown: boolean, fallback: string): string {
+  const line = text.split(/\r\n|\r|\n/).find((l) => l.trim())?.trim() ?? '';
+  const bare = markdown ? line.replace(/^(#{1,6}\s+|>\s*|[-*+]\s+(\[[ xX]\]\s+)?|\d+[.)]\s+)/, '').replace(/[*_`~]/g, '') : line;
+  // a title is one calm line: tabs and runs of spaces collapse (the text itself keeps them)
+  const clean = bare.replace(/\s+/g, ' ').trim();
+  if (!clean) return fallback;
+  return clean.length > 60 ? `${clean.slice(0, 59).trimEnd()}…` : clean;
+}
 
 /** "Space › Ordner › Unterordner" of an item's place, from the live library. */
 function useBreadcrumb(item: Item): string {
@@ -174,13 +190,17 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
   const place = useBreadcrumb(item);
 
   const [title, setTitle] = useState(item.title);
-  const titleAuto = useRef(item.kind === 'document' && item.title === DEFAULT_DOCUMENT_TITLE);
+  // a new, still unnamed item takes its title from the first line until the user names it
+  const titleAuto = useRef(
+    (item.kind === 'document' && item.title === DEFAULT_DOCUMENT_TITLE) || ((item.kind === 'text' || item.kind === 'markdown') && item.title === NEW_ITEM_TITLES[item.kind] && isLocal(item)),
+  );
   const [language, setLanguage] = useState(item.kind === 'code' ? item.language : '');
   const [mode, setMode] = useState<MarkdownMode>('split');
-  const [prefs, setPrefs] = useState<EditorPrefs>(() => normalizeEditorPrefs(workspace.savedEditorPrefs));
+  const [prefs, setPrefs] = useState<EditorPrefs>(() => ({ ...(sessionPrefs ?? normalizeEditorPrefs(workspace.savedEditorPrefs)), focus: false }));
   // the image studio brings its own tool panel instead of the Context Rail
   const studio = item.kind === 'image';
   const [railOpen, setRailOpen] = useState(!phone && !studio);
+  const [explorerOpen, setExplorerOpen] = useState(!phone && !studio && sessionExplorer);
   const [tool, setTool] = useState<StudioTool>('adjust');
   const [compare, setCompare] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -234,9 +254,10 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
     (text: string) => {
       body.current = text;
       setRev((r) => r + 1);
+      if (titleAuto.current && (item.kind === 'text' || item.kind === 'markdown')) setTitle(titleFromLine(text, item.kind === 'markdown', NEW_ITEM_TITLES[item.kind]));
       touch();
     },
-    [touch],
+    [touch, item.kind],
   );
   const onDocChange = useCallback(() => {
     setRev((r) => r + 1);
@@ -257,6 +278,7 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
   const changePrefs = (patch: Partial<EditorPrefs>) => {
     const next = { ...prefs, ...patch };
     setPrefs(next);
+    sessionPrefs = next;
     if (!('focus' in patch) || Object.keys(patch).length > 1) workspace.saveEditorPrefs({ ...next, focus: false });
   };
 
@@ -299,6 +321,20 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
     event.preventDefault();
     if (prefs.focus) changePrefs({ focus: false });
     else void requestClose();
+  };
+
+  // --- Explorer: switching saves the current edits first; a failed save keeps this editor open with its edits ---
+  const toggleExplorer = (open: boolean) => {
+    setExplorerOpen(open);
+    if (!phone) sessionExplorer = open;
+  };
+  const openFromExplorer = async (id: string) => {
+    if (!(await autosave.flush())) {
+      notify('Die Änderungen sind noch nicht gespeichert. Der Editor bleibt geöffnet.', { tone: 'error' });
+      return;
+    }
+    if (phone) setExplorerOpen(false);
+    dispatch({ type: 'openComposer', itemId: id });
   };
 
   // text card → writing studio: the plain edits are stored first, then the conversion dialog asks
@@ -370,6 +406,14 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
     return { primary: `${wordCount(text)} Wörter`, secondary: `${text.length} Zeichen`, outline: item.kind === 'markdown' ? markdownOutline(text) : [] };
   }, [deferredRev, railOpen, item, handle]);
 
+  // the plain-text sheet's own quiet status line (counts and the text's line endings, which are kept as they are)
+  const textStatus = useMemo(() => {
+    void deferredRev;
+    if (item.kind !== 'text') return null;
+    const text = body.current;
+    return { words: wordCount(text), chars: text.length, crlf: text.includes('\r\n') };
+  }, [deferredRev, item.kind]);
+
   const status = writable ? saveLabel[autosave.state] : 'Beispielinhalt – schreibgeschützt';
   const hasModes = item.kind === 'markdown';
   const toolbarDisabled = !writable || (hasModes && effectiveMode === 'preview');
@@ -382,6 +426,7 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
       data-kind={item.kind}
       data-mode={hasModes ? effectiveMode : undefined}
       data-rail={railOpen || undefined}
+      data-explorer={explorerOpen || undefined}
       data-focus={prefs.focus || undefined}
       style={{ '--cb-editor-font': `${prefs.fontSize}px` } as CSSProperties}
       onKeyDown={onKeyDown}
@@ -465,6 +510,7 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
               language={language}
               readOnly={!writable}
               prefs={prefs}
+              handle={handle as CodeHandle | null}
               onLanguage={(l) => {
                 setLanguage(l);
                 touch();
@@ -480,6 +526,7 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
           </ToolGroup>
           <ToolSeparator />
           <ToolGroup label="Aktionen">
+            {!studio && <ToolButton icon="sidebar" label="Explorer" pressed={explorerOpen} onClick={() => toggleExplorer(!explorerOpen)} />}
             {handle?.find && <ToolButton icon="search" label="Suchen und Ersetzen" shortcut="⌘F" disabled={hasModes && effectiveMode === 'preview'} onClick={() => handle.find?.()} />}
             <ToolButton icon="copy" label={studio ? 'Bild kopieren' : 'Alles kopieren'} onClick={() => void copyAll()} />
             <ToolButton icon="download" label="Exportieren" onClick={() => void exportFile()} />
@@ -500,6 +547,7 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
       )}
 
       <div className="cb-composer__body">
+        {explorerOpen && !studio && <EditorExplorer item={item} onOpen={(id) => void openFromExplorer(id)} onClose={() => toggleExplorer(false)} />}
         {item.kind === 'image' && (
           <ImageStudio
             item={item}
@@ -545,21 +593,32 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
               </div>
             )}
             {item.kind === 'text' && (
-              <div className="cb-composer__pane" data-width={prefs.width}>
-                <CodeEditor
-                  initial={item.body}
-                  language="text"
-                  prose
-                  readOnly={!writable}
-                  wrap
-                  tabSize={2}
-                  lineNumbers={false}
-                  ariaLabel="Text"
-                  title={title}
-                  onChange={onText}
-                  onHistory={setHistory}
-                  onReady={onHandle}
-                />
+              <div className="cb-composer__pane cb-sheet" data-width={prefs.width}>
+                <div className="cb-sheet__editor">
+                  <CodeEditor
+                    initial={item.body}
+                    language="text"
+                    prose
+                    readOnly={!writable}
+                    wrap
+                    tabSize={2}
+                    lineNumbers={false}
+                    ariaLabel="Text"
+                    placeholder={writable ? 'Schreib los …' : undefined}
+                    title={title}
+                    onChange={onText}
+                    onHistory={setHistory}
+                    onReady={onHandle}
+                  />
+                </div>
+                {textStatus && (
+                  <footer className="cb-sheet__status" aria-label="Textstatus">
+                    <span>
+                      {textStatus.words} {textStatus.words === 1 ? 'Wort' : 'Wörter'} · {textStatus.chars} Zeichen
+                    </span>
+                    <span>Klartext{textStatus.crlf ? ' · CRLF' : ''}</span>
+                  </footer>
+                )}
               </div>
             )}
           </div>

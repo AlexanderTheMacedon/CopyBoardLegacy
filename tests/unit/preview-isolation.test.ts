@@ -30,7 +30,8 @@ describe('React app is isolated from the legacy data path and the network', () =
     // Photo credits of the bundled nature backgrounds: attribution links only (user-clicked, never fetched by the app).
     { pattern: /https:\/\/unsplash\.com\/photos\//, files: ['src/next/features/shell/scenes.ts'] },
     // Link cards of the synthetic test space "Full": inert item data (shown and user-clicked like any link card, never fetched).
-    { pattern: /https?:\/\/(?!unsplash\.com\/photos\/)/, files: ['src/next/data/showcase.ts', 'src/next/domain/document.ts', 'src/next/features/composer/markdown-commands.ts', 'src/next/features/composer/DocumentEditor.tsx'] },
+    // the SVG namespace is an XML identifier, never fetched
+    { pattern: /https?:\/\/(?!unsplash\.com\/photos\/|www\.w3\.org\/2000\/svg['"])/, files: ['src/next/data/showcase.ts', 'src/next/domain/document.ts', 'src/next/features/composer/markdown-commands.ts', 'src/next/features/composer/DocumentEditor.tsx'] },
     // Pasted clipboard HTML is parsed into an inert detached document and serialised back after stripping active content
     // (never assigned to the live DOM); this is the only place that reads `innerHTML`.
     { pattern: /innerHTML/, files: ['src/next/features/composer/clipboard-html.ts'] },

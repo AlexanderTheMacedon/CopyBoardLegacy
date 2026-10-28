@@ -7,7 +7,6 @@ import { ClipboardAccessError, readSystemClipboard } from '../../data/clipboard'
 import type { Folder, Item, Space } from '../../domain/types';
 import { focusCapture } from '../capture/SmartCapture';
 import { useCapture } from '../capture/useCapture';
-import { useCreateDocument } from '../capture/useCreateDocument';
 import { folderActions } from '../folders/folder-actions';
 import { useRunFolderAction } from '../folders/FolderTile';
 import { itemActions } from '../items/item-actions';
@@ -47,7 +46,6 @@ const isMac = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(n
 export function ContextMenu() {
   const { state, dispatch, library, notify } = usePreview();
   const capture = useCapture();
-  const createDocument = useCreateDocument();
   const placement = useCapturePlacement();
   const runAction = useRunItemAction();
   const runFolder = useRunFolderAction();
@@ -204,7 +202,7 @@ export function ContextMenu() {
     entries = [
       { id: 'paste', label: 'Einfügen', icon: 'clipboard', shortcut: isMac() ? '⌘V' : 'Strg V', run: () => void pasteFromMenu() },
       { id: 'new', label: 'Neuer Eintrag', icon: 'plus', run: () => requestAnimationFrame(focusCapture) },
-      { id: 'new-document', label: 'Neues Dokument', icon: 'fileText', run: () => void createDocument() },
+      { id: 'create', label: 'Neu erstellen …', icon: 'layers', run: () => dispatch({ type: 'openModal', modal: { kind: 'create' } }) },
       ...(placement ? [{ id: 'new-folder', label: 'Neuer Ordner', icon: 'folderPlus' as const, run: () => entriesOps.openNewFolder(placement) }] : []),
       { id: 'select-all', label: 'Alles auswählen', icon: 'checkSquare', shortcut: isMac() ? '⌘A' : 'Strg A', group: true, run: selectAllShown },
       ...(selectionCount ? [{ id: 'clear', label: 'Auswahl aufheben', icon: 'squareDashed' as const, shortcut: 'Esc', run: () => dispatch({ type: 'clearSelection' }) }] : []),

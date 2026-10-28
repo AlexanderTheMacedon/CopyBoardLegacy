@@ -7,7 +7,7 @@ import { useObjectUrl } from '../../components/useObjectUrl';
 import type { AudioItem, ImageItem, Item } from '../../domain/types';
 import { ImageSwatch, useImageView, Waveform } from '../grid/ItemPreview';
 import { tileOpenButtonId } from '../grid/ItemTile';
-import { itemActions } from '../items/item-actions';
+import { inspectorLayout, itemActions, type ItemAction } from '../items/item-actions';
 import { formatDateTime, formatDuration, formatSize, kindIcon, kindLabel, linkParts, spaceColorVar } from '../items/item-meta';
 import { useRunItemAction } from '../items/useItemActions';
 
@@ -199,6 +199,8 @@ export function Inspector({ item, leaving, width, onWidthChange }: InspectorProp
   }, [itemId]);
 
   const space = library.getSpace(item.spaceId);
+  const layout = inspectorLayout(itemActions(item, state.location), item);
+  const run = (action: ItemAction) => runAction(action, item);
 
   const close = () => {
     dispatch({ type: 'closeInspector' });
@@ -248,25 +250,56 @@ export function Inspector({ item, leaving, width, onWidthChange }: InspectorProp
           )}
 
           <div className="cb-inspector__actions" role="group" aria-label="Aktionen" style={step(3)}>
-            {itemActions(item, state.location).map((action, i) => (
-              <button
-                key={action.id}
-                type="button"
-                className={`cb-button ${i === 0 ? 'cb-button--primary' : action.danger ? 'cb-button--danger' : 'cb-button--secondary'}`}
-                aria-pressed={action.id === 'favorite' ? item.favorite : undefined}
-                onClick={() => runAction(action, item)}
-              >
-                <Icon name={action.icon} size={16} />
-                <span>{action.label}</span>
+            {layout.primary && (
+              <button type="button" className="cb-button cb-button--primary cb-inspector__primary" onClick={() => run(layout.primary as ItemAction)}>
+                <Icon name={layout.primary.icon} size={17} />
+                <span>{layout.primary.label}</span>
               </button>
-            ))}
+            )}
+            {layout.quick.length > 0 && (
+              <div className="cb-inspector__quick">
+                {layout.quick.map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className="cb-button cb-button--secondary"
+                    data-action={action.id}
+                    aria-pressed={action.id === 'favorite' ? item.favorite : undefined}
+                    onClick={() => run(action)}
+                  >
+                    <Icon name={action.icon} size={16} />
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="cb-inspector__content" style={step(4)}>
+          {(layout.organize.length > 0 || layout.danger.length > 0) && (
+            <section className="cb-inspector__organize" aria-labelledby="cb-inspector-organize" style={step(4)}>
+              <h3 id="cb-inspector-organize">Organisieren</h3>
+              <div className="cb-inspector__organize-row">
+                {layout.organize.map((action) => (
+                  <button key={action.id} type="button" className="cb-inspector__chip" onClick={() => run(action)}>
+                    <Icon name={action.icon} size={15} />
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+                {layout.danger.map((action) => (
+                  <button key={action.id} type="button" className="cb-inspector__chip" data-danger="" onClick={() => run(action)}>
+                    <Icon name={action.icon} size={15} />
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <div className="cb-inspector__content" style={step(5)}>
             <InspectorContent item={item} />
           </div>
 
-          <dl className="cb-inspector__facts cb-inspector__facts--meta" style={step(5)}>
+          <dl className="cb-inspector__facts cb-inspector__facts--meta" style={step(6)}>
             <dt>Erstellt</dt>
             <dd>
               <time dateTime={item.createdAt}>{formatDateTime(item.createdAt)}</time>

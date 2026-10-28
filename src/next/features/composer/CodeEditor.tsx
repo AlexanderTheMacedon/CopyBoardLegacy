@@ -1,9 +1,10 @@
 import { redo, redoDepth, undo, undoDepth } from '@codemirror/commands';
 import { openSearchPanel } from '@codemirror/search';
 import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorView, tooltips } from '@codemirror/view';
 import { useEffect, useRef } from 'react';
-import { baseExtensions, gutterExt, makeCompartments, markdownExtension, readOnlyExt, resolveLanguage, tabsExt, wrapExt, type Compartments } from './codemirror';
+import { baseExtensions, gutterExt, lineSeparatorFor, makeCompartments, markdownExtension, readOnlyExt, resolveLanguage, tabsExt, wrapExt, type Compartments } from './codemirror';
+import { completionExtension } from './completions';
 import type { EditorHandle, HistoryState } from './editor-types';
 import { safeFileName } from './editor-types';
 
@@ -24,6 +25,8 @@ interface CodeEditorProps {
   readonly title: string;
   /** Markdown source: prose behaviour (no autocomplete popups, no fold gutter). */
   readonly prose?: boolean;
+  /** Shown while the text is empty; purely visual. */
+  readonly placeholder?: string;
   readonly onChange: (text: string) => void;
   readonly onHistory: (state: HistoryState) => void;
   readonly onReady: (handle: CodeHandle | null) => void;
@@ -55,9 +58,13 @@ export function CodeEditor(props: CodeEditorProps) {
         doc: p.initial,
         extensions: [
           ...(p.extensions ?? []),
-          ...baseExtensions(c, { readOnly: p.readOnly, wrap: p.wrap, tabSize: p.tabSize, lineNumbers: p.lineNumbers, prose: p.prose }, p.ariaLabel),
+          // pills and suggestion lists live in the editor's glass shell, so a pane edge never clips them
+          tooltips({ parent: parent.closest<HTMLElement>('.cb-composer') ?? undefined, position: 'absolute' }),
+          lineSeparatorFor(p.initial),
+          ...baseExtensions(c, { readOnly: p.readOnly, wrap: p.wrap, tabSize: p.tabSize, lineNumbers: p.lineNumbers, prose: p.prose, placeholder: p.placeholder }, p.ariaLabel),
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) cb.current.onChange(update.state.doc.toString());
+            // sliceDoc joins lines with the state's own separator (doc.toString() would turn CRLF into LF)
+            if (update.docChanged) cb.current.onChange(update.state.sliceDoc());
             if (update.docChanged || update.transactions.length) reportHistory(update.state);
           }),
         ],
@@ -77,9 +84,9 @@ export function CodeEditor(props: CodeEditorProps) {
       find: () => {
         openSearchPanel(view);
       },
-      getText: () => view.state.doc.toString(),
+      getText: () => view.state.sliceDoc(),
       exportFile: () => {
-        const text = view.state.doc.toString();
+        const text = view.state.sliceDoc();
         const lang = resolveLanguage(cb.current.language);
         return { name: safeFileName(cb.current.title, lang?.ext ?? 'txt'), mime: lang?.id === 'markdown' ? 'text/markdown' : 'text/plain', data: text };
       },
@@ -98,7 +105,10 @@ export function CodeEditor(props: CodeEditorProps) {
   useEffect(() => {
     let cancelled = false;
     const resolved = resolveLanguage(lang);
-    const load: Promise<Extension> = asMarkdown ? markdownExtension() : resolved ? resolved.load() : Promise.resolve([]);
+    // code (not prose) also gets the local completion sources of its language; plain text code completes buffer words
+    const load: Promise<Extension> = asMarkdown
+      ? markdownExtension()
+      : Promise.all([resolved ? resolved.load() : Promise.resolve([]), cb.current.prose ? Promise.resolve([]) : completionExtension(resolved?.id ?? '')]);
     load.then(
       (ext) => {
         if (!cancelled) viewRef.current?.dispatch({ effects: comps.current.language.reconfigure(ext) });

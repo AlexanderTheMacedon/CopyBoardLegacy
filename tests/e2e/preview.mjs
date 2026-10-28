@@ -449,14 +449,18 @@ test('P12', 'phone: dock, spaces drawer, full-screen search and inspector, no ho
   await page.click('.cb-tile[data-item-id="it-brief"] .cb-tile__open');
   const inspector = await page.$eval('.cb-inspector', (e) => ({ w: e.offsetWidth, pos: getComputedStyle(e).position }));
   await page.click('[aria-label="Inspector schließen"]');
-  await page.click('.cb-dock__button:has-text("Erfassen")');
+  // "Neu" opens the one create sheet; its quick note focuses the capture bar
+  await page.click('.cb-dock__button:has-text("Neu")');
+  await page.waitForSelector('dialog[open] .cb-create');
+  const sheet = await page.$eval('dialog[open] .cb-dialog__panel', (e) => ({ right: e.getBoundingClientRect().right, bottom: e.getBoundingClientRect().bottom }));
+  await page.click('.cb-create__main:has-text("Schnellnotiz")');
   await settle(page);
   const captureFocused = await focusedId(page);
   await page.click('.cb-dock__button:has-text("Aufnahme")');
   const recorder = await page.$eval('.cb-recorder', (e) => e.getBoundingClientRect().bottom);
   const dockTop = await page.$eval('.cb-dock', (e) => e.getBoundingClientRect().top);
   const problems = await clean();
-  const ok = layout.sidebar === 'none' && layout.dock.join() === 'Spaces,Suche,Erfassen,Aufnahme' && !layout.overflow && drawerClosed && title === 'Kunden' && paletteWidth === 390 && inspector.w === 390 && inspector.pos === 'fixed' && captureFocused === 'cb-capture-input' && recorder <= dockTop && !problems.length;
+  const ok = layout.sidebar === 'none' && layout.dock.join() === 'Spaces,Suche,Neu,Aufnahme' && sheet.right <= 390 && sheet.bottom <= 844 && !layout.overflow && drawerClosed && title === 'Kunden' && paletteWidth === 390 && inspector.w === 390 && inspector.pos === 'fixed' && captureFocused === 'cb-capture-input' && recorder <= dockTop && !problems.length;
   return { ok, observed: `${JSON.stringify(layout)}, drawer->${title}, palette w=${paletteWidth}, inspector=${JSON.stringify(inspector)}, capture focus=${captureFocused}, recorder above dock=${recorder <= dockTop}` };
 });
 
@@ -1735,6 +1739,348 @@ test('P38', 'Textkarte als Klartext: bleibt Text und kopiert unverändert; Schre
     beforeConvert.kind === 'text' && beforeConvert.body === 'Klartext bleibt\nZeile  2 ok!' && JSON.stringify(afterFailure) === JSON.stringify(beforeConvert) && stillPlain &&
     converted.kind === 'document' && converted.text === beforeConvert.body && !surface.cm && surface.closes === 1 && !problems.length;
   return { ok, observed: `plain=${JSON.stringify(plainSurface)}, edited=${JSON.stringify(edited.body)} kind=${edited.kind}, copied=${JSON.stringify(copied)}, flushed=${JSON.stringify(beforeConvert.body)}, failure unchanged=${JSON.stringify(afterFailure) === JSON.stringify(beforeConvert)} plain still open=${stillPlain}, converted=${converted.kind} ${JSON.stringify(converted.text)}, surface=${JSON.stringify(surface)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+
+// --- Editor workspace (Run D): floating surfaces, line band, completion, Explorer, Inspector hierarchy, "Neu erstellen" ----
+/** "Neu erstellen" from the board's context menu (closes an open editor first). */
+const createVia = async (page, label) => {
+  if (await page.$('.cb-composer')) {
+    await page.click('[aria-label="Editor schließen"]');
+    await page.waitForSelector('.cb-composer', { state: 'detached' });
+  }
+  await page.mouse.click(720, 135, { button: 'right' });
+  await page.click('.cb-context-menu [role="menuitem"]:has-text("Neu erstellen")');
+  await page.waitForSelector('dialog[open] .cb-create');
+  await page.click(`.cb-create__main:has-text("${label}")`);
+  // the editor chunk loads lazily: type only once the writing surface itself has focus
+  await page.waitForFunction(() => document.activeElement?.closest('.cb-composer__body'));
+};
+/** Labels of the open completion list. */
+const completionLabels = (page) => page.$$eval('.cm-tooltip-autocomplete li .cm-completionLabel', (els) => els.map((e) => e.textContent));
+const failPuts = (page) =>
+  page.evaluate(() => {
+    window.__fail = true;
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args) {
+      if (window.__fail) throw new DOMException('quota', 'QuotaExceededError');
+      return put.apply(this, args);
+    };
+  });
+
+test('P39', 'Klartext: schwebende, zentrierte Schreibfläche, gerundete Zeilenhervorhebung statt Balken; Tabs, Leerzeichen, Schlusszeilenumbruch und CRLF bleiben bytegenau; Undo/Redo; Reload', async ({ page, clean }) => {
+  await createVia(page, 'Klartext');
+  await page.waitForSelector('.cb-sheet .cm-content');
+  await page.keyboard.type('Erste Zeile');
+  await page.keyboard.insertText('\t');
+  await page.keyboard.type('mit Tab  ');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Zweite');
+  await page.keyboard.press('Enter');
+  await savedStatus(page);
+  await page.waitForSelector('.cb-lineband');
+  const geometry = await page.evaluate(() => {
+    const sheet = document.querySelector('.cb-sheet').getBoundingClientRect();
+    const panes = document.querySelector('.cb-composer__panes').getBoundingClientRect();
+    const band = document.querySelector('.cb-lineband');
+    const b = band.getBoundingClientRect();
+    return {
+      centred: Math.abs(sheet.left - panes.left - (panes.right - sheet.right)) < 2,
+      bounded: sheet.width < panes.width - 40,
+      floating: getComputedStyle(document.querySelector('.cb-sheet')).boxShadow !== 'none' && parseFloat(getComputedStyle(document.querySelector('.cb-sheet')).borderTopLeftRadius) > 8,
+      band: { radius: parseFloat(getComputedStyle(band).borderTopLeftRadius), inside: b.left >= sheet.left && b.right <= sheet.right },
+      oldBar: !!document.querySelector('.cm-activeLine'),
+      status: document.querySelector('.cb-sheet__status')?.textContent,
+      title: document.querySelector('#cb-composer-title').value,
+    };
+  });
+  const own = (await dbItems(page)).find((i) => i.kind === 'text' && i.title === 'Erste Zeile mit Tab');
+  await page.click('[aria-label="Rückgängig"]');
+  await page.click('[aria-label="Rückgängig"]');
+  const undone = await page.$eval('.cb-sheet .cm-content', (e) => e.textContent);
+  await page.click('[aria-label="Wiederholen"]');
+  await page.click('[aria-label="Wiederholen"]');
+  await savedStatus(page);
+  const redone = (await dbItems(page)).find((i) => i.id === own?.id);
+  // a stored CRLF text keeps its line endings: edits continue them, nothing is rewritten on open
+  const crlf = { ...own, id: 'it-local-crlf-e2e', title: 'CRLF-Text', body: 'A\r\nB\t \r\n', updatedAt: '2026-01-01T00:00:00.000Z' };
+  await dbPut(page, crlf);
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  await inspectorAction(page, crlf.id, 'Als Klartext bearbeiten');
+  await page.waitForSelector('.cb-sheet .cm-content');
+  const crlfStatus = await page.$eval('.cb-sheet__status', (e) => e.textContent);
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-composer', { state: 'detached' });
+  const untouched = (await dbItems(page)).find((i) => i.id === crlf.id);
+  await inspectorAction(page, crlf.id, 'Als Klartext bearbeiten');
+  await page.waitForSelector('.cb-sheet .cm-content');
+  await page.click('.cb-sheet .cm-content');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('C');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('D');
+  await savedStatus(page);
+  const edited = (await dbItems(page)).find((i) => i.id === crlf.id);
+  const problems = await clean();
+  const ok =
+    geometry.centred && geometry.bounded && geometry.floating && geometry.band.radius >= 6 && geometry.band.inside && !geometry.oldBar && /Wörter/.test(geometry.status) &&
+    geometry.title === 'Erste Zeile mit Tab' && own?.body === 'Erste Zeile\tmit Tab  \nZweite\n' && undone !== 'Erste Zeile\tmit Tab  Zweite' && redone?.body === own?.body &&
+    /CRLF/.test(crlfStatus) && untouched.body === crlf.body && untouched.updatedAt === crlf.updatedAt && edited.body === 'A\r\nB\t \r\nC\r\nD' && !problems.length;
+  return { ok, observed: `geometry=${JSON.stringify(geometry)}, body=${JSON.stringify(own?.body)}, undo→${JSON.stringify(undone)}, redo=${JSON.stringify(redone?.body)}, crlf status=${crlfStatus}, untouched=${untouched.updatedAt === crlf.updatedAt}, edited=${JSON.stringify(edited.body)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P40', 'Dokument als schwebendes A4-Blatt (210:297) mit Abstand zur eigenen Glass-Kontextleiste; langer Text verlängert das Blatt statt abgeschnitten zu werden; Zoom skaliert; Druck ohne Radius und Schatten', async ({ page, clean }) => {
+  await createVia(page, 'Dokument');
+  await page.waitForSelector('.cb-doc__prose');
+  await page.keyboard.type('Kurz');
+  await savedStatus(page);
+  const measure = () =>
+    page.evaluate(() => {
+      const el = document.querySelector('.cb-doc__page');
+      const r = el.getBoundingClientRect();
+      const rail = document.querySelector('.cb-rail');
+      const railRect = rail?.getBoundingClientRect();
+      const prose = document.querySelector('.cb-doc__prose').getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return {
+        w: Math.round(r.width),
+        ratio: +(r.height / r.width).toFixed(3),
+        radius: parseFloat(s.borderTopLeftRadius),
+        shadow: s.boxShadow !== 'none',
+        railGlass: rail ? getComputedStyle(rail).backgroundImage !== 'none' && parseFloat(getComputedStyle(rail).borderTopLeftRadius) > 8 : false,
+        railGap: railRect ? Math.round(railRect.left - document.querySelector('.cb-composer__panes').getBoundingClientRect().right) : -1,
+        proseInside: prose.bottom <= r.bottom + 1,
+        overflow: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+  const short = await measure();
+  const paragraph = 'Ein längerer Absatz, der die erste Seite füllt und darüber hinaus weiterfließt. '.repeat(14);
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText(paragraph);
+  }
+  await savedStatus(page);
+  const long = await measure();
+  await page.click('.cb-doc__zoom .cb-tool:last-child');
+  const zoomed = await measure();
+  await page.emulateMedia({ media: 'print' });
+  const print = await page.$eval('.cb-doc__page', (e) => ({ radius: getComputedStyle(e).borderTopLeftRadius, shadow: getComputedStyle(e).boxShadow, ratio: getComputedStyle(e).aspectRatio }));
+  await page.emulateMedia({ media: 'screen' });
+  const problems = await clean();
+  const a4 = 297 / 210;
+  const ok =
+    Math.abs(short.ratio - a4) < 0.01 && short.radius > 8 && short.shadow && short.railGlass && short.railGap >= 12 && long.ratio > a4 + 0.2 && long.proseInside && zoomed.w > long.w &&
+    print.radius === '0px' && print.shadow === 'none' && print.ratio === 'auto' && !short.overflow && !problems.length;
+  return { ok, observed: `short=${JSON.stringify(short)}, long=${JSON.stringify(long)}, zoomed w=${zoomed.w}, print=${JSON.stringify(print)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P41', 'Code: lokale Vorschläge (console.log, eigene Namen), Annahme per Enter, Klammerpaar bleibt, manuelles Öffnen über die Werkzeugleiste mit Tastaturnavigation, Go-Schlüsselwörter; alles gespeichert', async ({ page, clean }) => {
+  await createVia(page, 'Code');
+  await page.waitForSelector('.cb-composer .cm-content');
+  await page.keyboard.type('const total = 1;');
+  // completion sources arrive with the language chunk (highlighted tokens show it is there)
+  await page.waitForSelector('.cb-composer .cm-line span');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('console.lo');
+  await page.waitForSelector('.cm-tooltip-autocomplete li');
+  const members = await completionLabels(page);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('(tot');
+  await page.waitForFunction(() => [...document.querySelectorAll('.cm-tooltip-autocomplete li')].some((li) => li.textContent.includes('total')));
+  const locals = await completionLabels(page);
+  // CodeMirror ignores Enter for 75 ms after the list changed (no accidental accept while typing on)
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.click('[aria-label="Vorschläge anzeigen"]');
+  await page.waitForSelector('.cm-tooltip-autocomplete li');
+  const first = await page.$eval('.cm-tooltip-autocomplete li[aria-selected]', (e) => e.textContent);
+  await page.keyboard.press('ArrowDown');
+  const second = await page.$eval('.cm-tooltip-autocomplete li[aria-selected]', (e) => e.textContent);
+  await page.keyboard.press('Escape');
+  const closed = !(await page.$('.cm-tooltip-autocomplete'));
+  await savedStatus(page);
+  const ts = (await dbItems(page)).find((i) => i.kind === 'code' && i.body.includes('console.log'));
+  await page.selectOption('.cb-canvas-bar select', 'go');
+  await page.keyboard.type('fu');
+  await page.waitForSelector('.cm-tooltip-autocomplete li');
+  const go = await completionLabels(page);
+  await page.keyboard.press('Escape');
+  await savedStatus(page);
+  const problems = await clean();
+  const ok =
+    members.includes('log') && locals.includes('total') && ts?.body === 'const total = 1;\nconsole.log(total)\n' && first !== second && closed && go.includes('func') && !problems.length;
+  return { ok, observed: `members=${members.slice(0, 6).join(',')}, locals has total=${locals.includes('total')}, body=${JSON.stringify(ts?.body)}, manual ${JSON.stringify(first)}→${JSON.stringify(second)}, closed=${closed}, go=${go.slice(0, 6).join(',')}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P42', 'Explorer: echte Ordner und Elemente des Space, aktive Datei markiert, Ordner aufklappbar; Wechsel speichert zuerst – keine ungesicherte Änderung geht verloren; kein Überlauf', async ({ page, clean }) => {
+  // a folder with the stand-up note and the debounce snippet: card on card
+  const a = await (await page.$('.cb-tile[data-item-id="it-note-standup"] .cb-tile__open')).boundingBox();
+  const b = await (await page.$('.cb-tile[data-item-id="it-snippet-debounce"] .cb-tile__open')).boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(a.x + a.width / 2 + 20, a.y + 20, { steps: 4 });
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 });
+  await page.waitForTimeout(380);
+  await page.mouse.up();
+  await page.waitForSelector('.cb-tile--folder');
+  await createVia(page, 'Klartext');
+  await page.keyboard.type('Explorer Notiz');
+  await savedStatus(page);
+  await page.click('.cb-tool[aria-label="Explorer"]');
+  await page.waitForSelector('.cb-explorer');
+  const tree = await page.evaluate(() => {
+    const ex = document.querySelector('.cb-explorer').getBoundingClientRect();
+    return {
+      active: document.querySelector('.cb-explorer__file[aria-current="page"]')?.textContent,
+      folders: [...document.querySelectorAll('.cb-explorer__folder')].map((f) => f.textContent),
+      outside: [...document.querySelectorAll('.cb-explorer__row')].filter((r) => r.getBoundingClientRect().right > ex.right + 1).length,
+    };
+  });
+  await page.click('.cb-explorer__folder');
+  await page.waitForSelector('.cb-explorer__fold[data-open] .cb-explorer__file:has-text("debounce")');
+  // unsaved keystrokes, then switch at once
+  await page.click('.cb-sheet .cm-content');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' plus Eile');
+  await page.click('.cb-explorer__fold[data-open] .cb-explorer__file:has-text("debounce")');
+  await page.waitForSelector('.cb-composer[data-kind="code"]');
+  const after = await page.evaluate(() => ({ title: document.querySelector('#cb-composer-title, .cb-composer__heading h2')?.value ?? document.querySelector('.cb-composer__heading h2')?.textContent, explorer: !!document.querySelector('.cb-explorer'), active: document.querySelector('.cb-explorer__file[aria-current="page"]')?.textContent }));
+  const note = (await dbItems(page)).find((i) => i.kind === 'text' && i.body.startsWith('Explorer Notiz'));
+  const problems = await clean();
+  const ok = tree.active === 'Explorer Notiz' && tree.folders.length >= 1 && !tree.outside && after.explorer && /debounce/.test(after.active ?? '') && note?.body === 'Explorer Notiz plus Eile' && !problems.length;
+  return { ok, observed: `tree=${JSON.stringify(tree)}, after=${JSON.stringify(after)}, saved=${JSON.stringify(note?.body)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P43', 'Inspector: eine Primäraktion (Schreibstudio bei eigener Textkarte), Kopieren sichtbar, Organisieren gruppiert, Löschen gekennzeichnet; dieselben Aktionen wie im Kontextmenü', { clipboard: true }, async ({ page, clean }) => {
+  const card = await pasteTextCard(page, 'Inspector Hierarchie');
+  await page.click(`.cb-tile[data-item-id="${card.id}"] .cb-tile__open`);
+  await page.waitForSelector('.cb-inspector__primary');
+  const inspector = await page.evaluate(() => ({
+    primary: document.querySelector('.cb-inspector__primary').textContent,
+    quick: [...document.querySelectorAll('.cb-inspector__quick button')].map((b) => b.textContent),
+    organize: [...document.querySelectorAll('.cb-inspector__organize .cb-inspector__chip:not([data-danger])')].map((b) => b.textContent),
+    danger: [...document.querySelectorAll('.cb-inspector__chip[data-danger]')].map((b) => b.textContent),
+    primaries: document.querySelectorAll('.cb-inspector .cb-button--primary').length,
+  }));
+  await page.click(`.cb-tile[data-item-id="${card.id}"] .cb-tile__open`, { button: 'right' });
+  const menu = (await page.$$eval('.cb-context-menu [role="menuitem"]', (els) => els.map((e) => e.textContent.trim()))).filter((l) => l !== 'Öffnen');
+  await page.keyboard.press('Escape');
+  const all = [inspector.primary, ...inspector.quick, ...inspector.organize, ...inspector.danger].map((l) => l.trim());
+  const same = all.length === menu.length && menu.every((l) => all.includes(l));
+  // the favourite toggle keeps working from its new place
+  await page.click('.cb-inspector__quick button:has-text("Favoriten")');
+  await page.waitForSelector('.cb-inspector__quick button[aria-pressed="true"]');
+  const problems = await clean(['DataTransfer.', 'clipboard.']);
+  const ok = /Schreibstudio/.test(inspector.primary) && inspector.primaries === 1 && inspector.quick.some((l) => /Kopieren/.test(l)) && inspector.organize.some((l) => /Verschieben/.test(l)) && inspector.danger.some((l) => /Löschen/.test(l)) && same && !problems.length;
+  return { ok, observed: `inspector=${JSON.stringify(inspector)}, menu=${menu.join('/')}, same=${same}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P44', 'Neu erstellen: im offenen Ordner angelegt, gespeichert und direkt im Markdown-Editor geöffnet (Titel aus der ersten Zeile); ein fehlschlagendes Speichern zeigt kein Element; Aufnahme nutzt den Recorder', async ({ page, clean }) => {
+  const a = await (await page.$('.cb-tile[data-item-id="it-note-standup"] .cb-tile__open')).boundingBox();
+  const b = await (await page.$('.cb-tile[data-item-id="it-snippet-debounce"] .cb-tile__open')).boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(a.x + a.width / 2 + 20, a.y + 20, { steps: 4 });
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 });
+  await page.waitForTimeout(380);
+  await page.mouse.up();
+  await page.waitForSelector('.cb-tile--folder');
+  const folderId = await page.$eval('.cb-tile--folder', (e) => e.closest('[data-folder-id]')?.dataset.folderId ?? e.dataset.folderId);
+  await page.click('.cb-tile--folder .cb-tile__open');
+  await page.waitForSelector('.cb-folder-window');
+  await page.click('[aria-label="Neu in diesem Ordner erstellen"]');
+  await page.waitForSelector('dialog[open] .cb-create');
+  const eyebrow = await page.$eval('.cb-create .cb-card-dialog__eyebrow', (e) => e.textContent);
+  await page.click('.cb-create__main:has-text("Markdown")');
+  await page.waitForSelector('.cb-composer[data-kind="markdown"] .cm-content');
+  await page.keyboard.type('# Plan Q4');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Text');
+  await savedStatus(page);
+  const title = await page.$eval('#cb-composer-title', (e) => e.value);
+  const md = (await dbItems(page)).find((i) => i.kind === 'markdown' && i.body.startsWith('# Plan Q4'));
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-composer', { state: 'detached' });
+  // a failing commit: nothing appears, nothing opens, the notice says so
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.cb-folder-window', { state: 'detached' }).catch(() => {});
+  const before = (await dbItems(page)).length;
+  const tilesBefore = await tileCount(page);
+  await failPuts(page);
+  await page.mouse.click(720, 135, { button: 'right' });
+  await page.click('.cb-context-menu [role="menuitem"]:has-text("Neu erstellen")');
+  await page.click('.cb-create__main:has-text("Klartext")');
+  await page.waitForSelector('.cb-notice[data-tone="error"]');
+  const notice = await page.$eval('.cb-notice[data-tone="error"]', (e) => e.textContent);
+  const failed = { composer: !!(await page.$('.cb-composer')), tiles: await tileCount(page) };
+  await page.evaluate(() => (window.__fail = false));
+  const after = (await dbItems(page)).length;
+  // voice recording hands over to the recorder (which never asks for the microphone by itself)
+  await page.mouse.click(720, 135, { button: 'right' });
+  await page.click('.cb-context-menu [role="menuitem"]:has-text("Neu erstellen")');
+  await page.click('.cb-create__main:has-text("Sprachaufnahme")');
+  const recorder = await page.waitForSelector('.cb-recorder').then(() => true, () => false);
+  const problems = (await clean()).filter((p) => !/QuotaExceeded|quota/i.test(p));
+  const ok =
+    /Snippets|Ordner|›/.test(eyebrow) && title === 'Plan Q4' && md?.folderId === folderId && md?.body === '# Plan Q4\n\nText' &&
+    /kein Text angelegt/.test(notice) && !failed.composer && failed.tiles === tilesBefore && after === before && recorder && !problems.length;
+  return { ok, observed: `eyebrow=${eyebrow}, title=${title}, md=${JSON.stringify({ folderId: md?.folderId === folderId, body: md?.body })}, notice=${notice}, failed=${JSON.stringify(failed)} tiles before=${tilesBefore}, db ${before}→${after}, recorder=${recorder}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P45', 'Markdown: gesetzte Quelle (Überschrift, Codeblock, Code-Chip), Auswahl-Pille formatiert die Auswahl ohne Fokusverlust; Quelltext/Vorschau/Split bleiben; Phone ohne Überbreite', async ({ page, clean }) => {
+  await createVia(page, 'Markdown');
+  await page.waitForSelector('.cb-md__source .cm-content');
+  await page.keyboard.type('# Titel');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Ein Wort mit `code` hier.');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('```');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('x = 1');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('```');
+  await savedStatus(page);
+  const typeset = await page.evaluate(() => ({
+    heading: !!document.querySelector('.cb-md__source .cb-mdheading .cb-mdh1'),
+    chip: !!document.querySelector('.cb-md__source .cb-mdchip'),
+    fence: document.querySelectorAll('.cb-md__source .cb-mdfence').length,
+  }));
+  // select "Wort" with the mouse: the pill appears once the drag ends
+  const word = await page.evaluate(() => {
+    const line = [...document.querySelectorAll('.cb-md__source .cm-line')].find((l) => l.textContent.startsWith('Ein Wort'));
+    const range = document.createRange();
+    const text = line.firstChild;
+    range.setStart(text, 4);
+    range.setEnd(text, 8);
+    const r = range.getBoundingClientRect();
+    return { x1: r.left + 1, x2: r.right - 1, y: r.top + r.height / 2 };
+  });
+  await page.mouse.move(word.x1, word.y);
+  await page.mouse.down();
+  await page.mouse.move(word.x2, word.y, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForSelector('.cm-tooltip.cb-pill');
+  await page.click('.cm-tooltip.cb-pill [aria-label="Fett"]');
+  await savedStatus(page);
+  const focus = await page.evaluate(() => document.activeElement?.classList.contains('cm-content'));
+  const body = (await dbItems(page)).find((i) => i.kind === 'markdown' && i.body.startsWith('# Titel'))?.body;
+  await page.click('.cb-segmented button:has-text("Vorschau")');
+  const preview = await page.$eval('.cb-markdown', (e) => ({ strong: e.querySelector('strong')?.textContent, h1: e.querySelector('h1')?.textContent }));
+  await page.click('.cb-segmented button:has-text("Split")');
+  const split = await page.$$eval('.cb-md > .cb-composer__pane:not([hidden])', (els) => els.length);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await settle(page);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+  const problems = await clean();
+  const ok = typeset.heading && typeset.chip && typeset.fence === 3 && focus && body === '# Titel\n\nEin **Wort** mit `code` hier.\n\n```\nx = 1\n```' && preview.strong === 'Wort' && preview.h1 === 'Titel' && split === 2 && !overflow && !problems.length;
+  return { ok, observed: `typeset=${JSON.stringify(typeset)}, focus=${focus}, body=${JSON.stringify(body)}, preview=${JSON.stringify(preview)}, split panes=${split}, phone overflow=${overflow}, problems=${problems.join(' | ') || '-'}` };
 });
 
 const ONLY = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY) : null; // e.g. E2E_ONLY='^(P6|P23)$' for a focused run

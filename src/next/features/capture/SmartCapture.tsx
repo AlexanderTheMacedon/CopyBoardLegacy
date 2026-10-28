@@ -15,6 +15,18 @@ export function focusCapture() {
   document.getElementById(CAPTURE_INPUT_ID)?.focus({ preventScroll: true });
 }
 
+/** The system file picker for captures elsewhere (e.g. "Neu erstellen"): a transient input, so it works while the bar is hidden. */
+export function pickCaptureFiles(onFiles: (files: File[]) => void) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.addEventListener('change', () => {
+    const files = [...(input.files ?? [])];
+    if (files.length) onFiles(files);
+  });
+  input.click();
+}
+
 const isMac = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
 
 /**

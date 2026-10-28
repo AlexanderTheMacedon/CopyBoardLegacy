@@ -1,5 +1,5 @@
 import { DEFAULT_DOCUMENT_TITLE, emptyDocument } from '../domain/document';
-import type { DocumentItem, FolderId, Item, ItemId, SpaceId } from '../domain/types';
+import type { CodeItem, DocumentItem, FolderId, Item, ItemId, SpaceId, TextItem } from '../domain/types';
 import { classifyText, deriveTitle, isGenericImageName, type CaptureSource } from './classify';
 
 // Turns capture sources into complete items. Image size and audio waveform are measured from the real data; when a
@@ -76,6 +76,17 @@ const base = (ctx: ItemContext, title: string) => {
 /** A new, empty rich-text document at a placement (space board or folder). Always the user's own, writable content. */
 export function createDocumentItem(spaceId: SpaceId, folderId: FolderId | null, now = new Date()): DocumentItem {
   return { ...base({ spaceId, favorite: false, now }, DEFAULT_DOCUMENT_TITLE), kind: 'document', content: emptyDocument(), text: '', ...(folderId ? { folderId } : {}) };
+}
+
+/** Titles of new, still unnamed text items; the editor derives a title from the first line while one of these is set. */
+export const NEW_ITEM_TITLES = { text: 'Neuer Text', markdown: 'Neues Markdown', code: 'Neuer Code' } as const;
+
+/** A new, empty text, Markdown or code item at a placement. Always the user's own, writable content. */
+export function createBlankItem(kind: 'text' | 'markdown', spaceId: SpaceId, folderId: FolderId | null, now?: Date): TextItem;
+export function createBlankItem(kind: 'code', spaceId: SpaceId, folderId: FolderId | null, now?: Date, language?: string): CodeItem;
+export function createBlankItem(kind: 'text' | 'markdown' | 'code', spaceId: SpaceId, folderId: FolderId | null, now = new Date(), language = 'typescript'): TextItem | CodeItem {
+  const head = { ...base({ spaceId, favorite: false, now }, NEW_ITEM_TITLES[kind]), ...(folderId ? { folderId } : {}) };
+  return kind === 'code' ? { ...head, kind, language, body: '' } : { ...head, kind, body: '' };
 }
 
 export function textItem(text: string, ctx: ItemContext): Item {
