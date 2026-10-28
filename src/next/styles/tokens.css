@@ -195,8 +195,10 @@
   --cb-logo-a: #e2600f;
   --cb-logo-b: #ffab5e;
 
-  /* Scene: a cool daylight veil — calm and readable behind the board (left/top), more landscape towards the right */
-  --cb-scene-veil: linear-gradient(100deg, rgb(244 247 250 / 0.7) 0%, rgb(244 247 250 / 0.5) 38%, rgb(244 247 250 / 0.26) 72%, rgb(244 247 250 / 0.14) 100%);
+  /* Scene: a cool daylight veil — calm and readable behind the board, more landscape towards the right. It is level over
+     the dock column: a peak at the window edge read as a separate light rail behind the dock wherever a panel (editor,
+     folder, inspector) covers the rest of the scene. */
+  --cb-scene-veil: linear-gradient(100deg, rgb(244 247 250 / 0.5) 0%, rgb(244 247 250 / 0.5) 38%, rgb(244 247 250 / 0.26) 72%, rgb(244 247 250 / 0.14) 100%);
   --cb-scene-bleed: linear-gradient(180deg, rgb(248 250 252 / 0.42), transparent 30%);
   --cb-scene-vignette: radial-gradient(130% 120% at 50% 40%, transparent 58%, rgb(10 20 35 / 0.18) 100%);
   --cb-scene-filter: saturate(1.08) contrast(1.02);
@@ -279,7 +281,7 @@
   --cb-logo-a: #ff9a4d;
   --cb-logo-b: #ffd2a8;
 
-  --cb-scene-veil: linear-gradient(100deg, rgb(6 9 13 / 0.78) 0%, rgb(6 9 13 / 0.62) 42%, rgb(6 9 13 / 0.46) 100%);
+  --cb-scene-veil: linear-gradient(100deg, rgb(6 9 13 / 0.62) 0%, rgb(6 9 13 / 0.62) 42%, rgb(6 9 13 / 0.46) 100%);
   --cb-scene-bleed: linear-gradient(180deg, rgb(6 9 13 / 0.4), transparent 34%);
   --cb-scene-vignette: radial-gradient(130% 120% at 50% 40%, transparent 46%, rgb(0 0 0 / 0.55) 100%);
   --cb-scene-filter: saturate(0.92) brightness(0.82) contrast(1.06);

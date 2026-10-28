@@ -9,7 +9,8 @@ const KEYBOARD_MIN = 80;
  * over the board and the folder window (captures follow the open folder, useCapture). It stays mounted while hidden
  * (editor, selection, image mode), so a draft is never lost. Layout data is published as CSS variables on the app root,
  * never as React state: `--cb-composer-h` (live height, for notices and the recorder above it) and `--cb-keyboard` (the
- * on-screen keyboard while typing, from the visual viewport; `data-keyboard` marks that one is actually shown).
+ * on-screen keyboard while typing, from the visual viewport; `data-keyboard` marks that one is actually shown). A soft,
+ * purely visual blur aura right around the surface lets it float free of the cards scrolling beneath.
  */
 export function ComposerDock({ hidden }: { hidden: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -71,6 +72,8 @@ export function ComposerDock({ hidden }: { hidden: boolean }) {
       }}
     >
       <SmartCapture />
+      {/* local blur aura behind the surface (after it: the dock measures its first child) */}
+      <span className="cb-composer-halo" aria-hidden="true" />
     </div>
   );
 }

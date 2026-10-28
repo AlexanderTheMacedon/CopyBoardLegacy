@@ -104,6 +104,37 @@
   text-align: left;
   transition: background-color var(--cb-dur-hover) var(--cb-ease-out), transform var(--cb-dur-select) var(--cb-spring);
 }
+/* Arrival of a board (keyed by location): the glyph lands with a small spring, the heading rises a beat later — the
+   counterpart to the departing board (board-departure.ts). */
+.cb-hero__identity > .cb-hero__glyph {
+  animation: cb-glyph-arrive var(--cb-dur-expressive) var(--cb-spring-bouncy) 70ms backwards;
+}
+.cb-hero__identity > .cb-hero__title {
+  animation: cb-title-arrive calc(var(--cb-dur-expressive) * 1.3) var(--cb-ease-glide) 120ms backwards;
+}
+@keyframes cb-glyph-arrive {
+  from {
+    opacity: 0;
+    transform: scale(0.7) rotate(-10deg);
+  }
+}
+@keyframes cb-title-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+/* the departing board: a still copy that recedes over the workspace, above the content and below the toolbar */
+.cb-departure {
+  position: absolute;
+  z-index: 9;
+  overflow: hidden;
+  pointer-events: none;
+}
+.cb-departure * {
+  animation: none !important;
+  transition: none !important;
+}
 .cb-hero__identity:not(.cb-hero__identity--static):hover {
   background: color-mix(in srgb, var(--cb-glass-hover) 70%, transparent);
 }
@@ -208,7 +239,13 @@
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  transition: opacity var(--cb-dur-standard) var(--cb-ease-out), scale var(--cb-dur-panel) var(--cb-ease-glide);
+}
+/* On narrow desktops the content column would reach under the right dock: the board keeps a lane free for it, only as far
+   as the centred column needs it (none on wide screens, at most the dock's width). */
+@media (min-width: 600px) {
+  .cb-board-root {
+    padding-right: clamp(0px, calc(var(--cb-rdock-lane) * 2 - (100% - var(--cb-content-max))), var(--cb-rdock-lane));
+  }
 }
 /* auto side margins would shrink flex items to their content: the columns keep their full (max-)width */
 .cb-board-root > :is(.cb-toolbar, .cb-hero, .cb-board) {
@@ -218,8 +255,12 @@
   flex: 1;
 }
 /* The open folder window owns the stage: the board behind it steps back completely (no veil, no band beside the dock)
-   and returns while the window shrinks back into its tile. */
-.cb-app[data-folder] .cb-board-root {
+   and returns while the window shrinks back into its tile. Only the columns scale, never the root: a transform there
+   would become the containing block of the fixed right dock and pull it into the board. */
+.cb-board-root > :is(.cb-toolbar, .cb-hero, .cb-board) {
+  transition: opacity var(--cb-dur-standard) var(--cb-ease-out), scale var(--cb-dur-panel) var(--cb-ease-glide);
+}
+.cb-app[data-folder] .cb-board-root > :is(.cb-hero, .cb-board) {
   opacity: 0;
   scale: 0.985;
   transition-duration: var(--cb-dur-swift), var(--cb-dur-panel);

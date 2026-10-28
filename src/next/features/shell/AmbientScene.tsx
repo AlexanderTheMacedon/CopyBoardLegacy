@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { usePreview, type PreviewContextValue } from '../../app/context';
-import { useMediaQuery } from '../../app/hooks';
+import { useCaptureSpace, useOpenFolder, usePreview, type PreviewContextValue } from '../../app/context';
+import { isPasteShortcut, useMediaQuery } from '../../app/hooks';
+import { BrandLogo } from '../../components/BrandLogo';
 import { Icon } from '../../components/Icon';
 import { usePresence } from '../../components/motion';
 import { scenes, SCENE_INTERVAL_MS, startScene, type Scene } from './scenes';
@@ -23,10 +24,11 @@ const CINEMA_IDLE_MS = 2600;
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 /** Leaves image mode and hands focus back to its entry in the credit. */
-function leaveCinema(dispatch: PreviewContextValue['dispatch']) {
+export function leaveCinema(dispatch: PreviewContextValue['dispatch']) {
   dispatch({ type: 'setCinema', on: false });
   requestAnimationFrame(() => document.querySelector<HTMLElement>('.cb-scene-credit__cinema')?.focus({ preventScroll: true }));
 }
+const pasteKey = () => (typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘V' : 'Strg V');
 const smoothstep = (t: number) => t * t * (3 - 2 * t);
 
 /**
@@ -93,14 +95,20 @@ function useProximityReveal(sceneRef: RefObject<HTMLDivElement | null>, creditRe
 
 /**
  * Cinematic image mode: the workspace steps aside (AppShell `data-cinema`, CSS), the photograph turns sharp and keeps its
- * slideshow. This layer only carries a calm caption and a discreet exit that appear on interaction and rest again after a
- * moment. While it is open it owns keyboard, paste and context menu, so no data operation can happen behind it; Escape or
- * the exit control return to the untouched workspace (same space, folder, selection, filter and scroll position).
+ * slideshow. This layer carries a quiet editorial frame — the CopyBoard mark top left, the exit as its own glass squircle
+ * top right, the motif in Instrument Serif bottom left — that appears on interaction and rests again after a moment.
+ * While it is open it owns keyboard and context menu, so no board operation can happen behind it; ⌘V is the one
+ * exception: Universal Paste (AppShell) saves the clipboard and returns to the workspace once the save is confirmed.
+ * Escape or the exit control return to the untouched workspace (same space, folder, selection, filter and scroll position).
  */
-function CinemaLayer({ scene, leaving }: { scene: Scene; leaving: boolean }) {
+function CinemaLayer({ scene, index, leaving }: { scene: Scene; index: number; leaving: boolean }) {
   const { dispatch } = usePreview();
   const ref = useRef<HTMLDivElement>(null);
   const [idle, setIdle] = useState(false);
+  // where a paste in image mode lands (the same placement useCapture uses)
+  const folder = useOpenFolder();
+  const space = useCaptureSpace();
+  const target = folder?.name ?? space?.name;
 
   useEffect(() => {
     if (leaving) return;
@@ -116,8 +124,10 @@ function CinemaLayer({ scene, leaving }: { scene: Scene; leaving: boolean }) {
       timer = window.setTimeout(() => setIdle(true), CINEMA_IDLE_MS);
     };
     // Window capture phase: runs before every document and React listener, so board shortcuts (⌘A, ⌘K, Delete …) stay
-    // silent. Native activation of the focused exit button (Enter/Space) is a default action and still works.
+    // silent. Native activation of the focused exit button (Enter/Space) is a default action and still works. The paste
+    // shortcut passes through to Universal Paste, which handles the paste event exactly once.
     const onKey = (event: KeyboardEvent) => {
+      if (isPasteShortcut(event)) return;
       event.stopPropagation();
       // editing shortcuts (select all, undo, delete) have nothing to act on here, not even natively
       if ((event.metaKey || event.ctrlKey) && ['a', 'z', 'y', 'backspace', 'delete'].includes(event.key.toLowerCase())) event.preventDefault();
@@ -126,18 +136,12 @@ function CinemaLayer({ scene, leaving }: { scene: Scene; leaving: boolean }) {
         leaveCinema(dispatch);
       } else wake();
     };
-    const onPaste = (event: ClipboardEvent) => {
-      event.stopPropagation();
-      event.preventDefault();
-    };
     window.addEventListener('keydown', onKey, true);
-    window.addEventListener('paste', onPaste, true);
     window.addEventListener('pointermove', wake, { passive: true });
     window.addEventListener('pointerdown', wake, { passive: true });
     timer = window.setTimeout(() => setIdle(true), CINEMA_IDLE_MS);
     return () => {
       window.removeEventListener('keydown', onKey, true);
-      window.removeEventListener('paste', onPaste, true);
       window.removeEventListener('pointermove', wake);
       window.removeEventListener('pointerdown', wake);
       clearTimeout(timer);
@@ -164,21 +168,34 @@ function CinemaLayer({ scene, leaving }: { scene: Scene; leaving: boolean }) {
         event.stopPropagation();
       }}
     >
-      <button
-        type="button"
-        className="cb-cinema__exit"
-        onClick={() => leaveCinema(dispatch)}
-      >
-        <Icon name="shrink" size={16} />
-        <span>Bildmodus beenden</span>
+      <p className="cb-cinema__brand">
+        <BrandLogo width={30} tone="current" className="cb-cinema__logo" />
+        <span className="cb-cinema__wordmark">CopyBoard</span>
+        {target && (
+          <span className="cb-cinema__hint">
+            <kbd>{pasteKey()}</kbd> sichert in „{target}“
+          </span>
+        )}
+      </p>
+      <button type="button" className="cb-cinema__exit" aria-keyshortcuts="Escape" onClick={() => leaveCinema(dispatch)}>
+        <span className="cb-cinema__exit-icon">
+          <Icon name="shrink" size={16} />
+        </span>
+        <span className="cb-cinema__exit-label">Bildmodus beenden</span>
         <kbd className="cb-cinema__kbd" aria-hidden="true">
           esc
         </kbd>
       </button>
       <div key={scene.id} className="cb-cinema__caption">
+        <p className="cb-cinema__index" aria-hidden="true">
+          {String(index + 1).padStart(2, '0')}
+          <span>/</span>
+          {String(scenes.length).padStart(2, '0')}
+        </p>
         <p className="cb-cinema__place">{scene.place}</p>
         <p className="cb-cinema__meta">
-          {scene.park} ·{' '}
+          <span className="cb-cinema__park">{scene.park}</span>
+          <span aria-hidden="true">·</span>
           <a href={scene.url} target="_blank" rel="noreferrer noopener">
             Foto: {scene.photographer} / Unsplash
           </a>
@@ -277,7 +294,7 @@ export function AmbientScene() {
           </button>
         </div>
       )}
-      {cinema.value && <CinemaLayer scene={current} leaving={cinema.leaving} />}
+      {cinema.value && <CinemaLayer scene={current} index={index} leaving={cinema.leaving} />}
     </>
   );
 }

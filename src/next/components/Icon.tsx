@@ -307,6 +307,7 @@ export function Icon({ name, size = 20, className }: { name: IconName; size?: nu
   return (
     <svg
       className={className ? `cb-icon ${className}` : 'cb-icon'}
+      data-icon={name}
       width={size}
       height={size}
       viewBox="0 0 24 24"

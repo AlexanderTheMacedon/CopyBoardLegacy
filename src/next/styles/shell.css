@@ -522,10 +522,20 @@
   user-select: none;
 }
 
-/* --- Floating header island (D-020, Visual Signature v3): the sticky row is click-through and aligned with the hero;
-   only the island is a surface. At rest it is the quiet search cluster at the top right. Scrolled, it condenses into a
-   compact floating glass island that unfolds the board identity on its left — never a full-width bar (SM-10: always
-   mounted, nothing remounts). -------------------------------------------------------------------------------------- */
+/* --- Header island → Right Dock (D-020, Motion Masterpiece): the sticky row is click-through and aligned with the hero;
+   only the island is a surface. At rest it is the quiet search cluster at the top right of the content column. Scrolled,
+   the same island (SM-10: always mounted, nothing remounts) becomes a vertical glass dock at the right edge of the board:
+   identity, search, new entry, storage status. The change of layout is instant in CSS; WorkspaceHeader plays it as one
+   shared-element morph (motion.ts playMorph), so no layout property here may transition. ----------------------------- */
+.cb-app {
+  --cb-rdock-pad: 6px;
+  --cb-rdock-item: 46px;
+  --cb-rdock-w: calc(var(--cb-rdock-item) + var(--cb-rdock-pad) * 2);
+  /* generous air to the window edge; inspector-aware below */
+  --cb-rdock-edge: calc(var(--cb-float) + 8px);
+  /* the lane the board keeps free for the dock on narrow desktops (Board padding, workspace.css) */
+  --cb-rdock-lane: calc(var(--cb-rdock-w) + var(--cb-rdock-edge));
+}
 .cb-toolbar {
   position: sticky;
   top: 0;
@@ -543,51 +553,6 @@
 .cb-toolbar > * {
   pointer-events: auto;
 }
-/* Compact: the island leaves the content column and docks at the right edge of the workspace (inspector-aware: the
-   workspace already makes room for it), one float gap from the top and right edges. Same row height, so nothing shifts. */
-.cb-toolbar[data-collapsed] {
-  max-width: none;
-  padding-right: var(--cb-float);
-}
-/* Hand-over (WorkspaceHeader.tsx): leg one glides the current island out to the right … */
-.cb-toolbar[data-phase='out'] .cb-toolbar__island {
-  opacity: 0;
-  transform: translateX(24px);
-  transition: opacity var(--cb-dur-exit) var(--cb-ease-exit), transform var(--cb-dur-exit) var(--cb-ease-exit);
-}
-.cb-toolbar[data-collapsed][data-phase='out'] .cb-toolbar__island {
-  transform: translateX(calc(100% + var(--cb-float)));
-}
-/* … leg two brings the new layout in: the compact island from beyond the right edge (the workspace clips it there), the
-   resting cluster with a short settle in place. Material and identity are already in their end state. */
-.cb-toolbar[data-phase='in'] .cb-toolbar__island {
-  transition: none;
-  animation: cb-island-settle var(--cb-dur-standard) var(--cb-ease-out) both;
-}
-.cb-toolbar[data-collapsed][data-phase='in'] .cb-toolbar__island {
-  animation: cb-island-arrive var(--cb-dur-panel) var(--cb-ease-glide) both;
-}
-.cb-toolbar[data-phase='in'] :is(.cb-toolbar__context, .cb-toolbar__context-inner, .cb-search-trigger) {
-  transition: none;
-}
-.cb-toolbar[data-phase='in'] .cb-toolbar__island::before {
-  transition: none;
-}
-@keyframes cb-island-arrive {
-  from {
-    opacity: 0;
-    transform: translateX(calc(100% + var(--cb-float)));
-  }
-  40% {
-    opacity: 1;
-  }
-}
-@keyframes cb-island-settle {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
-}
 .cb-toolbar__island {
   --cb-island-pad: 5px;
   position: relative;
@@ -597,10 +562,10 @@
   min-width: 0;
   padding: var(--cb-island-pad);
   border-radius: calc(var(--cb-radius-control) + var(--cb-island-pad));
-  transition: transform var(--cb-dur-panel) var(--cb-spring);
 }
-.cb-toolbar__island::before {
-  content: '';
+/* one continuous material: invisible at rest (the search pill carries its own glass), the dock's body when collapsed.
+   A real element (not a pseudo): the morph reshapes its box. */
+.cb-toolbar__plate {
   position: absolute;
   z-index: -1;
   inset: 0;
@@ -610,38 +575,21 @@
   border: 1px solid var(--cb-glass-rim);
   box-shadow: var(--cb-glass-lit), var(--cb-shadow-3);
   opacity: 0;
-  transform: scale(0.96);
-  transition: opacity var(--cb-dur-standard) var(--cb-ease-out), transform var(--cb-dur-panel) var(--cb-spring);
+  pointer-events: none;
 }
-.cb-toolbar[data-collapsed] .cb-toolbar__island::before {
+.cb-toolbar[data-collapsed] .cb-toolbar__plate {
   opacity: 1;
-  transform: none;
 }
-/* identity unfolds to the left of the search (grid columns 0fr → 1fr: no measuring, no layout jump) */
-.cb-toolbar__context {
-  display: grid;
-  grid-template-columns: 0fr;
-  min-width: 0;
-  transition: grid-template-columns var(--cb-dur-panel) var(--cb-ease-glide);
-}
-.cb-toolbar__context-inner {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  overflow: hidden;
+/* parts that only exist in the collapsed island stay laid out (measurable for the morph) but invisible at rest */
+.cb-toolbar:not([data-collapsed]) :is(.cb-toolbar__identity, .cb-toolbar__sep, .cb-toolbar__capture) {
+  position: absolute;
+  left: var(--cb-island-pad);
+  top: var(--cb-island-pad);
+  visibility: hidden;
   opacity: 0;
-  transform: translateX(10px);
-  transition: opacity var(--cb-dur-swift) var(--cb-ease-out), transform var(--cb-dur-panel) var(--cb-spring);
-}
-.cb-toolbar[data-collapsed] .cb-toolbar__context {
-  grid-template-columns: 1fr;
-}
-.cb-toolbar[data-collapsed] .cb-toolbar__context-inner {
-  opacity: 1;
-  transform: none;
-  transition-delay: 70ms;
 }
 .cb-toolbar__identity {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -656,8 +604,15 @@
 .cb-toolbar__identity:hover {
   background: var(--cb-glass-hover);
 }
+.cb-toolbar__glyph {
+  transition: transform var(--cb-dur-select) var(--cb-spring);
+}
 .cb-toolbar__identity:hover .cb-toolbar__glyph {
   transform: scale(1.06) rotate(-4deg);
+}
+.cb-toolbar__identity:active .cb-toolbar__glyph {
+  transform: scale(0.94);
+  transition-duration: var(--cb-dur-instant);
 }
 .cb-toolbar__title {
   min-width: 0;
@@ -682,19 +637,16 @@
   background: var(--cb-glass-hairline);
 }
 .cb-toolbar__capture {
-  display: none;
+  position: relative;
   border-radius: var(--cb-radius-control);
   background: var(--cb-accent-fill);
   color: var(--cb-on-accent);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 6px 16px -8px var(--cb-accent-glow);
-  animation: cb-pop-in var(--cb-dur-swift) var(--cb-spring-bouncy);
 }
 .cb-toolbar__capture:hover {
   background: var(--cb-accent-fill-hover);
   color: var(--cb-on-accent);
-}
-.cb-toolbar[data-collapsed] .cb-toolbar__capture {
-  display: inline-grid;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.32), 0 10px 22px -8px var(--cb-accent-glow);
 }
 .cb-toolbar__menu,
 .cb-toolbar__theme {
@@ -702,6 +654,7 @@
 }
 
 .cb-search-trigger {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--cb-space-2);
@@ -709,39 +662,45 @@
   min-width: 240px;
   padding: 0 var(--cb-space-2) 0 14px;
   border-radius: var(--cb-radius-control);
+  color: var(--cb-text-secondary);
+  font: var(--cb-text-ui);
+  white-space: nowrap;
+  transition: transform var(--cb-dur-select) var(--cb-spring), color var(--cb-dur-hover) var(--cb-ease-out);
+}
+/* the resting pill's own glass (a layer, so it can hand over to the dock plate without touching the icon) */
+.cb-search-trigger::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
   background: var(--cb-glass-sheen), var(--cb-glass-regular);
   backdrop-filter: blur(var(--cb-blur-thin)) saturate(var(--cb-glass-saturate));
   border: 1px solid var(--cb-glass-rim);
   box-shadow: var(--cb-glass-lit), var(--cb-shadow-1);
-  color: var(--cb-text-secondary);
-  font: var(--cb-text-ui);
-  transition: box-shadow var(--cb-dur-hover) var(--cb-ease-out), transform var(--cb-dur-select) var(--cb-spring),
-    background-color var(--cb-dur-hover) var(--cb-ease-out), color var(--cb-dur-hover) var(--cb-ease-out);
+  transition: box-shadow var(--cb-dur-hover) var(--cb-ease-out), background-color var(--cb-dur-hover) var(--cb-ease-out);
+  animation: cb-pill-return var(--cb-dur-standard) var(--cb-ease-out) 200ms backwards;
+}
+@keyframes cb-pill-return {
+  from {
+    opacity: 0;
+  }
 }
 .cb-search-trigger:hover {
-  background: var(--cb-glass-sheen), var(--cb-glass-thick);
-  box-shadow: var(--cb-glass-lit), var(--cb-shadow-2);
   transform: translateY(-1px);
   color: var(--cb-text-primary);
+}
+.cb-search-trigger:hover::before {
+  background: var(--cb-glass-sheen), var(--cb-glass-thick);
+  box-shadow: var(--cb-glass-lit), var(--cb-shadow-2);
 }
 .cb-search-trigger:active {
   transform: scale(0.98);
   transition-duration: var(--cb-dur-instant);
 }
 .cb-search-trigger > .cb-icon {
+  flex: none;
   color: var(--cb-accent);
-}
-.cb-toolbar[data-collapsed] .cb-search-trigger {
-  min-width: 210px;
-  min-height: 40px;
-  background: color-mix(in srgb, var(--cb-glass-solid) 55%, transparent);
-  backdrop-filter: none;
-  border-color: var(--cb-glass-rim-soft);
-  box-shadow: inset 0 1px 2px rgb(var(--cb-shadow-color) / 0.05);
-}
-.cb-toolbar[data-collapsed] .cb-search-trigger:hover {
-  transform: none;
-  background: var(--cb-glass-solid);
 }
 .cb-search-trigger__label {
   flex: 1;
@@ -755,6 +714,7 @@
 }
 
 .cb-trust {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -764,6 +724,7 @@
   color: var(--cb-text-secondary);
   font: var(--cb-text-meta);
   font-weight: 500;
+  white-space: nowrap;
   transition: background-color var(--cb-dur-hover) var(--cb-ease-out), color var(--cb-dur-hover) var(--cb-ease-out);
 }
 .cb-trust:hover {
@@ -771,8 +732,126 @@
   color: var(--cb-text-primary);
 }
 .cb-trust .cb-icon {
+  flex: none;
   width: 16px;
   height: 16px;
+}
+
+/* Collapsed, any width: the pill hands its glass to the plate; texts fold away but stay measurable for the morph */
+.cb-toolbar[data-collapsed] .cb-search-trigger::before {
+  opacity: 0;
+  animation: none;
+}
+.cb-toolbar[data-collapsed] .cb-search-trigger:hover {
+  transform: none;
+}
+.cb-toolbar[data-collapsed] :is(.cb-search-trigger__label, .cb-search-trigger__kbd, .cb-trust > span) {
+  position: absolute;
+  visibility: hidden;
+  opacity: 0;
+}
+
+/* --- Right Dock (desktop and tablet): the collapsed island stands upright at the right edge, vertically centred like
+   its counterpart on the left, but with its own vocabulary: no flyout, glyph on top, primary action in accent. ------- */
+@media (min-width: 600px) {
+  .cb-toolbar[data-collapsed] .cb-toolbar__island {
+    position: fixed;
+    top: 50%;
+    right: var(--cb-rdock-edge);
+    translate: 0 -50%;
+    flex-direction: column;
+    gap: 4px;
+    width: var(--cb-rdock-w);
+    padding: var(--cb-rdock-pad);
+    border-radius: var(--cb-radius-card);
+    /* the inspector arrives with the same glide the board uses to make room */
+    transition: right var(--cb-dur-panel) var(--cb-ease-glide), opacity var(--cb-dur-swift) var(--cb-ease-out), visibility 0s;
+  }
+  .cb-toolbar[data-collapsed] :is(.cb-toolbar__identity, .cb-search-trigger, .cb-toolbar__capture, .cb-trust) {
+    justify-content: center;
+    width: var(--cb-rdock-item);
+    min-width: 0;
+    height: var(--cb-rdock-item);
+    min-height: 0;
+    padding: 0;
+    border-radius: calc(var(--cb-radius-card) - var(--cb-rdock-pad));
+  }
+  .cb-toolbar[data-collapsed] .cb-search-trigger:hover,
+  .cb-toolbar[data-collapsed] .cb-trust:hover {
+    background: var(--cb-glass-hover);
+  }
+  .cb-toolbar[data-collapsed] .cb-trust .cb-icon {
+    width: 18px;
+    height: 18px;
+  }
+  .cb-toolbar[data-collapsed] :is(.cb-toolbar__title, .cb-toolbar__count) {
+    position: absolute;
+    visibility: hidden;
+    opacity: 0;
+  }
+  .cb-toolbar[data-collapsed] .cb-toolbar__sep {
+    width: 22px;
+    height: 1px;
+    margin: 3px 0;
+  }
+  /* inspector open: the dock keeps to the board's side of the panel */
+  .cb-app[data-detail='inspector'] .cb-toolbar[data-collapsed] .cb-toolbar__island {
+    right: calc(var(--cb-inspector-w) + var(--cb-float) + var(--cb-rdock-edge));
+  }
+  .cb-app[data-resizing] .cb-toolbar__island {
+    transition: none;
+  }
+  /* label tips beside the dock (pointer devices): the dock stays narrow, names appear where the eye already is */
+  .cb-toolbar[data-collapsed] .cb-toolbar__island [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    right: calc(100% + 14px);
+    top: 50%;
+    padding: 6px 10px;
+    border-radius: var(--cb-radius-control-sm);
+    background: var(--cb-surface-inverse);
+    color: var(--cb-text-on-inverse);
+    font: var(--cb-text-caption);
+    white-space: pre;
+    box-shadow: var(--cb-shadow-2);
+    opacity: 0;
+    translate: 6px -50%;
+    pointer-events: none;
+    transition: opacity var(--cb-dur-micro) var(--cb-ease-out), translate var(--cb-dur-select) var(--cb-spring);
+  }
+  .cb-toolbar[data-collapsed] .cb-toolbar__island [data-tip]:is(:hover, :focus-visible)::after {
+    opacity: 1;
+    translate: 0 -50%;
+    transition-delay: 140ms;
+  }
+  .cb-toolbar[data-collapsed] .cb-toolbar__island [aria-expanded='true']::after {
+    display: none;
+  }
+  /* the hero glyph has flown into the dock: it is not drawn twice */
+  .cb-toolbar[data-collapsed] + .cb-hero .cb-hero__glyph {
+    opacity: 0;
+    scale: 0.8;
+  }
+}
+/* the island steps aside while a folder window owns the stage (the board behind it recedes, workspace.css) */
+.cb-app[data-folder] .cb-toolbar__island {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--cb-dur-exit) var(--cb-ease-out), visibility 0s linear var(--cb-dur-exit);
+}
+/* returning, the hero glyph takes over just as the dock's glyph lands on it */
+.cb-hero__glyph {
+  transition: opacity var(--cb-dur-swift) var(--cb-ease-out) 260ms, scale var(--cb-dur-panel) var(--cb-spring) 200ms;
+}
+.cb-toolbar[data-collapsed] + .cb-hero .cb-hero__glyph {
+  transition-delay: 0ms;
+}
+@media (min-width: 600px) and (max-width: 1023.98px) {
+  .cb-app[data-detail='inspector'] .cb-toolbar[data-collapsed] .cb-toolbar__island {
+    right: var(--cb-rdock-edge);
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 
 /* --- Board header: identity (glyph + name), a quiet tool cluster, filter chips folded below ------------------------ */
@@ -1033,19 +1112,19 @@
     backdrop-filter: blur(var(--cb-blur-regular)) saturate(var(--cb-glass-saturate));
     box-shadow: var(--cb-glass-lit), var(--cb-shadow-2);
   }
+  /* phone: a compact top bar instead of the right dock — identity left, search and status as icons */
   .cb-toolbar__island {
     flex: 1;
   }
-  .cb-toolbar[data-collapsed] .cb-toolbar__context {
+  .cb-toolbar[data-collapsed] .cb-toolbar__identity {
     flex: 1;
-  }
-  .cb-toolbar__identity {
     max-width: none;
     padding-right: 6px;
   }
-  .cb-toolbar__count,
-  .cb-toolbar__sep {
-    display: none;
+  .cb-toolbar[data-collapsed] :is(.cb-toolbar__count, .cb-toolbar__sep, .cb-toolbar__capture) {
+    position: absolute;
+    visibility: hidden;
+    opacity: 0;
   }
   .cb-search-trigger {
     min-width: 0;
@@ -1054,16 +1133,13 @@
   .cb-toolbar[data-collapsed] .cb-search-trigger {
     flex: none;
     min-width: 40px;
+    min-height: 40px;
     padding: 0;
     justify-content: center;
   }
-  .cb-toolbar[data-collapsed] .cb-search-trigger__label,
   .cb-search-trigger__kbd,
-  .cb-trust span {
+  .cb-trust > span {
     display: none;
-  }
-  .cb-toolbar[data-collapsed] .cb-toolbar__capture {
-    display: none; /* the dock keeps "Erfassen" reachable on phones (SM-10) */
   }
   .cb-hero {
     gap: 14px;

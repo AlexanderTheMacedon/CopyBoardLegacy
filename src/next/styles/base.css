@@ -225,7 +225,7 @@ body {
   transition: opacity var(--cb-dur-expressive) var(--cb-ease-out) 120ms, scale var(--cb-dur-expressive) var(--cb-ease-glide) 120ms,
     translate var(--cb-dur-expressive) var(--cb-ease-glide) 120ms, visibility 0s;
 }
-.cb-app[data-cinema] :is(.cb-navdock-rail, .cb-stage, .cb-dock, .cb-recorder, .cb-selbar, .cb-notice-region, .cb-drop-veil) {
+.cb-app[data-cinema] :is(.cb-navdock-rail, .cb-stage, .cb-dock, .cb-recorder, .cb-selbar, .cb-drop-veil) {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -269,43 +269,130 @@ body {
   pointer-events: none;
   transition: opacity calc(var(--cb-dur-standard) * 4) var(--cb-ease-out);
 }
-.cb-cinema__exit {
+/* Editorial frame: brand top left, exit top right, motif bottom left — one inset from every edge (safe areas included), so
+   nothing ever leans on the window edge or on another control. */
+.cb-cinema {
+  --cb-cinema-inset-x: max(clamp(20px, 3.4vw, 44px), var(--cb-safe-left, 0px) + 16px);
+  --cb-cinema-inset-top: max(clamp(20px, 3.4vw, 40px), var(--cb-safe-top) + 14px);
+  --cb-cinema-inset-bottom: max(clamp(24px, 4.4vw, 56px), var(--cb-safe-bottom) + 16px);
+}
+.cb-cinema__brand {
   position: absolute;
-  top: calc(var(--cb-space-5) + var(--cb-safe-top));
-  right: var(--cb-space-5);
-  display: inline-flex;
+  top: var(--cb-cinema-inset-top);
+  left: var(--cb-cinema-inset-x);
+  display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 8px 0 14px;
-  border-radius: var(--cb-radius-control);
-  background: rgb(10 14 20 / 0.46);
-  backdrop-filter: blur(18px) saturate(1.3);
-  border: 1px solid rgb(255 255 255 / 0.2);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 10px 30px -14px rgb(0 0 0 / 0.6);
-  color: rgb(255 255 255 / 0.95);
-  font: var(--cb-text-ui);
-  transition: opacity var(--cb-dur-standard) var(--cb-ease-out), translate var(--cb-dur-standard) var(--cb-ease-glide),
-    background-color var(--cb-dur-hover) var(--cb-ease-out);
+  gap: 10px;
+  height: 46px;
+  color: rgb(255 255 255 / 0.94);
+  text-shadow: 0 1px 14px rgb(0 0 0 / 0.35);
+  animation: cb-cinema-frame calc(var(--cb-dur-expressive) * 2) var(--cb-ease-glide) 160ms backwards;
+  transition: opacity calc(var(--cb-dur-standard) * 4) var(--cb-ease-out);
 }
-.cb-cinema__exit:hover {
-  background: rgb(10 14 20 / 0.6);
+.cb-cinema__logo {
+  flex: none;
+  filter: drop-shadow(0 2px 8px rgb(0 0 0 / 0.3));
 }
-.cb-cinema__kbd {
+.cb-cinema__wordmark {
+  font-family: var(--cb-font-display);
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  padding-bottom: 2px;
+}
+.cb-cinema__hint {
+  margin-left: 8px;
+  padding-left: 14px;
+  border-left: 1px solid rgb(255 255 255 / 0.28);
+  font: var(--cb-text-caption);
+  color: rgb(255 255 255 / 0.78);
+  white-space: nowrap;
+}
+.cb-cinema__hint kbd {
+  margin-right: 4px;
   padding: 1px 6px;
   border-radius: var(--cb-radius-xs);
   background: rgb(255 255 255 / 0.14);
-  color: rgb(255 255 255 / 0.78);
+  color: rgb(255 255 255 / 0.9);
+  font: inherit;
+}
+/* Exit: a free-standing dark-glass squircle with its own icon well; hover lifts it and draws the arrows in. */
+.cb-cinema__exit {
+  position: absolute;
+  top: var(--cb-cinema-inset-top);
+  right: var(--cb-cinema-inset-x);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 8px 0 6px;
+  border-radius: 17px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.04)), rgb(12 16 22 / 0.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 18px 40px -18px rgb(0 0 0 / 0.65);
+  color: rgb(255 255 255 / 0.96);
+  font: var(--cb-text-ui);
+  animation: cb-cinema-frame calc(var(--cb-dur-expressive) * 2) var(--cb-ease-glide) 220ms backwards;
+  transition: opacity calc(var(--cb-dur-standard) * 2) var(--cb-ease-out), translate var(--cb-dur-standard) var(--cb-spring),
+    scale var(--cb-dur-select) var(--cb-spring), background-color var(--cb-dur-hover) var(--cb-ease-out),
+    box-shadow var(--cb-dur-hover) var(--cb-ease-out);
+}
+.cb-cinema__exit:hover {
+  background-color: rgb(12 16 22 / 0.56);
+  translate: 0 -1px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 22px 46px -18px rgb(0 0 0 / 0.75);
+}
+.cb-cinema__exit:active {
+  scale: 0.97;
+  transition-duration: var(--cb-dur-instant);
+}
+.cb-cinema__exit-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.16);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22);
+}
+.cb-cinema__exit-icon .cb-icon {
+  transition: scale var(--cb-dur-select) var(--cb-spring-bouncy);
+}
+.cb-cinema__exit:hover .cb-cinema__exit-icon .cb-icon {
+  scale: 0.82;
+}
+.cb-cinema__kbd {
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 0.12);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  color: rgb(255 255 255 / 0.8);
   font: var(--cb-text-caption);
 }
 .cb-cinema__caption {
   position: absolute;
-  left: calc(var(--cb-space-8) + var(--cb-safe-left, 0px));
-  bottom: calc(var(--cb-space-8) + var(--cb-safe-bottom));
-  max-width: min(720px, calc(100% - var(--cb-space-8) * 2));
+  left: var(--cb-cinema-inset-x);
+  bottom: var(--cb-cinema-inset-bottom);
+  max-width: min(760px, calc(100% - var(--cb-cinema-inset-x) * 2));
   text-shadow: 0 2px 22px rgb(0 0 0 / 0.35);
   animation: cb-cinema-caption calc(var(--cb-dur-expressive) * 3) var(--cb-ease-glide) 240ms backwards;
   transition: opacity calc(var(--cb-dur-standard) * 4) var(--cb-ease-out), translate calc(var(--cb-dur-standard) * 4) var(--cb-ease-glide);
+}
+.cb-cinema__index {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-family: var(--cb-font-display);
+  font-style: italic;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  color: rgb(255 255 255 / 0.8);
+  font-variant-numeric: tabular-nums;
+}
+.cb-cinema__index span {
+  opacity: 0.6;
 }
 .cb-cinema__place {
   font-family: var(--cb-font-display);
@@ -314,9 +401,19 @@ body {
   letter-spacing: -0.012em;
 }
 .cb-cinema__meta {
-  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 14px;
   font: var(--cb-text-meta);
   color: rgb(255 255 255 / 0.82);
+}
+.cb-cinema__park {
+  font-family: var(--cb-font-display);
+  font-style: italic;
+  font-size: 18px;
+  color: rgb(255 255 255 / 0.94);
 }
 .cb-cinema__meta a {
   color: inherit;
@@ -327,10 +424,17 @@ body {
 .cb-cinema__meta a:hover {
   text-decoration-color: currentColor;
 }
-/* at rest only the photograph remains; any movement or key brings caption and exit back */
+/* at rest only the photograph and a faint signature remain; any movement or key brings the frame back */
 .cb-cinema[data-idle] :is(.cb-cinema__caption, .cb-cinema__exit:not(:focus-visible)) {
   opacity: 0;
   pointer-events: none;
+}
+.cb-cinema[data-idle] .cb-cinema__brand {
+  opacity: 0.42;
+}
+.cb-cinema[data-idle] .cb-cinema__hint {
+  opacity: 0;
+  transition: opacity calc(var(--cb-dur-standard) * 2) var(--cb-ease-out);
 }
 .cb-cinema[data-idle] .cb-cinema__caption {
   translate: 0 8px;
@@ -341,9 +445,32 @@ body {
 .cb-cinema[data-idle]::before {
   opacity: 0;
 }
+/* a shade at the top for the frame, mirroring the caption shade */
+.cb-cinema::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 22%;
+  background: linear-gradient(0deg, transparent, rgb(0 0 0 / 0.2));
+  pointer-events: none;
+  transition: opacity calc(var(--cb-dur-standard) * 4) var(--cb-ease-out);
+}
+.cb-cinema[data-idle]::after {
+  opacity: 0.4;
+}
+.cb-cinema > * {
+  z-index: 1;
+}
 @keyframes cb-cinema-in {
   from {
     opacity: 0;
+  }
+}
+@keyframes cb-cinema-frame {
+  from {
+    opacity: 0;
+    translate: 0 -10px;
+    filter: blur(6px);
   }
 }
 @keyframes cb-cinema-caption {
@@ -352,13 +479,18 @@ body {
     translate: 0 14px;
   }
 }
+/* image mode keeps notices (a paste that could not be saved says so here) */
+.cb-app[data-cinema] .cb-notice-region {
+  z-index: 85;
+}
 @media (max-width: 599.98px) {
-  .cb-cinema__caption {
-    left: var(--cb-space-5);
-    bottom: calc(var(--cb-space-6) + var(--cb-safe-bottom));
-  }
-  .cb-cinema__exit span {
+  .cb-cinema__exit-label,
+  .cb-cinema__kbd,
+  .cb-cinema__hint {
     display: none;
+  }
+  .cb-cinema__exit {
+    padding: 0 5px;
   }
 }
 @keyframes cb-credit-in {

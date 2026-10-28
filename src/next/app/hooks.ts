@@ -22,3 +22,7 @@ export const PHONE_QUERY = '(max-width: 599.98px)';
 
 export const isEditableTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+
+/** ⌘V / Strg+V (not the "paste and match style" variants with Alt). */
+export const isPasteShortcut = (event: KeyboardEvent): boolean =>
+  event.key.toLowerCase() === 'v' && (event.metaKey || event.ctrlKey) && !event.altKey;

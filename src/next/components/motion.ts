@@ -111,6 +111,92 @@ export const springEasing = (): string =>
     ? 'linear(0, 0.0384, 0.1311, 0.2511, 0.3797, 0.5045, 0.618, 0.7163, 0.7981, 0.8638, 0.9146, 0.9525, 0.9797, 0.9981, 1.0098, 1.0164, 1.0194, 1.0199, 1.0187, 1.0167, 1.0142, 1.0117, 1.0092, 1.0071, 1.0052, 1.0036, 1.0024, 1.0015, 1)'
     : 'cubic-bezier(0.32, 0.72, 0, 1)';
 
+/** Named parts of a morph: key → selector inside the morph root. */
+export type MorphParts = Readonly<Record<string, string>>;
+type MorphSnapshot = Map<string, { rect: DOMRect; shown: boolean; radius: string }>;
+
+const MORPH_ID = 'cb-morph';
+
+const isShown = (el: Element, rect: DOMRect) => {
+  const style = getComputedStyle(el);
+  return style.visibility !== 'hidden' && rect.width > 0 && Number(style.opacity) > 0.05;
+};
+
+/** First half of a morph: where every part is drawn right now, running morph animations included. */
+export function snapshotMorph(root: HTMLElement, parts: MorphParts): MorphSnapshot {
+  const snapshot: MorphSnapshot = new Map();
+  for (const [key, selector] of Object.entries(parts)) {
+    const el = root.querySelector(selector);
+    if (!el) continue;
+    const rect = el.getBoundingClientRect();
+    snapshot.set(key, { rect, shown: isShown(el, rect), radius: getComputedStyle(el).borderRadius });
+  }
+  return snapshot;
+}
+
+interface MorphOptions {
+  /**
+   * Where a part is drawn at the end where it is hidden: 'self' (its own hidden box, the default), 'other' (where it is
+   * shown at the other end: it fades in place) or a rect (e.g. the hero glyph it came from). A null rect falls back to 'self'.
+   */
+  hidden?: Readonly<Record<string, 'self' | 'other' | (() => DOMRect | null | undefined)>>;
+  /** Parts whose box itself reshapes (width, height, radius) instead of scaling: surfaces, never content. */
+  resize?: readonly string[];
+  /** Parts that hand over from or to another surface: they appear at once and fade out only after they have arrived. */
+  late?: readonly string[];
+  duration?: number;
+}
+
+/**
+ * Shared-element morph (FLIP) between two layouts of the same elements: after the layout changed, every part starts from
+ * where the snapshot saw it and travels to its new box on the spring. Content parts only translate and scale (no layout
+ * work per frame); `resize` surfaces reshape their own absolutely positioned box. Parts that appear or vanish fade.
+ * Interruptible: a new snapshot during a running morph starts the next one from the current, in-flight positions.
+ */
+export function playMorph(root: HTMLElement, parts: MorphParts, first: MorphSnapshot, options: MorphOptions = {}) {
+  const { hidden = {}, resize = [], late = [], duration = 560 } = options;
+  const still = motionReduced();
+  const easing = springEasing();
+  for (const [key, selector] of Object.entries(parts)) {
+    const el = root.querySelector<HTMLElement>(selector);
+    for (const animation of el?.getAnimations() ?? []) if (animation.id === MORPH_ID) animation.cancel();
+    const from = first.get(key);
+    if (!el || !from || still) continue;
+    const box = el.getBoundingClientRect();
+    const shown = isShown(el, box);
+    if (!from.shown && !shown) continue;
+    const rule = hidden[key] ?? 'self';
+    const hiddenRect = (self: DOMRect, other: DOMRect) => (rule === 'self' ? self : rule === 'other' ? other : (rule() ?? self));
+    const a = from.shown ? from.rect : hiddenRect(from.rect, box);
+    const b = shown ? box : hiddenRect(box, from.rect);
+    const sized = resize.includes(key);
+    // Only a part drawn at both ends (or flying to a stand-in) scales with its box; one that appears or vanishes keeps its
+    // size (its hidden box may be squeezed), and one that appears in its own box grows out of it.
+    const scales = (from.shown && shown) || typeof rule === 'function';
+    const frame = (v: DOMRect, radius: string, grow = 1): Keyframe =>
+      sized
+        ? { transform: `translate(${v.left - box.left}px, ${v.top - box.top}px)`, width: `${v.width}px`, height: `${v.height}px`, borderRadius: radius }
+        : {
+            transform: `translate(${v.left + v.width / 2 - (box.left + box.width / 2)}px, ${v.top + v.height / 2 - (box.top + box.height / 2)}px) scale(${
+              (scales && box.width ? v.width / box.width : 1) * grow
+            })`,
+          };
+    const grow = !from.shown && rule === 'self' ? 0.6 : 1;
+    const move = el.animate([frame(a, from.radius, grow), frame(b, getComputedStyle(el).borderRadius)], { duration, easing });
+    move.id = MORPH_ID;
+    if (from.shown === shown) continue;
+    const fade = shown
+      ? el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: late.includes(key) ? 120 : 240, delay: late.includes(key) ? 0 : duration * 0.18, easing: 'ease-out', fill: 'backwards' })
+      : el.animate([{ opacity: 1, visibility: 'visible' }, { opacity: 0, visibility: 'visible' }], {
+          duration: late.includes(key) ? duration * 0.45 : 180,
+          delay: late.includes(key) ? duration * 0.5 : 0,
+          easing: 'ease-out',
+          fill: 'backwards',
+        });
+    fade.id = MORPH_ID;
+  }
+}
+
 interface LayoutMotionOptions {
   /** Origin rect for the first newly mounted element matching `spawnSelector` (e.g. a folder created by a merge). */
   takeSpawn?: () => DOMRect | null;
@@ -173,4 +259,64 @@ export function useLayoutMotion(ref: RefObject<HTMLElement | null>, { takeSpawn,
     }
     previous.current = next;
   });
+}
+
+/** Largest visual lag of a card behind the scroll, in px. */
+const INERTIA_MAX = 6;
+
+/**
+ * Magnetic grid / underwater inertia: while the board scrolls, its cards trail the movement by a few pixels on a soft,
+ * slightly underdamped spring and settle back to rest when it stops. Native scrolling, wheel, pointer and scroll position
+ * are never touched: the hook only reads `scrollTop` and writes one CSS variable (`--cb-drift`, px) plus `data-drift` on
+ * the grid inside the scroll root, once per frame and only while there is motion; CSS turns that into a `translate` per
+ * card (a separate property, so it composes with every transform animation). Off with reduced motion, on touch-first
+ * devices and while dragging, selecting or a folder window owns the stage.
+ */
+export function useScrollInertia(scrollRoot: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const root = scrollRoot.current;
+    const app = root?.closest<HTMLElement>('.cb-app');
+    if (!root || !app) return;
+    const coarse = window.matchMedia('(pointer: coarse)');
+    let frame = 0;
+    let last = root.scrollTop;
+    let offset = 0;
+    let velocity = 0;
+    let grid: HTMLElement | null = null;
+    const paused = () =>
+      motionReduced() || coarse.matches || app.matches('[data-dragging], [data-selecting], [data-folder], [data-cinema]');
+    const rest = () => {
+      offset = 0;
+      velocity = 0;
+      grid?.style.removeProperty('--cb-drift');
+      grid?.removeAttribute('data-drift');
+      grid = null;
+    };
+    const tick = () => {
+      frame = 0;
+      const y = root.scrollTop;
+      const delta = y - last;
+      last = y;
+      if (paused()) return rest();
+      if (!grid?.isConnected) grid = root.querySelector<HTMLElement>('.cb-grid');
+      if (!grid) return;
+      // spring towards a target proportional to the scroll speed of this frame (capped)
+      const target = Math.max(-INERTIA_MAX, Math.min(INERTIA_MAX, delta * 0.45));
+      velocity = (velocity + (target - offset) * 0.14) * 0.72;
+      offset += velocity;
+      if (Math.abs(offset) < 0.05 && Math.abs(velocity) < 0.05 && delta === 0) return rest();
+      grid.setAttribute('data-drift', '');
+      grid.style.setProperty('--cb-drift', `${offset.toFixed(2)}px`);
+      frame = requestAnimationFrame(tick);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(tick);
+    };
+    root.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      root.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+      rest();
+    };
+  }, [scrollRoot]);
 }

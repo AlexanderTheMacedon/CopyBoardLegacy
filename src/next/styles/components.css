@@ -622,3 +622,122 @@
 .cb-notice p {
   flex: 1;
 }
+
+/* --- Icon motion (Motion Masterpiece): one vocabulary for every interactive icon. Each icon answers with the gesture of
+   its meaning — plus turns towards "create", the lens leans into search, folders lift their lid, chevrons point the way,
+   checks draw themselves, copy confirms with a snap — only on hover, keyboard focus, press or a state change, never at
+   rest and never in a loop. Individual transform properties (rotate/scale/translate) compose with any morph or layout
+   animation. Reduced motion (OS or in-app) keeps every icon still. ------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  :where(.cb-app:not([data-motion='reduced'])) :where(.cb-icon) {
+    transform-origin: 50% 50%;
+    transition: rotate var(--cb-dur-select) var(--cb-spring), scale var(--cb-dur-select) var(--cb-spring),
+      translate var(--cb-dur-select) var(--cb-spring), color var(--cb-dur-hover) var(--cb-ease-out);
+  }
+  .cb-app:not([data-motion='reduced']) {
+    /* create */
+    & :is(button, a, [role='menuitem']):is(:hover, :focus-visible) .cb-icon[data-icon='plus'] {
+      rotate: 90deg;
+    }
+    & :is(button, a, [role='menuitem']):is(:hover, :focus-visible) .cb-icon:is([data-icon='folderPlus'], [data-icon='copyPlus']) {
+      scale: 1.1;
+      rotate: -6deg;
+    }
+    /* search */
+    & :is(button, a, [role='menuitem']):is(:hover, :focus-visible) .cb-icon[data-icon='search'] {
+      rotate: -12deg;
+      scale: 1.08;
+    }
+    /* folders: open / drop into */
+    & :is(button, a, [role='menuitem']):is(:hover, :focus-visible) .cb-icon:is([data-icon='folder'], [data-icon='folderOpen'], [data-icon='folderInput']) {
+      translate: 0 -1.5px;
+      scale: 1.06;
+    }
+    /* direction and expansion */
+    & :is(button, a, [role='menuitem']):is(:hover, :focus-visible) .cb-icon[data-icon='chevronRight'] {
+      translate: 2px 0;
+    }
+    & :is(button, a):is(:hover, :focus-visible):not([aria-expanded='true']) .cb-icon[data-icon='chevronDown'] {
+      translate: 0 1.5px;
+    }
+    & [aria-expanded='true'] .cb-icon[data-icon='chevronDown'] {
+      rotate: 180deg;
+    }
+    & :is(button, a, [role='menuitem']):is(:hover, :focus-visible) .cb-icon[data-icon='arrowUp'] {
+      translate: 0 -2px;
+    }
+    /* dismiss, favourite, remove, more, attach, record, view */
+    & :is(button, [role='menuitem']):is(:hover, :focus-visible) .cb-icon[data-icon='x'] {
+      rotate: 90deg;
+    }
+    & :is(button, [role='menuitem']):is(:hover, :focus-visible) .cb-icon[data-icon='star'] {
+      rotate: 14deg;
+      scale: 1.14;
+    }
+    & :is(button, [role='menuitem']):is(:hover, :focus-visible) .cb-icon[data-icon='trash'] {
+      rotate: -9deg;
+      translate: 0 -1px;
+    }
+    & :is(button, [role='menuitem']):is(:hover, :focus-visible) .cb-icon[data-icon='more'] {
+      scale: 1.18 1;
+    }
+    & :is(button, label):is(:hover, :focus-visible) .cb-icon[data-icon='paperclip'] {
+      rotate: -14deg;
+    }
+    & :is(button):is(:hover, :focus-visible) .cb-icon[data-icon='mic'] {
+      scale: 1.12;
+      translate: 0 -1px;
+    }
+    & :is(button, [role='menuitem']):is(:hover, :focus-visible) .cb-icon:is([data-icon='expand'], [data-icon='panelRight']) {
+      scale: 1.12;
+    }
+    & :is(button, [role='radio'], [role='menuitemradio']):is(:hover, :focus-visible) .cb-icon[data-icon='sun'] {
+      rotate: 45deg;
+    }
+    & :is(button, [role='radio'], [role='menuitemradio']):is(:hover, :focus-visible) .cb-icon[data-icon='moon'] {
+      rotate: -16deg;
+    }
+    & :is(button, a, [role='menuitem']):is(:hover, :focus-visible) .cb-icon:is([data-icon='filter'], [data-icon='sortAsc']) {
+      translate: 0 1px;
+    }
+    /* press: every icon inside a control gives way under the pointer */
+    & :is(button, [role='button'], [role='radio']):active > .cb-icon {
+      scale: 0.86;
+      transition-duration: var(--cb-dur-instant);
+    }
+    /* selection and confirmation: a check draws itself whenever it appears */
+    & .cb-icon[data-icon='check'] path {
+      stroke-dasharray: 22;
+      animation: cb-icon-draw 360ms var(--cb-ease-out) 40ms backwards;
+    }
+    & [aria-checked='false'] > .cb-icon[data-icon='check'] path {
+      animation: none;
+    }
+    & [aria-checked='true'] > .cb-icon[data-icon='check'] path {
+      animation: cb-icon-draw 360ms var(--cb-ease-out) 40ms backwards;
+    }
+    /* copied: the front sheet snaps onto the stack, the control glows success for a moment */
+    & [data-done] .cb-icon[data-icon='copy'] {
+      color: var(--cb-status-success);
+      animation: cb-icon-copied 620ms var(--cb-spring-bouncy);
+    }
+  }
+}
+@keyframes cb-icon-draw {
+  from {
+    stroke-dashoffset: 22;
+  }
+}
+@keyframes cb-icon-copied {
+  0% {
+    scale: 1;
+  }
+  30% {
+    scale: 0.78;
+    rotate: -10deg;
+  }
+  100% {
+    scale: 1;
+    rotate: 0deg;
+  }
+}

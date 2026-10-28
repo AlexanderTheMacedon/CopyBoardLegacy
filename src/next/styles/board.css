@@ -61,6 +61,38 @@
 .cb-composer-dock > .cb-capture[data-state='focus'] {
   box-shadow: var(--cb-glass-lit), var(--cb-shadow-4), 0 22px 54px -28px var(--cb-accent-glow);
 }
+/* Blur aura: content right around the composer softens, fading out over a few paddings; nowhere else. A sibling behind
+   the surface (z −1 in the dock), never a parent: the surface's own glass and text stay sharp. Visual only. */
+.cb-composer-halo {
+  --cb-halo: 30px;
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  bottom: calc(var(--cb-halo) * -0.6);
+  width: calc(min(720px, 100% - var(--cb-gutter) * 2) + var(--cb-halo) * 2);
+  height: calc(var(--cb-composer-h, 58px) + var(--cb-halo) * 1.6);
+  translate: -50% 0;
+  border-radius: calc(var(--cb-radius-card) + var(--cb-halo));
+  backdrop-filter: blur(9px) saturate(1.08);
+  -webkit-mask: linear-gradient(90deg, transparent, #000 var(--cb-halo), #000 calc(100% - var(--cb-halo)), transparent),
+    linear-gradient(180deg, transparent, #000 var(--cb-halo), #000 calc(100% - var(--cb-halo) * 0.6), transparent);
+  -webkit-mask-composite: source-in;
+  mask: linear-gradient(90deg, transparent, #000 var(--cb-halo), #000 calc(100% - var(--cb-halo)), transparent),
+    linear-gradient(180deg, transparent, #000 var(--cb-halo), #000 calc(100% - var(--cb-halo) * 0.6), transparent);
+  mask-composite: intersect;
+  pointer-events: none;
+  transition: width var(--cb-dur-panel) var(--cb-ease-glide), height var(--cb-dur-panel) var(--cb-ease-glide);
+}
+/* focus widens the surface: the aura follows it with the same glide and breathes a little further */
+.cb-composer-dock:has(> .cb-capture[data-state='focus']) .cb-composer-halo {
+  --cb-halo: 38px;
+  width: calc(min(860px, 100% - var(--cb-gutter) * 2) + var(--cb-halo) * 2);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cb-composer-halo {
+    display: none;
+  }
+}
 .cb-app[data-detail='inspector'] .cb-composer-dock {
   right: calc(var(--cb-inspector-w) + var(--cb-float));
 }
@@ -318,6 +350,21 @@
   /* reveal: cards settle into the grid with a capped stagger (M-12, Blueprint 03 §4.4 rule 5) */
   animation: cb-appear var(--cb-dur-expressive) var(--cb-spring) backwards;
   animation-delay: calc(var(--i, 0) * var(--cb-stagger) + 90ms);
+}
+/* Magnetic grid (motion.ts useScrollInertia): while the board scrolls, cards trail it by a few pixels; neighbours answer
+   with slightly different weight, so the grid moves like one loosely coupled lattice rather than a sheet. Only while
+   `data-drift` is set: at rest no card carries a transform. */
+.cb-grid[data-drift] > .cb-tile {
+  translate: 0 calc(var(--cb-drift, 0px) * var(--cb-lag, 1));
+}
+.cb-grid > .cb-tile:nth-child(3n + 1) {
+  --cb-lag: 0.78;
+}
+.cb-grid > .cb-tile:nth-child(3n) {
+  --cb-lag: 1.22;
+}
+.cb-grid > .cb-tile:nth-child(4n + 2) {
+  --cb-lag: 1.08;
 }
 /* Glass card: translucent fill, top sheen, lit rim, soft ambient shadow; a pointer light follows the cursor (SmartGrid). */
 .cb-tile__open {

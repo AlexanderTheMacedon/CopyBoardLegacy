@@ -111,7 +111,9 @@ async function openPreview(opts = {}) {
 }
 
 const h1 = (page) => page.$eval('#cb-workspace-title', (e) => e.textContent);
-const tileIds = (page) => page.$$eval('.cb-grid .cb-tile', (els) => els.map((e) => e.dataset.itemId));
+// the departing board (board-departure.ts) is an inert copy for a moment after a change: never content
+const LIVE_TILES = '.cb-grid .cb-tile:not(.cb-departure *)';
+const tileIds = (page) => page.$$eval(LIVE_TILES, (els) => els.map((e) => e.dataset.itemId));
 const focusedId = (page) => page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName);
 const settle = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 // Dock navigation: spaces live in the flyout of the active-space switcher, collections and utilities in the folded section.
@@ -125,7 +127,7 @@ async function dockItem(page, title) {
   await page.click(`.cb-navdock__item[title="${title}"]`);
   await page.mouse.move(900, 600);
 }
-const tileCount = (page) => page.$$eval('.cb-grid .cb-tile', (els) => els.length);
+const tileCount = (page) => page.$$eval(LIVE_TILES, (els) => els.length);
 
 test('P1', 'preview boots as the React shell without errors, storage or network', async ({ page, clean }) => {
   const status = await page.$eval('#preview-root', (e) => e.dataset.previewStatus);
@@ -621,6 +623,164 @@ test('P18', 'file view select-all (mixed/all/none), bottom composer, image mode 
     mixed === 'mixed' && all[0] === 'true' && all[1] === all[2] && all[2] > 1 && none[0] === 'false' && none[1] === 0 &&
     composer > 0 && composer < 48 && inCinema.stage && inCinema.cinema && !back.stage && back.files && !problems.length;
   return { ok, observed: `select-all ${mixed}→${all.join('/')}→${none.join('/')}, composer bottom gap=${composer}, cinema=${JSON.stringify(inCinema)}, back=${JSON.stringify(back)}` };
+});
+
+// Motion Masterpiece: the scrolled header becomes a vertical right dock (one morphing island), image mode accepts a real
+// paste, the composer's blur aura is local and visual only, and the magnetic grid never interferes with drag & drop.
+const SHORT = { width: 1280, height: 600 };
+const morphsRunning = (page) =>
+  page.evaluate(() => document.querySelector('.cb-toolbar__island').getAnimations({ subtree: true }).filter((a) => a.id === 'cb-morph' && a.playState === 'running').length);
+
+test('P19', 'scrolled header morphs into a vertical right dock: search and new entry work, inspector-aware, back on scroll up', { viewport: SHORT }, async ({ page, clean }) => {
+  const island = () =>
+    page.$eval('.cb-toolbar__island', (e) => {
+      const r = e.getBoundingClientRect();
+      const slot = (sel) => Math.round(e.querySelector(sel).getBoundingClientRect().top);
+      return {
+        fixed: getComputedStyle(e).position === 'fixed',
+        column: getComputedStyle(e).flexDirection === 'column',
+        right: Math.round(innerWidth - r.right),
+        centre: Math.round(r.top + r.height / 2 - innerHeight / 2),
+        upright: r.height > r.width * 2,
+        order: [slot('.cb-toolbar__identity'), slot('.cb-search-trigger'), slot('.cb-toolbar__capture'), slot('.cb-trust')],
+        identityInert: e.querySelector('.cb-toolbar__identity').inert,
+        captureInert: e.querySelector('.cb-toolbar__capture').inert,
+      };
+    });
+  const rest = await island();
+  await page.mouse.move(640, 300);
+  await page.$eval('.cb-workspace', (e) => e.scrollTo({ top: 150 }));
+  await page.waitForSelector('.cb-toolbar[data-collapsed]');
+  // a quick direction change mid-morph settles in a stable state with nothing left running
+  await page.$eval('.cb-workspace', (e) => e.scrollTo({ top: 0 }));
+  await page.waitForTimeout(60);
+  await page.$eval('.cb-workspace', (e) => e.scrollTo({ top: 150 }));
+  await page.waitForTimeout(900);
+  const dock = await island();
+  const running = await morphsRunning(page);
+  await page.click('.cb-search-trigger');
+  await page.waitForSelector('dialog[open]');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog[open]', { state: 'detached' });
+  await page.click('.cb-toolbar__capture');
+  const captureFocus = await focusedId(page);
+  // the inspector arrives: the dock keeps to the board's side of it
+  await page.keyboard.press('Escape');
+  await page.$eval('.cb-tile[data-item-id="it-snippet-debounce"] .cb-tile__open', (e) => e.click());
+  await page.waitForSelector('.cb-inspector');
+  await page.$eval('.cb-workspace', (e) => e.scrollTo({ top: 150 }));
+  await page.waitForTimeout(700);
+  const beside = await page.evaluate(() => Math.round(document.querySelector('.cb-inspector').getBoundingClientRect().left - document.querySelector('.cb-toolbar__island').getBoundingClientRect().right));
+  await page.keyboard.press('Escape');
+  await page.$eval('.cb-workspace', (e) => e.scrollTo({ top: 0 }));
+  await page.waitForSelector('.cb-toolbar:not([data-collapsed])');
+  await page.waitForTimeout(800);
+  const back = await island();
+  const problems = await clean();
+  const ok =
+    !rest.fixed && rest.identityInert && rest.captureInert &&
+    dock.fixed && dock.column && dock.upright && dock.right >= 12 && dock.right <= 40 && Math.abs(dock.centre) <= 2 &&
+    dock.order.every((v, i, a) => i === 0 || v > a[i - 1]) && !dock.identityInert && !dock.captureInert && running === 0 &&
+    captureFocus === 'cb-capture-input' && beside >= 12 &&
+    !back.fixed && back.identityInert && !problems.length;
+  return { ok, observed: `rest=${JSON.stringify(rest)}, dock=${JSON.stringify(dock)}, running=${running}, capture focus=${captureFocus}, gap to inspector=${beside}, back=${JSON.stringify(back)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P20', 'image mode: branded frame; ⌘V saves via Universal Paste and returns only after the save; a failed paste stays and says so', { clipboard: true }, async ({ page, clean }) => {
+  const before = await tileCount(page);
+  await page.hover('.cb-scene-credit');
+  await page.click('.cb-scene-credit__cinema');
+  await page.waitForSelector('.cb-cinema');
+  await page.mouse.move(700, 400);
+  const frame = await page.evaluate(() => {
+    const box = (sel) => document.querySelector(sel).getBoundingClientRect();
+    const apart = (a, b) => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+    const exit = box('.cb-cinema__exit');
+    return {
+      logo: !!document.querySelector('.cb-cinema__brand .cb-logo'),
+      hint: document.querySelector('.cb-cinema__hint')?.textContent,
+      inset: [Math.round(innerWidth - exit.right), Math.round(exit.top)],
+      free: apart(exit, box('.cb-cinema__brand')) && apart(exit, box('.cb-cinema__caption')),
+    };
+  });
+  // nothing usable in the clipboard: image mode stays, the notice is visible above it
+  await page.evaluate(() => navigator.clipboard.writeText(''));
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.waitForSelector('.cb-notice');
+  const failed = await page.evaluate(() => ({
+    cinema: !!document.querySelector('.cb-cinema'),
+    notice: document.querySelector('.cb-notice p').textContent,
+    visible: getComputedStyle(document.querySelector('.cb-notice-region')).visibility !== 'hidden',
+  }));
+  await page.evaluate(() => navigator.clipboard.writeText('Notiz aus dem Bildmodus'));
+  await page.evaluate(() => (window.__cbHits.length = 0));
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.waitForSelector('.cb-cinema', { state: 'detached' });
+  await page.waitForSelector('.cb-notice[data-tone="success"]');
+  const saved = await page.evaluate(() => ({
+    notice: document.querySelector('.cb-notice p').textContent,
+    stageInert: document.querySelector('.cb-stage').inert,
+    title: document.querySelector('.cb-grid .cb-tile .cb-tile__title')?.textContent,
+  }));
+  const after = await tileCount(page);
+  const problems = await clean(['DataTransfer.']);
+  const ok =
+    frame.logo && /sichert in „Entwicklung“/.test(frame.hint) && frame.inset.every((v) => v >= 16) && frame.free &&
+    failed.cinema && /leer/.test(failed.notice) && failed.visible &&
+    after === before + 1 && /Text gespeichert · Entwicklung/.test(saved.notice) && !saved.stageInert && /Bildmodus/.test(saved.title) && !problems.length;
+  return { ok, observed: `frame=${JSON.stringify(frame)}, failed=${JSON.stringify(failed)}, tiles ${before}→${after}, saved=${JSON.stringify(saved)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P21', 'composer blur aura: local around the surface, visual only, follows the focus expansion', async ({ page, clean }) => {
+  const measure = () =>
+    page.evaluate(() => {
+      const halo = document.querySelector('.cb-composer-halo');
+      const surface = document.querySelector('.cb-composer-dock .cb-capture').getBoundingClientRect();
+      const r = halo.getBoundingClientRect();
+      const style = getComputedStyle(halo);
+      return {
+        pointer: style.pointerEvents,
+        blur: /blur/.test(style.backdropFilter),
+        aura: Math.round(r.width - surface.width),
+        share: Math.round((r.width / innerWidth) * 100),
+        hit: document.elementFromPoint(r.left + 8, r.top + 8)?.closest('.cb-composer-halo, .cb-composer-dock .cb-capture') ? 'composer' : 'content',
+        sharp: getComputedStyle(document.querySelector('.cb-composer-dock .cb-capture')).filter === 'none',
+      };
+    });
+  const restState = await measure();
+  await page.click('#cb-capture-input');
+  await page.waitForTimeout(600);
+  const focusState = await measure();
+  const problems = await clean();
+  const ok =
+    restState.pointer === 'none' && restState.blur && restState.aura >= 40 && restState.aura <= 120 && restState.share < 70 &&
+    restState.hit === 'content' && restState.sharp && focusState.aura >= restState.aura && !problems.length;
+  return { ok, observed: `rest=${JSON.stringify(restState)}, focus=${JSON.stringify(focusState)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P22', 'magnetic grid: cards trail a scroll and settle; while dragging it rests, and card on card still makes a folder', { viewport: SHORT }, async ({ page, clean }) => {
+  await page.mouse.move(640, 300);
+  await page.mouse.wheel(0, 120);
+  const drifting = await page.waitForFunction(() => document.querySelector('.cb-grid[data-drift]'), null, { timeout: 2000 }).then(() => true, () => false);
+  await page.waitForFunction(() => !document.querySelector('.cb-grid[data-drift]'), null, { timeout: 3000 });
+  const scrolled = await page.$eval('.cb-workspace', (e) => e.scrollTop);
+  const a = await (await page.$('.cb-tile[data-item-id="it-note-standup"]')).boundingBox();
+  const b = await (await page.$('.cb-tile[data-item-id="it-snippet-debounce"] .cb-tile__open')).boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(a.x + a.width / 2 + 24, a.y + 24, { steps: 4 });
+  await page.$eval('.cb-workspace', (e) => e.scrollBy({ top: -30 }));
+  await page.waitForTimeout(80);
+  const duringDrag = await page.evaluate(() => ({ drift: !!document.querySelector('.cb-grid[data-drift]'), dragging: document.querySelector('.cb-app').hasAttribute('data-dragging') }));
+  const b2 = await (await page.$('.cb-tile[data-item-id="it-snippet-debounce"] .cb-tile__open')).boundingBox();
+  await page.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2, { steps: 12 });
+  await page.waitForTimeout(380);
+  await page.mouse.up();
+  await page.waitForSelector('.cb-tile--folder');
+  const created = await page.$eval('.cb-notice p', (e) => e.textContent);
+  const problems = await clean();
+  const ok = drifting && scrolled > 0 && b && duringDrag.dragging && !duringDrag.drift && /Ordner mit 2 Einträgen/.test(created) && !problems.length;
+  return { ok, observed: `drift while scrolling=${drifting}, scrollTop=${scrolled}, during drag=${JSON.stringify(duringDrag)}, created="${created}", problems=${problems.join(' | ') || '-'}` };
 });
 
 browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });

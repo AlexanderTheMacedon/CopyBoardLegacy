@@ -29,6 +29,13 @@ function openLink(url: string) {
  * Executes a registry action for one item. When the item is part of the current selection, organising actions apply to
  * the whole selection (like Finder). Writes resolve after the local commit; failures are reported, never hidden.
  */
+/** Short success state on a control (`data-done`, CSS plays the icon's confirmation); a no-op for a detached element. */
+function markDone(el: HTMLElement | null) {
+  if (!el?.isConnected) return;
+  el.setAttribute('data-done', '');
+  window.setTimeout(() => el.removeAttribute('data-done'), 1400);
+}
+
 export function useRunItemAction() {
   const { state, dispatch, notify } = usePreview();
   const entries = useEntryActions();
@@ -42,9 +49,14 @@ export function useRunItemAction() {
         case 'open-link':
           if (item.kind === 'link') openLink(item.url);
           break;
-        case 'copy':
+        case 'copy': {
+          // the control that asked for the copy confirms it with its own icon, once the clipboard took it
+          const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
           writeItemToClipboard(item).then(
-            () => notify('In die Zwischenablage kopiert', { tone: 'success' }),
+            () => {
+              markDone(trigger);
+              notify('In die Zwischenablage kopiert', { tone: 'success' });
+            },
             (error: unknown) =>
               notify(
                 error instanceof ClipboardAccessError && error.reason === 'denied'
@@ -54,6 +66,7 @@ export function useRunItemAction() {
               ),
           );
           break;
+        }
         case 'download':
           download(item);
           break;

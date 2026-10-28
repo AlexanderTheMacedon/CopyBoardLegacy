@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode, type RefObject } from 'react';
-import { isEditableTarget, useMediaQuery } from '../../app/hooks';
+import { isEditableTarget, isPasteShortcut, useMediaQuery } from '../../app/hooks';
 import { useInspectedItem, usePreview } from '../../app/context';
 import { usePresence, useScrollFade } from '../../components/motion';
 import { spaceColorVar } from '../../components/SpaceIcon';
@@ -16,7 +16,7 @@ import { Inspector, INSPECTOR_DEFAULT_WIDTH } from '../inspector/Inspector';
 import { RecorderShell } from '../recorder/RecorderShell';
 import { SearchPalette } from '../search/SearchPalette';
 import { SettingsStudio } from '../settings/SettingsStudio';
-import { AmbientScene } from './AmbientScene';
+import { AmbientScene, leaveCinema } from './AmbientScene';
 import { Board } from './Board';
 import { Dock } from './Dock';
 import { MobileDock } from './MobileDock';
@@ -25,19 +25,22 @@ import { SpacesDrawer } from './SpacesDrawer';
 /** Exit window of the inspector: matches `--cb-dur-exit` + a frame of slack. */
 const INSPECTOR_EXIT_MS = 240;
 
-/** A modal layer (search, settings, drawer, image mode) owns keyboard and clipboard while it is open. */
+/** A modal layer (search, settings, drawer, image mode) owns keyboard and drop while it is open. */
 const modalOpen = () => !!document.querySelector('dialog[open], .cb-app[data-cinema]');
-
-const isPasteShortcut = (event: KeyboardEvent) =>
-  event.key.toLowerCase() === 'v' && (event.metaKey || event.ctrlKey) && !event.altKey;
+/** Dialogs own the clipboard too; image mode does not: a paste there is saved and brings the workspace back. */
+const dialogOpen = () => !!document.querySelector('dialog[open]');
+const cinemaOpen = () => !!document.querySelector('.cb-app[data-cinema]');
 
 /**
  * Universal Paste (P0): ⌘V / Strg+V anywhere in the window creates a board item, unless an editable field has focus —
  * then the field receives the paste natively. Some browsers fire no paste event while nothing editable is focused, so the
  * shortcut briefly focuses an off-screen catcher field; the paste lands there and is handled once. Clipboard data is only
- * read inside the user's own paste event.
+ * read inside the user's own paste event. In image mode the same pipeline saves to the active space or folder; only once
+ * the store confirmed the save does image mode close, so the new card is what the workspace returns to. A failed save
+ * keeps image mode and says so (the notice region stays visible there).
  */
 function useUniversalPaste(catcherRef: RefObject<HTMLTextAreaElement | null>) {
+  const { dispatch } = usePreview();
   const capture = useCapture();
   const captureRef = useRef(capture);
   useEffect(() => {
@@ -55,18 +58,21 @@ function useUniversalPaste(catcherRef: RefObject<HTMLTextAreaElement | null>) {
     };
     const onKeyDown = (event: KeyboardEvent) => {
       const catcher = catcherRef.current;
-      if (!catcher || !isPasteShortcut(event) || isEditableTarget(event.target) || modalOpen()) return;
+      if (!catcher || !isPasteShortcut(event) || isEditableTarget(event.target) || dialogOpen()) return;
       returnFocus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
       catcher.focus({ preventScroll: true });
     };
     const onPaste = (event: ClipboardEvent) => {
       const fromCatcher = event.target === catcherRef.current;
       if (event.defaultPrevented || !event.clipboardData) return;
-      if (!fromCatcher && (isEditableTarget(event.target) || isEditableTarget(document.activeElement) || modalOpen())) return;
+      if (!fromCatcher && (isEditableTarget(event.target) || isEditableTarget(document.activeElement) || dialogOpen())) return;
       event.preventDefault();
       const raw = readTransfer(event.clipboardData);
+      const fromCinema = cinemaOpen();
       if (fromCatcher) release();
-      void captureRef.current(raw);
+      void captureRef.current(raw).then((saved) => {
+        if (saved && fromCinema && cinemaOpen()) leaveCinema(dispatch);
+      });
     };
     // Capture phase: the catcher must take focus before the browser resolves the paste target.
     document.addEventListener('keydown', onKeyDown, true);
@@ -77,7 +83,7 @@ function useUniversalPaste(catcherRef: RefObject<HTMLTextAreaElement | null>) {
       document.removeEventListener('keyup', release);
       document.removeEventListener('paste', onPaste);
     };
-  }, [catcherRef]);
+  }, [catcherRef, dispatch]);
 }
 
 /**

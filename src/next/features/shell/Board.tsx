@@ -1,6 +1,7 @@
 import { useMemo, type RefObject } from 'react';
 import { usePreview } from '../../app/context';
 import type { BoardFilter } from '../../app/state';
+import { useScrollInertia } from '../../components/motion';
 import type { SegmentOption } from '../../components/SegmentedControl';
 import { kindOrder } from '../../domain/kinds';
 import { searchItems } from '../../domain/search';
@@ -60,6 +61,7 @@ export function Board({ scrollRoot }: { scrollRoot: RefObject<HTMLElement | null
   const orderedIds = useOrderedIds(entries.folders, entries.items);
   const selection = useSelection(orderedIds, { active: !state.openFolderId && !state.composerItemId });
   useDragAutoScroll(scrollRoot);
+  useScrollInertia(scrollRoot);
 
   const emptyVariant = collection && !collection.available ? 'unavailable' : space ? 'space-empty' : 'collection-empty';
   const hasContent = level.folders.length > 0 || level.items.length > 0;

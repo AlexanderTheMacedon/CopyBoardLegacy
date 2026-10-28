@@ -4,6 +4,8 @@ import { Icon, type IconName } from './Icon';
 interface PopoverProps {
   /** Accessible name and tooltip of the trigger; must contain any visible trigger text. */
   label: string;
+  /** Short custom tooltip (`data-tip`, styled by the surface that hosts the trigger); replaces the native title. */
+  tip?: string;
   icon: IconName;
   iconSize?: number;
   /** Optional visible trigger text next to the icon. */
@@ -18,6 +20,7 @@ interface PopoverProps {
 /** Non-modal popover (IA-02 L3): expands from its trigger; Escape and outside click close it and return focus. */
 export function Popover({
   label,
+  tip,
   icon,
   iconSize = 20,
   text,
@@ -65,7 +68,8 @@ export function Popover({
         type="button"
         className={triggerClassName ?? 'cb-icon-button cb-icon-button--ghost cb-icon-button--md'}
         aria-label={label}
-        title={label}
+        title={tip ? undefined : label}
+        data-tip={tip}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((v) => !v)}
