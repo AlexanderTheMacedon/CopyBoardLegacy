@@ -4,7 +4,7 @@ import { isPasteShortcut, useMediaQuery } from '../../app/hooks';
 import { BrandLogo } from '../../components/BrandLogo';
 import { Icon } from '../../components/Icon';
 import { usePresence } from '../../components/motion';
-import { scenes, SCENE_INTERVAL_MS, startScene, type Scene } from './scenes';
+import { lightScenes, scenes, SCENE_INTERVAL_MS, startScene, type Scene } from './scenes';
 
 /** Loads and decodes the next photo before it is shown, so a crossfade never reveals a half-loaded image. */
 function preload(src: string): Promise<void> {
@@ -18,8 +18,8 @@ const REACH_FACTOR = 3;
 /** Above this reveal the credit offers its image-mode button. */
 const NEAR_AT = 0.35;
 const CINEMA_EXIT_MS = 320;
-/** Exit control and caption rest after this long without interaction. */
-const CINEMA_IDLE_MS = 2600;
+/** The frame (exit, caption, wordmark) rests after this long without interaction; only the mark stays. */
+const CINEMA_IDLE_MS = 3600;
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
@@ -101,7 +101,7 @@ function useProximityReveal(sceneRef: RefObject<HTMLDivElement | null>, creditRe
  * exception: Universal Paste (AppShell) saves the clipboard and returns to the workspace once the save is confirmed.
  * Escape or the exit control return to the untouched workspace (same space, folder, selection, filter and scroll position).
  */
-function CinemaLayer({ scene, index, leaving }: { scene: Scene; index: number; leaving: boolean }) {
+function CinemaLayer({ scene, index, total, leaving }: { scene: Scene; index: number; total: number; leaving: boolean }) {
   const { dispatch } = usePreview();
   const ref = useRef<HTMLDivElement>(null);
   const [idle, setIdle] = useState(false);
@@ -190,7 +190,7 @@ function CinemaLayer({ scene, index, leaving }: { scene: Scene; index: number; l
         <p className="cb-cinema__index" aria-hidden="true">
           {String(index + 1).padStart(2, '0')}
           <span>/</span>
-          {String(scenes.length).padStart(2, '0')}
+          {String(total).padStart(2, '0')}
         </p>
         <p className="cb-cinema__place">{scene.place}</p>
         <p className="cb-cinema__meta">
@@ -206,27 +206,35 @@ function CinemaLayer({ scene, index, leaving }: { scene: Scene; index: number; l
 }
 
 /**
- * Cinematic Nature background: curated national-park photography behind every glass surface. Two stacked layers
- * crossfade (with a slow settle from a slight zoom) every ~40 s; a veil, a light bleed and a vignette keep the board
- * readable, the per-photo veil strength adapts the contrast. The slideshow pauses while the tab is hidden and stays
- * static with reduced motion or a fixed background. Alternatives: the former orange line photo or a calm gradient.
- * Decorative only; the photo credit is a small link in the corner (with the proximity reveal and the image-mode entry)
- * and in the settings.
+ * Cinematic background: curated photography behind every glass surface — national parks ("Natur") or long-exposure light
+ * ("Lichtlinien"). Two stacked layers crossfade (with a slow settle from a slight zoom) every ~40 s; a veil, a light bleed
+ * and a vignette keep the board readable, the per-photo veil strength adapts the contrast. The slideshow pauses while the
+ * tab is hidden and stays static with reduced motion or a fixed background. The third mode is a deep gradient preset
+ * without a photo. Decorative only; the photo credit is a small link in the corner (with the proximity reveal and the
+ * image-mode entry) and in the settings.
  */
 export function AmbientScene() {
   const { state, dispatch } = usePreview();
-  const { scene: mode, slideshow, sceneBlur, motion } = state.prefs;
+  const { scene: mode, slideshow, sceneBlur, motion, gradient } = state.prefs;
   const osReduced = useMediaQuery('(prefers-reduced-motion: reduce)');
   const still = slideshow === 'off' || motion === 'reduced' || osReduced;
-  const [index, setIndex] = useState(() => startScene());
-  // Layer A and B alternate; the inactive one receives the next photo before the fade starts.
-  const [layers, setLayers] = useState(() => ({ a: index, b: index, front: 'a' as 'a' | 'b' }));
+  const set = mode === 'nature' ? scenes : mode === 'ambient' ? lightScenes : null;
+  // Index and layers belong to one photo set; switching the set starts it fresh (derived during render, no extra pass).
+  const [show, setShow] = useState(() => {
+    const index = startScene(Date.now(), set ?? scenes);
+    return { set, index, a: index, b: index, front: 'a' as 'a' | 'b' };
+  });
+  if (show.set !== set) {
+    const index = startScene(Date.now(), set ?? scenes);
+    setShow({ set, index, a: index, b: index, front: 'a' });
+  }
+  const { index } = show;
   const sceneRef = useRef<HTMLDivElement>(null);
   const creditRef = useRef<HTMLDivElement>(null);
-  const cinema = usePresence(state.cinema && mode === 'nature' ? true : undefined, CINEMA_EXIT_MS);
+  const cinema = usePresence(state.cinema && set ? true : undefined, CINEMA_EXIT_MS);
 
   useEffect(() => {
-    if (mode !== 'nature' || still) return;
+    if (!set || still) return;
     let timer = 0;
     let cancelled = false;
     const schedule = () => {
@@ -234,11 +242,10 @@ export function AmbientScene() {
     };
     const advance = () => {
       if (document.hidden) return schedule();
-      const next = (index + 1) % scenes.length;
-      void preload(scenes[next]!.src).then(() => {
+      const next = (index + 1) % set.length;
+      void preload(set[next]!.src).then(() => {
         if (cancelled) return;
-        setLayers((current) => (current.front === 'a' ? { ...current, b: next, front: 'b' } : { ...current, a: next, front: 'a' }));
-        setIndex(next);
+        setShow((current) => (current.set !== set ? current : current.front === 'a' ? { ...current, index: next, b: next, front: 'b' } : { ...current, index: next, a: next, front: 'a' }));
       });
     };
     schedule();
@@ -246,23 +253,24 @@ export function AmbientScene() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [mode, still, index]);
+  }, [set, still, index]);
 
-  // Image mode belongs to the photographs: switching to another background mode ends it.
+  // Image mode belongs to the photographs: switching to the gradient ends it.
   useEffect(() => {
-    if (state.cinema && mode !== 'nature') dispatch({ type: 'setCinema', on: false });
-  }, [state.cinema, mode, dispatch]);
+    if (state.cinema && !set) dispatch({ type: 'setCinema', on: false });
+  }, [state.cinema, set, dispatch]);
 
-  const current = scenes[index]!;
-  useProximityReveal(sceneRef, creditRef, mode === 'nature' ? current.id : '');
+  const current = set?.[index % set.length];
+  useProximityReveal(sceneRef, creditRef, current?.id ?? '');
 
   const layer = (slot: 'a' | 'b') => {
-    const scene = scenes[layers[slot]]!;
+    const scene = set?.[show[slot] % set.length];
+    if (!scene) return null;
     return (
       <span
         key={slot}
         className="cb-scene__photo"
-        data-front={layers.front === slot || undefined}
+        data-front={show.front === slot || undefined}
         style={{ backgroundImage: `url(${scene.src})`, backgroundPosition: scene.focus }}
       />
     );
@@ -270,18 +278,29 @@ export function AmbientScene() {
 
   return (
     <>
-      <div ref={sceneRef} className="cb-scene" aria-hidden="true" data-mode={mode} data-blur={sceneBlur} data-still={still || undefined}>
-        {mode === 'nature' ? (
+      <div
+        ref={sceneRef}
+        className="cb-scene"
+        aria-hidden="true"
+        data-mode={mode}
+        data-preset={mode === 'gradient' ? gradient : undefined}
+        data-blur={sceneBlur}
+        data-still={still || undefined}
+      >
+        {set ? (
           <>
             {layer('a')}
             {layer('b')}
           </>
         ) : (
-          <span className="cb-scene__photo" data-front />
+          <>
+            <span className="cb-scene__photo" data-front />
+            <span className="cb-scene__depth" />
+          </>
         )}
-        <span className="cb-scene__veil" style={mode === 'nature' ? ({ '--cb-veil': current.veil } as CSSProperties) : undefined} />
+        <span className="cb-scene__veil" style={current ? ({ '--cb-veil': current.veil } as CSSProperties) : undefined} />
       </div>
-      {mode === 'nature' && (
+      {current && (
         <div ref={creditRef} className="cb-scene-credit">
           <a key={current.id} className="cb-scene-credit__link" href={current.url} target="_blank" rel="noreferrer noopener">
             <span className="cb-scene-credit__place">
@@ -294,7 +313,7 @@ export function AmbientScene() {
           </button>
         </div>
       )}
-      {cinema.value && <CinemaLayer scene={current} index={index} leaving={cinema.leaving} />}
+      {cinema.value && current && set && <CinemaLayer scene={current} index={index % set.length} total={set.length} leaving={cinema.leaving} />}
     </>
   );
 }

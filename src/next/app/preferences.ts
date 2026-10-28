@@ -14,6 +14,10 @@ export type SceneSlideshow = 'on' | 'off';
 export type SceneBlur = 'clear' | 'soft' | 'deep';
 /** `system` follows the OS setting; `reduced` collapses motion in the app regardless of it. */
 export type MotionMode = 'system' | 'reduced';
+/** Signature intro on a fresh start (skipped anyway with reduced motion). */
+export type IntroMode = 'on' | 'off';
+/** Light composition of the gradient background (tokens in tokens.css, `.cb-scene[data-preset]`). */
+export type GradientPreset = 'mist' | 'dusk' | 'ember' | 'moss' | 'night';
 
 export interface Preferences {
   readonly theme: ThemeMode;
@@ -24,6 +28,8 @@ export interface Preferences {
   readonly slideshow: SceneSlideshow;
   readonly sceneBlur: SceneBlur;
   readonly motion: MotionMode;
+  readonly intro: IntroMode;
+  readonly gradient: GradientPreset;
 }
 
 /** Light is the primary design state: first start is always light, never derived from the OS theme. */
@@ -36,6 +42,8 @@ export const defaultPreferences: Preferences = {
   slideshow: 'on',
   sceneBlur: 'soft',
   motion: 'system',
+  intro: 'on',
+  gradient: 'mist',
 };
 
 export interface PreferenceOption<V extends string> {
@@ -129,6 +137,27 @@ export const motionPreference: PreferenceDefinition<'motion'> = {
   ],
 };
 
+export const introPreference: PreferenceDefinition<'intro'> = {
+  key: 'intro',
+  label: 'Startanimation',
+  options: [
+    { value: 'on', label: 'An' },
+    { value: 'off', label: 'Aus' },
+  ],
+};
+
+export const gradientPreference: PreferenceDefinition<'gradient'> = {
+  key: 'gradient',
+  label: 'Verlauf',
+  options: [
+    { value: 'mist', label: 'Nebelblau' },
+    { value: 'dusk', label: 'Dämmerung' },
+    { value: 'ember', label: 'Glut' },
+    { value: 'moss', label: 'Moos' },
+    { value: 'night', label: 'Nachtglas' },
+  ],
+};
+
 const pick = <V extends string>(value: unknown, options: readonly PreferenceOption<V>[]): V | undefined =>
   options.find((o) => o.value === value)?.value;
 
@@ -143,5 +172,7 @@ export function restorePreferences(saved: Partial<Record<keyof Preferences, unkn
     slideshow: pick(saved?.slideshow, slideshowPreference.options) ?? defaultPreferences.slideshow,
     sceneBlur: pick(saved?.sceneBlur, sceneBlurPreference.options) ?? defaultPreferences.sceneBlur,
     motion: pick(saved?.motion, motionPreference.options) ?? defaultPreferences.motion,
+    intro: pick(saved?.intro, introPreference.options) ?? defaultPreferences.intro,
+    gradient: pick(saved?.gradient, gradientPreference.options) ?? defaultPreferences.gradient,
   };
 }

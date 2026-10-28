@@ -156,6 +156,13 @@
   background: var(--cb-glass-solid);
   box-shadow: var(--cb-glass-lit), var(--cb-shadow-1);
 }
+/* Inside a track the thumb glides on the critically damped glide curve: position and width travel together and never
+   overshoot past the track's inset, however fast the options change. */
+[data-glide='on'].cb-segmented--segmented > .cb-glider {
+  transition: transform var(--cb-dur-panel) var(--cb-ease-glide), width var(--cb-dur-panel) var(--cb-ease-glide),
+    height var(--cb-dur-panel) var(--cb-ease-glide), opacity var(--cb-dur-hover) var(--cb-ease-out);
+  will-change: transform, width;
+}
 .cb-segmented__option {
   position: relative;
   display: inline-flex;
@@ -181,11 +188,11 @@
   min-width: 36px;
   padding: 0;
 }
+/* the thumb is the only surface in a track: hover only lifts the ink, so no second contour ever competes with it */
 .cb-segmented--segmented .cb-segmented__option:hover:not(:disabled):not([aria-checked='true']) {
   color: var(--cb-text-primary);
-  background: color-mix(in srgb, var(--cb-glass-hover) 55%, transparent);
 }
-.cb-segmented__option:active:not(:disabled) {
+.cb-segmented--chips .cb-segmented__option:active:not(:disabled) {
   transform: scale(0.95);
   transition-duration: var(--cb-dur-instant);
 }
@@ -224,6 +231,12 @@
   bottom: calc(100% + var(--cb-space-2));
   left: 0;
   transform-origin: bottom left;
+}
+/* Floating layer (Popover `layer`): portalled into the app root and fixed at its trigger, so a card's menu always paints
+   above every neighbouring card, folder and running card animation; the same level as the context menu. */
+.cb-popover__panel--layer {
+  position: fixed;
+  z-index: 80;
 }
 .cb-popover__panel--right-end {
   left: calc(100% + var(--cb-space-3));

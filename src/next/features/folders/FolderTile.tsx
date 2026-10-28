@@ -158,7 +158,7 @@ export function FolderTile({ folder, index, placement, selection }: FolderTilePr
         </button>
       )}
       <div className="cb-tile__actions">
-        <Popover label={`Ordner ${folder.name}: Aktionen`} icon="more" iconSize={16} triggerClassName="cb-icon-button cb-icon-button--subtle cb-icon-button--sm">
+        <Popover label={`Ordner ${folder.name}: Aktionen`} icon="more" iconSize={16} triggerClassName="cb-icon-button cb-icon-button--subtle cb-icon-button--sm" layer>
           {(close) => (
             <div className="cb-menu" role="menu" aria-label="Ordneraktionen">
               {folderActions(folder).map((action) => (

@@ -80,7 +80,7 @@ describe('item building', () => {
 
 describe('preferences', () => {
   it('restore stored values and fall back to light defaults', () => {
-    const scene = { scene: 'nature', slideshow: 'on', sceneBlur: 'soft', motion: 'system' };
+    const scene = { scene: 'nature', slideshow: 'on', sceneBlur: 'soft', motion: 'system', intro: 'on', gradient: 'mist' };
     expect(restorePreferences(undefined)).toEqual({ theme: 'light', density: 'standard', view: 'grid', sort: 'newest', ...scene });
     expect(restorePreferences({ theme: 'dark', density: 'bogus', sidebarMode: 'expanded' } as never)).toEqual({ theme: 'dark', density: 'standard', view: 'grid', sort: 'newest', ...scene });
     expect(restorePreferences({ scene: 'gradient', slideshow: 'off', sceneBlur: 'warp', motion: 'reduced' } as never)).toMatchObject({ scene: 'gradient', slideshow: 'off', sceneBlur: 'soft', motion: 'reduced' });

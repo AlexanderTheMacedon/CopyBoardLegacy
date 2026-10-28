@@ -20,6 +20,7 @@ import { AmbientScene, leaveCinema } from './AmbientScene';
 import { Board } from './Board';
 import { Dock } from './Dock';
 import { MobileDock } from './MobileDock';
+import { SignatureIntro } from './SignatureIntro';
 import { SpacesDrawer } from './SpacesDrawer';
 
 /** Exit window of the inspector: matches `--cb-dur-exit` + a frame of slack. */
@@ -190,6 +191,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <SettingsStudio />
       <SpacesDrawer />
       <WorkspaceDialogs />
+      <SignatureIntro />
       {children}
     </div>
   );

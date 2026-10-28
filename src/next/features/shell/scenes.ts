@@ -3,6 +3,9 @@ import glacierLake from '../../assets/scenes/glacier-lake.jpg';
 import grandTetonPond from '../../assets/scenes/grand-teton-pond.jpg';
 import yosemiteMerced from '../../assets/scenes/yosemite-merced.jpg';
 import yosemiteTunnelView from '../../assets/scenes/yosemite-tunnel-view.jpg';
+import lightArcsCyan from '../../assets/light/light-arcs-cyan.jpg';
+import lightCityTraces from '../../assets/light/light-city-traces.jpg';
+import lightRoadEmber from '../../assets/light/light-road-ember.jpg';
 
 /**
  * Curated national-park photography for the Cinematic Nature background. All photos are published on Unsplash under the
@@ -80,6 +83,44 @@ export const scenes: readonly Scene[] = [
   },
 ];
 
+/**
+ * "Lichtlinien": long-exposure light photography (Unsplash License, credited like the nature set). The photos are dark
+ * night exposures; the scene composes them soft and spatial (deeper blur, a luminous veil in light mode, see base.css
+ * `.cb-scene[data-mode='ambient']`), so only the glow of the lines reaches the board, never a sharp line under text.
+ */
+export const lightScenes: readonly Scene[] = [
+  {
+    id: 'light-arcs-cyan',
+    src: lightArcsCyan,
+    place: 'Lichtbögen',
+    park: 'Langzeitbelichtung',
+    photographer: 'Anton Maksimov',
+    url: ref('MSzGw5V0ui8'),
+    focus: '40% 50%',
+    veil: 1,
+  },
+  {
+    id: 'light-road-ember',
+    src: lightRoadEmber,
+    place: 'Nachtfahrt',
+    park: 'Lichtspuren',
+    photographer: 'Jahanzeb Ahsan',
+    url: ref('NHxa-piVOlc'),
+    focus: '30% 30%',
+    veil: 0.92,
+  },
+  {
+    id: 'light-city-traces',
+    src: lightCityTraces,
+    place: 'Stadtlichter',
+    park: 'Lichtspuren',
+    photographer: 'Egor Litvinov',
+    url: ref('6-QINjM3DSM'),
+    focus: '55% 45%',
+    veil: 1,
+  },
+];
+
 /** Interval of the slideshow: a calm change every ~40 s, never a carousel. */
 export const SCENE_INTERVAL_MS = 40_000;
 
@@ -87,4 +128,4 @@ export const SCENE_INTERVAL_MS = 40_000;
  * The first motif of a visit: derived from the time, so consecutive visits start on different photos without storing
  * anything (the app keeps its state only in its own IndexedDB store).
  */
-export const startScene = (now = Date.now()): number => Math.floor(now / SCENE_INTERVAL_MS) % scenes.length;
+export const startScene = (now = Date.now(), set: readonly Scene[] = scenes): number => Math.floor(now / SCENE_INTERVAL_MS) % set.length;

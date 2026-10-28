@@ -148,6 +148,7 @@ export function ItemTile({ item, index, showSpace, placement, selection }: ItemT
           icon="more"
           iconSize={16}
           triggerClassName="cb-icon-button cb-icon-button--subtle cb-icon-button--sm"
+          layer
         >
           {(close) => (
             <div className="cb-menu" role="menu" aria-label="Aktionen">

@@ -8,6 +8,7 @@ import { NoticeRegion, type Notice } from '../features/shell/NoticeRegion';
 import { PreviewProvider, type NoticeOptions, type PreviewContextValue } from './context';
 import { restorePreferences } from './preferences';
 import { createInitialState, uiReducer } from './state';
+import { SHOWCASE_SPACE_ID } from '../data/showcase';
 import { useWorkspace, type WorkspaceSeed } from './workspace';
 
 const NOTICE_MS = 6000;
@@ -65,6 +66,20 @@ export function App({ library: base, seed = { store: null }, initialLocation }: 
     if (state.prefs === restored.current) return;
     savePrefs(state.prefs).catch(() => {});
   }, [state.prefs, savePrefs]);
+
+  // `?seed=full` (preview / QA): creates the test space "Full" once per device and opens it. The parameter is removed again,
+  // so a reload never repeats it; the seed itself only ever adds missing records (data/showcase.ts).
+  const { seedShowcase, persistent } = workspace;
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('seed') !== 'full') return;
+    url.searchParams.delete('seed');
+    window.history.replaceState(window.history.state, '', url);
+    if (!persistent) return;
+    seedShowcase('auto')
+      .then(() => dispatch({ type: 'navigate', location: { type: 'space', spaceId: SHOWCASE_SPACE_ID } }))
+      .catch(() => notify('Der Test-Space „Full“ konnte nicht angelegt werden.', { tone: 'error' }));
+  }, [seedShowcase, persistent, dispatch, notify]);
 
   const value = useMemo<PreviewContextValue>(
     () => ({ state, dispatch, library, workspace, notify, freshIds, markFresh }),

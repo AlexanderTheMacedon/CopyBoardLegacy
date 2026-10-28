@@ -33,7 +33,7 @@ walk(outDir);
 check(!files.includes('CNAME'), 'CNAME must not be deployed with the preview');
 check(!files.includes('preview.html'), 'preview.html must be renamed to index.html');
 check(!files.some((f) => /^assets\/main-/.test(f)), 'legacy main-* bundle must not be part of the preview build');
-check(files.every((f) => /^(index\.html|favicon\.svg|assets\/preview-[\w-]+\.(js|css)|assets\/modulepreload-polyfill-[\w-]+\.js|assets\/ambient-orange-[\w-]+\.jpg|assets\/(yosemite|grand-teton|glacier)-[\w-]+\.jpg|assets\/instrument-serif-[\w-]+\.woff2)$/.test(f)), `unexpected files in dist-preview: ${files.join(', ')}`);
+check(files.every((f) => /^(index\.html|favicon\.svg|assets\/preview-[\w-]+\.(js|css)|assets\/modulepreload-polyfill-[\w-]+\.js|assets\/ambient-orange-[\w-]+\.jpg|assets\/(yosemite|grand-teton|glacier|light)-[\w-]+\.jpg|assets\/instrument-serif-[\w-]+\.woff2)$/.test(f)), `unexpected files in dist-preview: ${files.join(', ')}`);
 check(files.some((f) => /^assets\/ambient-orange-[\w-]+\.jpg$/.test(f)), 'the ambient background photo must be part of the build');
 check(files.filter((f) => /^assets\/(yosemite|grand-teton|glacier)-[\w-]+\.jpg$/.test(f)).length === 5, 'the five nature scenes must be part of the build');
 check(files.some((f) => /^assets\/instrument-serif-latin-[\w-]+\.woff2$/.test(f)), 'the self-hosted Instrument Serif must be part of the build');

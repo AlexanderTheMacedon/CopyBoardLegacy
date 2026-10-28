@@ -29,6 +29,8 @@ describe('React app is isolated from the legacy data path and the network', () =
     { pattern: /type=["']file["']/, files: ['src/next/features/capture/SmartCapture.tsx'] },
     // Photo credits of the bundled nature backgrounds: attribution links only (user-clicked, never fetched by the app).
     { pattern: /https:\/\/unsplash\.com\/photos\//, files: ['src/next/features/shell/scenes.ts'] },
+    // Link cards of the synthetic test space "Full": inert item data (shown and user-clicked like any link card, never fetched).
+    { pattern: /https?:\/\/(?!unsplash\.com\/photos\/)/, files: ['src/next/data/showcase.ts'] },
   ];
 
   const forbidden = [
@@ -45,7 +47,6 @@ describe('React app is isolated from the legacy data path and the network', () =
     /WebSocket/,
     /EventSource/,
     /sendBeacon/,
-    /https?:\/\/(?!unsplash\.com\/photos\/)/,
     // device access that stays out of scope (microphone, file system handles)
     /getUserMedia|mediaDevices|MediaRecorder/,
     /\bFileReader\b/,
@@ -86,7 +87,8 @@ describe('React app is isolated from the legacy data path and the network', () =
       const specifiers = [...readFileSync(file, 'utf8').matchAll(/^import[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1] ?? '');
       for (const spec of specifiers) {
         const external = !spec.startsWith('.');
-        if (external) expect(['react', 'react-dom/client'], `${file}: ${spec}`).toContain(spec);
+        // react-dom: createPortal for the floating layer of card menus (components/Popover.tsx)
+        if (external) expect(['react', 'react-dom', 'react-dom/client'], `${file}: ${spec}`).toContain(spec);
         else expect(resolve(file, '..', spec).startsWith(nextDir), `${file}: ${spec}`).toBe(true);
       }
     }

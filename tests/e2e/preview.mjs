@@ -392,7 +392,7 @@ test('P15', 'light by default even with a dark OS; an explicit theme choice pers
   return { ok, observed: `dark OS first start=${initial}, after choosing dark + reload=${reloaded}` };
 });
 
-test('P10', 'dock is compact and centred on its core; it grows up and down around the core as an overlay', async ({ page, clean }) => {
+test('P10', 'dock is compact and its rest box is centred on the viewport (shared midpoint with the right dock); it grows up and down around the core as an overlay', async ({ page, clean }) => {
   const box = () => page.$eval('.cb-navdock', (e) => { const r = e.getBoundingClientRect(); return { w: r.width, h: r.height, top: r.top, bottom: r.bottom }; });
   const core = () => page.$eval('.cb-navdock__core', (e) => { const r = e.getBoundingClientRect(); return Math.round(r.top + r.height / 2); });
   const x0 = await page.$eval('#cb-main', (e) => e.getBoundingClientRect().left);
@@ -405,7 +405,7 @@ test('P10', 'dock is compact and centred on its core; it grows up and down aroun
   const flyout = await page.$eval('.cb-space-switch', (e) => e.hasAttribute('data-open'));
   const x1 = await page.$eval('#cb-main', (e) => e.getBoundingClientRect().left);
   const problems = await clean();
-  const ok = rest.h < 260 && rest.w <= 64 && open.w >= 220 && open.top < rest.top && open.bottom > rest.bottom && Math.abs(coreRest - 450) <= 1 && coreRest === coreOpen && flyout && x0 === x1 && !problems.length;
+  const ok = rest.h < 260 && rest.w <= 64 && open.w >= 220 && open.top < rest.top && open.bottom > rest.bottom && Math.abs((rest.top + rest.bottom) / 2 - 450) <= 1 && coreRest === coreOpen && flyout && x0 === x1 && !problems.length;
   return { ok, observed: `rest=${JSON.stringify(rest)}, open=${JSON.stringify(open)}, core centre ${coreRest} -> ${coreOpen}, flyout open=${flyout}, workspace left ${x0} -> ${x1}` };
 });
 

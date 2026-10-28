@@ -242,9 +242,10 @@ function SpaceSwitcher() {
 }
 
 /**
- * Keeps the dock's core (active space + board actions) at a fixed height on screen: the rail is placed so that the core's
- * centre sits on the viewport centre, and a ResizeObserver re-measures while the folds unfold. The dock therefore grows up
- * and down around the core, and whatever is under the pointer never slides away.
+ * Keeps the dock on the viewport centre: at rest its whole box is centred (the same reference the right dock uses, so both
+ * docks share one vertical midpoint). Unfolding, the core (active space + board actions) holds that position and the dock
+ * grows up and down around it, so whatever is under the pointer never slides away. The offset between the rest box centre
+ * and the core centre is measured whenever the dock is at rest; a ResizeObserver re-measures while the folds move.
  */
 function useCoreAnchor() {
   const railRef = useRef<HTMLElement>(null);
@@ -253,7 +254,14 @@ function useCoreAnchor() {
     const rail = railRef.current;
     const core = coreRef.current;
     if (!rail || !core) return;
-    const update = () => rail.style.setProperty('--cb-dock-anchor', `${core.offsetTop + core.offsetHeight / 2}px`);
+    let restOffset = 0;
+    const update = () => {
+      const dock = core.parentElement;
+      const coreCentre = core.offsetTop + core.offsetHeight / 2;
+      const folded = (dock?.querySelector<HTMLElement>('.cb-navdock__more--top')?.offsetHeight ?? 0) < 0.5;
+      if (dock && folded && !rail.matches(':hover, :has(:focus-visible), [data-expanded]')) restOffset = dock.offsetHeight / 2 - coreCentre;
+      rail.style.setProperty('--cb-dock-anchor', `${coreCentre + restOffset}px`);
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(core.parentElement ?? core);

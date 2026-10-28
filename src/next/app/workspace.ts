@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { buildShowcase, planShowcase, SHOWCASE_META_KEY, SHOWCASE_SPACE_ID } from '../data/showcase';
+import { createShowcaseMedia } from '../data/showcase-media';
 import type { LocalStore, StoreSnapshot, WriteBatch } from '../data/store';
 import type { ReadOnlyLibrary } from '../domain/library';
 import { isLocal, type Folder, type FolderId, type Item, type ItemId, type Placement, type Space, type SpaceId } from '../domain/types';
@@ -49,6 +51,9 @@ export interface Workspace {
   /** `false` when IndexedDB is unavailable (e.g. blocked storage); captures then fail visibly instead of pretending. */
   readonly persistent: boolean;
   readonly savedPrefs: Partial<Preferences> | undefined;
+  /** When the signature intro last played on this device (ms epoch, from the store's meta), if ever. */
+  readonly introPlayedAt: number | undefined;
+  markIntroPlayed(): void;
   add(items: readonly Item[]): Promise<void>;
   update(item: Item): Promise<void>;
   remove(item: Item): Promise<void>;
@@ -68,7 +73,19 @@ export interface Workspace {
   updateSpace(id: SpaceId, patch: Partial<Omit<Space, 'id' | 'origin'>>): Promise<void>;
   reorderSpaces(orderedIds: readonly SpaceId[]): Promise<void>;
   deleteSpace(id: SpaceId, disposition: SpaceDisposition): Promise<DeletedBundle>;
+  // --- showcase ---
+  /** Whether the test space "Full" was seeded on this device (marker), and whether it currently exists. */
+  readonly showcase: { readonly seeded: boolean; readonly present: boolean };
+  /**
+   * Creates the test space "Full" by adding only records that do not exist yet (see data/showcase.ts). `auto` runs at
+   * most once per device (marker); `explicit` (the settings action) may rebuild missing parts after the user deleted them,
+   * still without overwriting anything. Resolves with the number of records added.
+   */
+  seedShowcase(mode: 'auto' | 'explicit'): Promise<number>;
 }
+
+/** Meta key of the intro's last play (a timestamp, nothing else). */
+const INTRO_KEY = 'intro.playedAt';
 
 const seedData = (snapshot: StoreSnapshot | undefined): WorkspaceData =>
   snapshot
@@ -79,6 +96,10 @@ export function useWorkspace(base: ReadOnlyLibrary, seed: WorkspaceSeed): Worksp
   const { store, snapshot } = seed;
   const [data, setData] = useState<WorkspaceData>(() => seedData(snapshot));
   const savedPrefs = snapshot?.meta.get(PREFS_KEY) as Partial<Preferences> | undefined;
+  const introPlayedAt = snapshot?.meta.get(INTRO_KEY) as number | undefined;
+  const markIntroPlayed = useCallback(() => void store?.putMeta(INTRO_KEY, Date.now()).catch(() => {}), [store]);
+  const [showcaseSeeded, setShowcaseSeeded] = useState(() => snapshot?.meta.has(SHOWCASE_META_KEY) ?? false);
+  const seeding = useRef<Promise<number> | null>(null);
 
   const library = useMemo(() => buildLibrary(base, data, base.collections), [base, data]);
 
@@ -173,11 +194,41 @@ export function useWorkspace(base: ReadOnlyLibrary, seed: WorkspaceSeed): Worksp
     [commit],
   );
 
+  const seedShowcase = useCallback(
+    (mode: 'auto' | 'explicit') => {
+      if (mode === 'auto' && showcaseSeeded) return Promise.resolve(0);
+      // one seed at a time (StrictMode, double clicks): later calls share the running one
+      seeding.current ??= (async () => {
+        const now = new Date();
+        const { data } = latest.current;
+        const plan = planShowcase(
+          {
+            itemIds: new Set(data.local.map((i) => i.id)),
+            folderIds: new Set(data.folders.map((f) => f.id)),
+            spaceIds: new Set(data.spaceRecords.map((s) => s.id)),
+          },
+          buildShowcase(now, await createShowcaseMedia()),
+          now,
+        );
+        await commit(plan.batch);
+        setShowcaseSeeded(true);
+        return plan.added;
+      })().finally(() => {
+        seeding.current = null;
+      });
+      return seeding.current;
+    },
+    [commit, showcaseSeeded],
+  );
+  const showcase = useMemo(() => ({ seeded: showcaseSeeded, present: !!library.getSpace(SHOWCASE_SPACE_ID) }), [showcaseSeeded, library]);
+
   return useMemo(
     () => ({
       library,
       persistent: !!store,
       savedPrefs,
+      introPlayedAt,
+      markIntroPlayed,
       add,
       update,
       remove,
@@ -194,7 +245,9 @@ export function useWorkspace(base: ReadOnlyLibrary, seed: WorkspaceSeed): Worksp
       updateSpace,
       reorderSpaces,
       deleteSpace,
+      showcase,
+      seedShowcase,
     }),
-    [library, store, savedPrefs, add, update, remove, setFavorite, savePrefs, moveEntries, duplicateEntries, deleteEntries, restore, setFavorites, createFolder, updateFolder, createSpace, updateSpace, reorderSpaces, deleteSpace],
+    [library, store, savedPrefs, introPlayedAt, markIntroPlayed, add, update, remove, setFavorite, savePrefs, moveEntries, duplicateEntries, deleteEntries, restore, setFavorites, createFolder, updateFolder, createSpace, updateSpace, reorderSpaces, deleteSpace, showcase, seedShowcase],
   );
 }

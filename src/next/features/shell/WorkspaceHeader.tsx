@@ -212,7 +212,7 @@ export function WorkspaceHeader({ title, space, collectionId, filters, filter, o
           className="cb-toolbar__menu"
           onClick={() => dispatch({ type: 'openOverlay', overlay: 'spaces-drawer' })}
         />
-        <div ref={islandRef} className="cb-toolbar__island" role="group" aria-label="Schnellzugriff">
+        <div ref={islandRef} className="cb-toolbar__island" role="group" aria-label="Schnellzugriff" data-identity={space ? 'space' : 'collection'}>
           <span className="cb-toolbar__plate" aria-hidden="true" />
           <button
             type="button"

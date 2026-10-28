@@ -15,11 +15,15 @@ export function useGlider<T extends HTMLElement>(activeSelector: string, deps: D
     const root = ref.current;
     if (!root) return;
 
+    // Last placed geometry: a ResizeObserver notification that changes nothing (every observer reports once on observe)
+    // must not switch the glider to snap, or it would cut the selection glide that just started.
+    let placed = '';
     const place = () => {
       const target = root.querySelector<HTMLElement>(activeSelector);
       if (!target) {
         root.style.setProperty('--glider-o', '0');
-        return;
+        placed = '';
+        return false;
       }
       // offset* ignores transforms, so entrance animations of the target never pull the glider off its final position.
       let x = 0;
@@ -30,11 +34,15 @@ export function useGlider<T extends HTMLElement>(activeSelector: string, deps: D
         y += el.offsetTop;
         el = el.offsetParent as HTMLElement | null;
       }
+      const next = `${x},${y},${target.offsetWidth},${target.offsetHeight}`;
+      if (next === placed) return false;
+      placed = next;
       root.style.setProperty('--glider-x', `${x}px`);
       root.style.setProperty('--glider-y', `${y}px`);
       root.style.setProperty('--glider-w', `${target.offsetWidth}px`);
       root.style.setProperty('--glider-h', `${target.offsetHeight}px`);
       root.style.setProperty('--glider-o', '1');
+      return true;
     };
 
     place();
@@ -43,8 +51,12 @@ export function useGlider<T extends HTMLElement>(activeSelector: string, deps: D
 
     let snapFrame = 0;
     const observer = new ResizeObserver(() => {
+      const glideOn = root.getAttribute('data-glide');
       root.setAttribute('data-glide', 'snap');
-      place();
+      if (!place()) {
+        if (glideOn) root.setAttribute('data-glide', glideOn);
+        return;
+      }
       cancelAnimationFrame(snapFrame);
       snapFrame = requestAnimationFrame(() => root.setAttribute('data-glide', 'on'));
     });

@@ -96,12 +96,136 @@ body {
 .cb-scene[data-still] .cb-scene__photo {
   transition-property: opacity, filter;
 }
-/* calm gradient mode: no photo, a soft light field tinted by the identity hue */
+/* --- Lichtlinien: night exposures composed as soft, spatial light. The lines are always drawn out of focus (a deeper blur
+   floor than the nature photos); in light mode the photo is screened onto a pale, cool base, so only the glow of the lines
+   tints the room and the night itself turns into air. Dark mode keeps the night under the usual dark veil. ----------- */
+.cb-scene[data-mode='ambient'] {
+  --cb-scene-blur: 16px;
+  background: radial-gradient(120% 90% at 70% 20%, #c9d3df, #a9b7c8 70%, #94a4b8);
+}
+.cb-scene[data-mode='ambient'][data-blur='clear'] {
+  --cb-scene-blur: 6px;
+}
+.cb-scene[data-mode='ambient'][data-blur='deep'] {
+  --cb-scene-blur: 30px;
+}
+.cb-scene[data-mode='ambient'] .cb-scene__photo {
+  mix-blend-mode: screen;
+  --cb-scene-filter: saturate(1.25) contrast(1.08);
+}
+.cb-scene[data-mode='ambient'] .cb-scene__veil {
+  background: var(--cb-scene-bleed), radial-gradient(130% 120% at 50% 40%, transparent 60%, rgb(40 55 75 / 0.12) 100%),
+    linear-gradient(100deg, rgb(244 247 250 / 0.5) 0%, rgb(244 247 250 / 0.34) 40%, rgb(244 247 250 / 0.08) 100%);
+}
+.cb-app[data-theme='dark'] .cb-scene[data-mode='ambient'] {
+  background: #05080c;
+}
+.cb-app[data-theme='dark'] .cb-scene[data-mode='ambient'] .cb-scene__photo {
+  mix-blend-mode: normal;
+  --cb-scene-filter: saturate(1.1) brightness(0.9);
+}
+.cb-app[data-theme='dark'] .cb-scene[data-mode='ambient'] .cb-scene__veil {
+  background: var(--cb-scene-bleed), var(--cb-scene-vignette), linear-gradient(100deg, rgb(6 9 13 / 0.5) 0%, rgb(6 9 13 / 0.42) 45%, rgb(6 9 13 / 0.22) 100%);
+}
+/* image mode shows the exposure as it is */
+.cb-app[data-cinema] .cb-scene[data-mode='ambient'] .cb-scene__photo {
+  mix-blend-mode: normal;
+}
+
+/* --- Verläufe: deep, layered light presets instead of one flat gradient. Each preset is a set of tokens: a base wash, a
+   key light, a counter light and a low glow; a second, blurred depth layer adds slowly drifting light pools (bokeh), so
+   the field reads as space rather than paint. The identity hue adds a faint orb of its own. ----------- */
+.cb-scene[data-mode='gradient'] {
+  --cb-g-base-a: #e9eef5;
+  --cb-g-base-b: #cfd9e6;
+  --cb-g-key: #b9cde6;
+  --cb-g-counter: #e6dcef;
+  --cb-g-glow: #f6f1ea;
+  --cb-g-pool: rgb(255 255 255 / 0.7);
+  background: var(--cb-g-base-b);
+}
+.cb-scene[data-preset='mist'] {
+  --cb-g-base-a: #f1f5f9;
+  --cb-g-base-b: #b7c8dc;
+  --cb-g-key: #8fb2dc;
+  --cb-g-counter: #d6e1ee;
+  --cb-g-glow: #f7f4ee;
+  --cb-g-pool: rgb(236 244 252 / 0.85);
+}
+.cb-scene[data-preset='dusk'] {
+  --cb-g-base-a: #f3e6ea;
+  --cb-g-base-b: #b9b1d6;
+  --cb-g-key: #f4a98e;
+  --cb-g-counter: #8e97d0;
+  --cb-g-glow: #fbe3cf;
+  --cb-g-pool: rgb(255 226 214 / 0.75);
+}
+.cb-scene[data-preset='ember'] {
+  --cb-g-base-a: #fbefe3;
+  --cb-g-base-b: #ecc19f;
+  --cb-g-key: #f79459;
+  --cb-g-counter: #f3d7b0;
+  --cb-g-glow: #fff4e2;
+  --cb-g-pool: rgb(255 214 170 / 0.7);
+}
+.cb-scene[data-preset='moss'] {
+  --cb-g-base-a: #eef2e8;
+  --cb-g-base-b: #b5c7af;
+  --cb-g-key: #8fb486;
+  --cb-g-counter: #d9e0c2;
+  --cb-g-glow: #f4f2e2;
+  --cb-g-pool: rgb(226 240 214 / 0.75);
+}
+.cb-scene[data-preset='night'] {
+  --cb-g-base-a: #dfe4ee;
+  --cb-g-base-b: #a9b3c8;
+  --cb-g-key: #8fa0c8;
+  --cb-g-counter: #b9a9d0;
+  --cb-g-glow: #e8edf6;
+  --cb-g-pool: rgb(210 222 246 / 0.7);
+}
 .cb-scene[data-mode='gradient'] .cb-scene__photo {
-  background: radial-gradient(70% 60% at 82% 12%, color-mix(in oklab, var(--cb-hue) 30%, transparent), transparent 70%),
-    radial-gradient(60% 70% at 8% 92%, color-mix(in srgb, var(--cb-orb-periwinkle) 70%, transparent), transparent 70%),
-    linear-gradient(160deg, var(--cb-surface-subtle), var(--cb-surface-canvas));
+  inset: 0;
+  background: radial-gradient(60% 55% at 84% 8%, color-mix(in oklab, var(--cb-hue) 18%, transparent), transparent 70%),
+    radial-gradient(75% 65% at 78% 18%, var(--cb-g-key), transparent 68%),
+    radial-gradient(70% 80% at 6% 96%, var(--cb-g-counter), transparent 70%),
+    radial-gradient(55% 45% at 38% 58%, var(--cb-g-glow), transparent 72%),
+    linear-gradient(162deg, var(--cb-g-base-a) 8%, var(--cb-g-base-b) 100%);
   filter: none;
+  transform: none;
+}
+.cb-scene__depth {
+  position: absolute;
+  inset: -10%;
+  background: radial-gradient(14% 18% at 22% 30%, var(--cb-g-pool), transparent 70%),
+    radial-gradient(10% 13% at 64% 72%, var(--cb-g-pool), transparent 70%),
+    radial-gradient(18% 22% at 86% 54%, var(--cb-g-pool), transparent 72%),
+    radial-gradient(8% 10% at 46% 18%, var(--cb-g-pool), transparent 70%);
+  filter: blur(28px);
+  opacity: 0.75;
+  animation: cb-scene-drift 90s var(--cb-ease-in-out) infinite alternate;
+}
+.cb-scene[data-still] .cb-scene__depth {
+  animation: none;
+}
+@keyframes cb-scene-drift {
+  to {
+    translate: 3% -2.5%;
+    scale: 1.06;
+  }
+}
+/* dark mode: the same light composition lowered into night — the base sinks, the key light keeps its glow (one rule
+   for every preset: a darkened base under a screened, saturated copy of the lights) */
+.cb-app[data-theme='dark'] .cb-scene[data-mode='gradient'] {
+  background: #06080c;
+}
+.cb-app[data-theme='dark'] .cb-scene[data-mode='gradient'] .cb-scene__photo {
+  filter: brightness(0.34) saturate(1.7) contrast(1.25);
+}
+.cb-app[data-theme='dark'] .cb-scene[data-mode='gradient'] .cb-scene__depth {
+  filter: blur(36px) brightness(0.55) saturate(1.6);
+  mix-blend-mode: screen;
+  opacity: 0.55;
 }
 .cb-scene__veil {
   position: absolute;
@@ -112,7 +236,7 @@ body {
   transition: opacity var(--cb-scene-focus-dur, var(--cb-dur-expressive)) var(--cb-ease-out);
 }
 .cb-scene[data-mode='gradient'] .cb-scene__veil {
-  opacity: 0.4;
+  opacity: 0.22;
 }
 
 /* Photo credit: a quiet label in the lower corner, fully legible on hover/focus. Near it the photograph sharpens (proximity
@@ -316,17 +440,23 @@ body {
   color: rgb(255 255 255 / 0.9);
   font: inherit;
 }
-/* Exit: a free-standing dark-glass squircle with its own icon well; hover lifts it and draws the arrows in. */
-.cb-cinema__exit {
+/* Exit: a free-standing dark-glass squircle. One symmetric inset on both sides; icon, label and key sit on one optical
+   centre line (no inner well that would make the left edge heavier than the right). Hover lifts it and draws the arrows in.
+   Scoped to the layer: the app's button reset (`.cb-app :where(button)`, later in this file) would otherwise win the tie
+   and strip padding and rim. */
+.cb-cinema .cb-cinema__exit {
+  --cb-exit-h: 42px;
+  --cb-exit-pad: 14px;
   position: absolute;
   top: var(--cb-cinema-inset-top);
   right: var(--cb-cinema-inset-x);
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  height: 46px;
-  padding: 0 8px 0 6px;
-  border-radius: 17px;
+  height: var(--cb-exit-h);
+  padding: 0 var(--cb-exit-pad);
+  border-radius: calc(var(--cb-exit-h) * 0.34);
+  white-space: nowrap;
   background: linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.04)), rgb(12 16 22 / 0.4);
   backdrop-filter: blur(22px) saturate(1.4);
   border: 1px solid rgb(255 255 255 / 0.22);
@@ -349,12 +479,15 @@ body {
 }
 .cb-cinema__exit-icon {
   display: grid;
+  flex: none;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  background: rgb(255 255 255 / 0.16);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22);
+  width: 16px;
+  height: 16px;
+  color: rgb(255 255 255 / 0.86);
+}
+.cb-cinema__exit-label {
+  line-height: 1;
+  padding-bottom: 1px;
 }
 .cb-cinema__exit-icon .cb-icon {
   transition: scale var(--cb-dur-select) var(--cb-spring-bouncy);
@@ -363,8 +496,13 @@ body {
   scale: 0.82;
 }
 .cb-cinema__kbd {
-  padding: 2px 7px;
+  display: inline-grid;
+  place-items: center;
+  height: 22px;
+  margin-left: 2px;
+  padding: 0 7px;
   border-radius: 7px;
+  line-height: 1;
   background: rgb(255 255 255 / 0.12);
   border: 1px solid rgb(255 255 255 / 0.16);
   color: rgb(255 255 255 / 0.8);
@@ -424,17 +562,25 @@ body {
 .cb-cinema__meta a:hover {
   text-decoration-color: currentColor;
 }
-/* at rest only the photograph and a faint signature remain; any movement or key brings the frame back */
+/* Stillness: at rest only the photograph and the CopyBoard mark remain, very faint. Any pointer move, touch or key brings
+   the frame back; a keyboard-focused exit never fades, and Escape and ⌘V work in every state. */
 .cb-cinema[data-idle] :is(.cb-cinema__caption, .cb-cinema__exit:not(:focus-visible)) {
   opacity: 0;
   pointer-events: none;
 }
-.cb-cinema[data-idle] .cb-cinema__brand {
-  opacity: 0.42;
-}
-.cb-cinema[data-idle] .cb-cinema__hint {
-  opacity: 0;
+.cb-cinema__wordmark,
+.cb-cinema__hint {
   transition: opacity calc(var(--cb-dur-standard) * 2) var(--cb-ease-out);
+}
+.cb-cinema__logo {
+  transition: opacity calc(var(--cb-dur-standard) * 4) var(--cb-ease-out), color calc(var(--cb-dur-standard) * 4) var(--cb-ease-out);
+}
+.cb-cinema[data-idle] :is(.cb-cinema__wordmark, .cb-cinema__hint) {
+  opacity: 0;
+}
+.cb-cinema[data-idle] .cb-cinema__logo {
+  opacity: 0.38;
+  color: color-mix(in oklab, var(--cb-brand) 22%, white);
 }
 .cb-cinema[data-idle] .cb-cinema__caption {
   translate: 0 8px;
@@ -483,14 +629,22 @@ body {
 .cb-app[data-cinema] .cb-notice-region {
   z-index: 85;
 }
-@media (max-width: 599.98px) {
-  .cb-cinema__exit-label,
-  .cb-cinema__kbd,
+/* the paste hint yields before it could ever meet the exit */
+@media (max-width: 899.98px) {
   .cb-cinema__hint {
     display: none;
   }
-  .cb-cinema__exit {
-    padding: 0 5px;
+}
+@media (max-width: 599.98px) {
+  .cb-cinema__exit-label,
+  .cb-cinema__kbd {
+    display: none;
+  }
+  .cb-cinema .cb-cinema__exit {
+    --cb-exit-h: 44px;
+    justify-content: center;
+    width: var(--cb-exit-h);
+    padding: 0;
   }
 }
 @keyframes cb-credit-in {
@@ -687,4 +841,167 @@ body {
   resize: none;
   pointer-events: none;
   caret-color: transparent;
+}
+
+/* --- Signature intro "Paste Bloom" (SignatureIntro.tsx): one ~1.2 s motion path, click-through, never a waiting wall --
+   0–45 %: the halves of the mark arrive offset like a copy and its paste and click into one mark.
+   35–90 %: a ring of light leaves the mark and runs through the room; a faint veil lifts.
+   60–100 %: the mark dissolves into light while the dock's own mark answers with the same click. */
+.cb-intro {
+  --cb-intro-dur: 1200ms;
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: cb-intro-life var(--cb-intro-dur) linear forwards;
+}
+.cb-intro[data-phase='skip'] {
+  animation: cb-intro-skip 160ms var(--cb-ease-out) forwards;
+}
+.cb-intro > * {
+  grid-area: 1 / 1;
+}
+.cb-intro__veil {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(42% 46% at 50% 50%, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.12) 60%, transparent 100%);
+  animation: cb-intro-veil var(--cb-intro-dur) var(--cb-ease-out) forwards;
+}
+.cb-app[data-theme='dark'] .cb-intro__veil {
+  background: radial-gradient(42% 46% at 50% 50%, rgb(10 14 20 / 0.55), rgb(10 14 20 / 0.18) 60%, transparent 100%);
+}
+.cb-intro__ring {
+  width: 180px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in oklab, var(--cb-brand) 55%, white);
+  box-shadow: 0 0 40px color-mix(in srgb, var(--cb-brand) 45%, transparent), inset 0 0 30px color-mix(in srgb, var(--cb-brand) 30%, transparent);
+  opacity: 0;
+  animation: cb-intro-ring var(--cb-intro-dur) var(--cb-ease-out) forwards;
+}
+.cb-intro__mark {
+  display: grid;
+  filter: drop-shadow(0 10px 28px color-mix(in srgb, var(--cb-brand) 40%, transparent));
+  animation: cb-intro-mark var(--cb-intro-dur) var(--cb-ease-glide) forwards;
+}
+.cb-intro__logo .cb-logo__half {
+  animation: var(--cb-intro-dur) var(--cb-spring) both;
+}
+.cb-intro__logo .cb-logo__half--a {
+  animation-name: cb-intro-copy;
+}
+.cb-intro__logo .cb-logo__half--b {
+  animation-name: cb-intro-paste;
+}
+/* the dock's mark answers: the same click at the moment the large mark dissolves */
+.cb-app[data-intro] .cb-navdock__brand .cb-logo__half {
+  animation: 1200ms var(--cb-spring) both;
+}
+.cb-app[data-intro] .cb-navdock__brand .cb-logo__half--a {
+  animation-name: cb-intro-dock-a;
+}
+.cb-app[data-intro] .cb-navdock__brand .cb-logo__half--b {
+  animation-name: cb-intro-dock-b;
+}
+@keyframes cb-intro-life {
+  0%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes cb-intro-skip {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes cb-intro-veil {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes cb-intro-ring {
+  0%,
+  34% {
+    opacity: 0;
+    scale: 0.35;
+  }
+  44% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    scale: 5.2;
+  }
+}
+@keyframes cb-intro-mark {
+  0% {
+    opacity: 0;
+    scale: 0.92;
+    filter: blur(6px);
+  }
+  18% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  58% {
+    opacity: 1;
+    scale: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    scale: 1.12;
+    filter: blur(14px);
+  }
+}
+@keyframes cb-intro-copy {
+  0% {
+    translate: 9px -7px;
+    opacity: 0.35;
+  }
+  40%,
+  100% {
+    translate: 0 0;
+    opacity: 1;
+  }
+}
+@keyframes cb-intro-paste {
+  0%,
+  8% {
+    translate: -16px 12px;
+    opacity: 0;
+  }
+  42%,
+  100% {
+    translate: 0 0;
+    opacity: 1;
+  }
+}
+@keyframes cb-intro-dock-a {
+  0%,
+  55% {
+    translate: 4px -3px;
+  }
+  85%,
+  100% {
+    translate: 0 0;
+  }
+}
+@keyframes cb-intro-dock-b {
+  0%,
+  55% {
+    translate: -4px 3px;
+  }
+  85%,
+  100% {
+    translate: 0 0;
+  }
 }

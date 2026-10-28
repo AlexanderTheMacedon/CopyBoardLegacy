@@ -1,7 +1,9 @@
-import { useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { usePreview } from '../../app/context';
 import {
   densityPreference,
+  gradientPreference,
+  introPreference,
   motionPreference,
   sceneBlurPreference,
   scenePreference,
@@ -19,7 +21,8 @@ import { Icon, type IconName } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { useGlider, useScrollFade } from '../../components/motion';
 import { SegmentedControl } from '../../components/SegmentedControl';
-import { scenes } from '../shell/scenes';
+import { lightScenes, scenes, type Scene } from '../shell/scenes';
+import { SHOWCASE_SPACE_ID } from '../../data/showcase';
 
 const sections: readonly { id: SettingsSection; label: string; icon: IconName }[] = [
   { id: 'general', label: 'Allgemein & Darstellung', icon: 'palette' },
@@ -60,13 +63,13 @@ function PendingRow({ label, index, children }: { label: string; index: number; 
   );
 }
 
-/** Photographers of the nature backgrounds, linked to their Unsplash pages. */
-function SceneCredits({ index }: { index: number }) {
+/** Photographers of the photo backgrounds (nature or light), linked to their Unsplash pages. */
+function SceneCredits({ index, set }: { index: number; set: readonly Scene[] }) {
   return (
     <div className="cb-settings__row cb-settings__credits" style={step(index)}>
       <p className="cb-settings__label">Fotografien</p>
       <ul className="cb-credits">
-        {scenes.map((scene) => (
+        {set.map((scene) => (
           <li key={scene.id}>
             <span className="cb-credits__thumb" style={{ backgroundImage: `url(${scene.src})` }} aria-hidden="true" />
             <span className="cb-credits__text">
@@ -85,28 +88,71 @@ function SceneCredits({ index }: { index: number }) {
   );
 }
 
+/**
+ * Explicit entry for the test space "Full" (data/showcase.ts): creates it once, or rebuilds the parts that are missing after
+ * the user deleted them. Never overwrites or deletes anything; other spaces are not touched.
+ */
+function ShowcaseRow({ index }: { index: number }) {
+  const { workspace, dispatch, notify } = usePreview();
+  const [busy, setBusy] = useState(false);
+  const { seeded, present } = workspace.showcase;
+  const run = async () => {
+    setBusy(true);
+    try {
+      const added = await workspace.seedShowcase('explicit');
+      notify(added ? 'Test-Space „Full“ ist bereit.' : 'Test-Space „Full“ ist bereits vollständig.', { tone: 'success' });
+      dispatch({ type: 'navigate', location: { type: 'space', spaceId: SHOWCASE_SPACE_ID } });
+      dispatch({ type: 'closeOverlay' });
+    } catch {
+      notify('Der Test-Space „Full“ konnte nicht angelegt werden. Bestehende Inhalte sind unverändert.', { tone: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="cb-settings__row" style={step(index)}>
+      <p className="cb-settings__label">
+        Test-Space „Full“ <DemoBadge>Testdaten</DemoBadge>
+      </p>
+      <button type="button" className="cb-button cb-button--sm" disabled={busy || !workspace.persistent} onClick={() => void run()}>
+        {present ? 'Fehlende Einträge ergänzen' : seeded ? 'Neu aufbauen' : 'Erstellen'}
+      </button>
+      <p className="cb-settings__hint">
+        Über 60 synthetische Einträge aller Arten mit Ordnern in bis zu vier Ebenen, zum Ausprobieren von Scrollen, Suche, Ziehen,
+        Auswahl und Editor. Ergänzt nur, was fehlt; bestehende Inhalte und andere Spaces bleiben unverändert.
+      </p>
+    </div>
+  );
+}
+
 function SectionContent({ section }: { section: SettingsSection }) {
   const { state } = usePreview();
-  const nature = state.prefs.scene === 'nature';
+  const { scene } = state.prefs;
+  const photoSet = scene === 'nature' ? scenes : scene === 'ambient' ? lightScenes : null;
   switch (section) {
     case 'general':
       return (
         <>
           <PreferenceRow definition={themePreference} index={0} />
           <PreferenceRow definition={scenePreference} index={1} />
-          <PreferenceRow definition={slideshowPreference} index={2} disabled={!nature} />
-          <PreferenceRow definition={sceneBlurPreference} index={3} disabled={state.prefs.scene === 'gradient'} />
+          {scene === 'gradient' ? (
+            <PreferenceRow definition={gradientPreference} index={2} />
+          ) : (
+            <PreferenceRow definition={slideshowPreference} index={2} />
+          )}
+          <PreferenceRow definition={sceneBlurPreference} index={3} disabled={scene === 'gradient'} />
           <PreferenceRow definition={motionPreference} index={4} />
-          <PreferenceRow definition={densityPreference} index={5} />
-          <PreferenceRow definition={viewPreference} index={6} />
-          <PreferenceRow definition={sortPreference} index={7} />
-          <PendingRow label="Sprache" index={8}>
+          <PreferenceRow definition={introPreference} index={5} />
+          <PreferenceRow definition={densityPreference} index={6} />
+          <PreferenceRow definition={viewPreference} index={7} />
+          <PreferenceRow definition={sortPreference} index={8} />
+          <PendingRow label="Sprache" index={9}>
             Deutsch. Weitere Sprachen folgen.
           </PendingRow>
-          {nature && <SceneCredits index={9} />}
-          <p className="cb-settings__note" style={step(10)}>
+          {photoSet && <SceneCredits index={10} set={photoSet} />}
+          <p className="cb-settings__note" style={step(11)}>
             <Icon name="info" size={16} />
-            Darstellung wird auf diesem Gerät gemerkt. Standard ist das helle Design mit wechselnden Naturmotiven. Bei reduzierter Bewegung bleibt das Hintergrundbild stehen. Spaces können eigene Voreinstellungen haben.
+            Darstellung wird auf diesem Gerät gemerkt. Standard ist das helle Design mit wechselnden Naturmotiven. Bei reduzierter Bewegung bleibt das Hintergrundbild stehen und die Startanimation entfällt. Spaces können eigene Voreinstellungen haben.
           </p>
         </>
       );
@@ -120,10 +166,11 @@ function SectionContent({ section }: { section: SettingsSection }) {
               Die Beispielinhalte sind synthetisch. Die bisherige CopyBoard-App und ihre Daten bleiben unberührt.
             </p>
           </div>
-          <PendingRow label="Konto & Cloud" index={1}>
+          <ShowcaseRow index={1} />
+          <PendingRow label="Konto & Cloud" index={2}>
             Keine Anmeldung und keine Synchronisierung in der Vorschau.
           </PendingRow>
-          <PendingRow label="Export & Backup" index={2}>
+          <PendingRow label="Export & Backup" index={3}>
             Folgt mit dem Datenadapter eines späteren Runs.
           </PendingRow>
         </>

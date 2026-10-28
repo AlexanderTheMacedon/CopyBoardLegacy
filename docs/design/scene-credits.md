@@ -18,7 +18,22 @@ endpoint, resized to 1680–1920 px and re-encoded without metadata.
 | `yosemite-tunnel-view.jpg` | Tunnel View | Yosemite | Zoshua Colah | https://unsplash.com/photos/6Jgp0hnv7xY |
 | `glacier-grinnell.jpg` | Grinnell Lake | Glacier | Harrison Steen | https://unsplash.com/photos/d01xcR3puFA |
 
-The former background `ambient-orange.jpg` (Ryunosuke Kikuno, Unsplash) remains available as the "Lichtlinien" mode.
+## Light backgrounds — "Lichtlinien" (`src/next/assets/light/`)
+
+Final Experience Polish V1. Long-exposure light photography, all published on Unsplash under the
+[Unsplash License](https://unsplash.com/license) (free use; each photo page was checked to say "Free to use under the Unsplash
+License", none is Unsplash+). Downloaded from the public Unsplash image CDN on 2026-10-28, resized to 1920 px and re-encoded
+(JPEG q≈62). No API key involved; nothing is loaded at runtime. The app composes them soft and out of focus (base.css,
+`.cb-scene[data-mode='ambient']`) and credits them in the corner, in image mode and in the settings.
+
+| File | Motif | Photographer | Source |
+| --- | --- | --- | --- |
+| `light-arcs-cyan.jpg` | Cyan light arcs | Anton Maksimov (@juvnsky) | https://unsplash.com/photos/MSzGw5V0ui8 |
+| `light-road-ember.jpg` | Light trails of a night drive | Jahanzeb Ahsan (@jahan_photobox) | https://unsplash.com/photos/NHxa-piVOlc |
+| `light-city-traces.jpg` | City light traces | Egor Litvinov (@litvinov) | https://unsplash.com/photos/6-QINjM3DSM |
+
+The former orange line photo `ambient-orange.jpg` (Ryunosuke Kikuno, Unsplash) is no longer shown by any mode; it stays in
+the repository as the CSS token fallback (`--cb-scene-photo`).
 
 ## Later: live Unsplash source (prepared, not active)
 
