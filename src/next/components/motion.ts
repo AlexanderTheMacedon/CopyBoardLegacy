@@ -209,6 +209,24 @@ export function playMorph(root: HTMLElement, parts: MorphParts, first: MorphSnap
   }
 }
 
+const REFLOW_ID = 'cb-reflow';
+
+/**
+ * Scroll positions as last seen by a scroll event, per scroller. When a change shortens a list, the browser clamps the
+ * scroll position during that commit, before any scroll event: the difference to this value is the clamp.
+ */
+const seenScroll = new WeakMap<Element, number>();
+let scrollWatch = false;
+function scrollerOf(el: HTMLElement): HTMLElement | null {
+  if (!scrollWatch) {
+    scrollWatch = true;
+    document.addEventListener('scroll', (event) => event.target instanceof Element && seenScroll.set(event.target, event.target.scrollTop), { capture: true, passive: true });
+  }
+  let node = el.parentElement;
+  while (node && !/(auto|scroll)/.test(getComputedStyle(node).overflowY)) node = node.parentElement;
+  return node;
+}
+
 interface LayoutMotionOptions {
   /** Origin rect for the first newly mounted element matching `spawnSelector` (e.g. a folder created by a merge). */
   takeSpawn?: () => DOMRect | null;
@@ -224,17 +242,23 @@ interface LayoutMotionOptions {
 export function useLayoutMotion(ref: RefObject<HTMLElement | null>, { takeSpawn, spawnSelector }: LayoutMotionOptions = {}) {
   const previous = useRef<Map<string, { x: number; y: number }>>(new Map());
   const lastList = useRef<HTMLElement | null>(null);
-
   useLayoutEffect(() => {
     const list = ref.current;
     if (!list) return;
-    // a remounted list (view, density or filter change) plays its own reveal; positions start fresh
+    // a remounted list (view or density change) plays its own reveal; positions start fresh
     if (list !== lastList.current) {
       lastList.current = list;
       previous.current = new Map();
     }
     const still = motionReduced();
     const easing = still ? '' : springEasing();
+    // glides far outside the viewport are invisible work: a long board (filter change in a big space) only moves what is seen
+    const reach = window.innerHeight * 0.25;
+    const offscreen = (top: number, bottom: number) => bottom < -reach || top > window.innerHeight + reach;
+    // glides start from where the cards were on screen, so a clamped scroll position never makes them jump
+    const scroller = still ? null : scrollerOf(list);
+    const clamped = scroller ? scroller.scrollTop - (seenScroll.get(scroller) ?? scroller.scrollTop) : 0;
+    if (scroller) seenScroll.set(scroller, scroller.scrollTop);
     const next = new Map<string, { x: number; y: number }>();
     for (const child of Array.from(list.children) as HTMLElement[]) {
       const key = child.dataset.itemId ?? child.dataset.folderId;
@@ -244,10 +268,26 @@ export function useLayoutMotion(ref: RefObject<HTMLElement | null>, { takeSpawn,
       if (still) continue;
       const old = previous.current.get(key);
       if (old) {
-        const dx = old.x - pos.x;
-        const dy = old.y - pos.y;
+        let dx = old.x - pos.x;
+        let dy = old.y - pos.y + clamped;
         if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-          child.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 560, easing });
+          // a running glide is replaced from where the card is drawn right now, so quick successive changes never jump
+          const running = child.getAnimations().filter((a) => a.id === REFLOW_ID);
+          if (running.length) {
+            const drawn = child.getBoundingClientRect();
+            for (const a of running) a.cancel();
+            const settled = child.getBoundingClientRect();
+            dx = drawn.left - settled.left;
+            dy = drawn.top - settled.top;
+          }
+          const rect = child.getBoundingClientRect();
+          if (offscreen(rect.top, rect.bottom) && offscreen(rect.top + dy, rect.bottom + dy)) continue;
+          // a card that was out of sight does not fly in across the board: it settles in place
+          const unseen = rect.bottom + dy <= 0 || rect.top + dy >= window.innerHeight;
+          const glide = unseen
+            ? child.animate([{ opacity: 0, transform: 'scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing })
+            : child.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 560, easing });
+          glide.id = REFLOW_ID;
         }
       } else if (previous.current.size && spawnSelector && child.matches(spawnSelector)) {
         const origin = takeSpawn?.();

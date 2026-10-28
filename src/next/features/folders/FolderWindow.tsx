@@ -167,7 +167,7 @@ export function FolderWindow({ folder, leaving }: { folder: Folder; leaving: boo
             </div>
           </div>
           {orderedIds.length ? (
-            <BoardGrid folders={entriesShown.folders} items={entriesShown.items} filter={filter} label={`Inhalte in ${folder.name}`} placement={placement} selection={selection} />
+            <BoardGrid folders={entriesShown.folders} items={entriesShown.items} label={`Inhalte in ${folder.name}`} placement={placement} selection={selection} />
           ) : (
             <div className="cb-empty cb-empty--folder" data-variant="folder-empty">
               <div className="cb-empty__art" aria-hidden="true">

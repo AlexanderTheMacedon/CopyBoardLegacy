@@ -3,7 +3,7 @@ import type { ReadOnlyLibrary } from '../domain/library';
 import type { ItemId, Location } from '../domain/types';
 import type { UiAction } from './state';
 import { AppShell } from '../features/shell/AppShell';
-import { departBoard, replacesBoard } from '../features/shell/board-departure';
+import { departBoard, departFiltered, replacesBoard } from '../features/shell/board-departure';
 import { NoticeRegion, type Notice } from '../features/shell/NoticeRegion';
 import { PreviewProvider, type NoticeOptions, type PreviewContextValue } from './context';
 import { restorePreferences } from './preferences';
@@ -38,6 +38,7 @@ export function App({ library: base, seed = { store: null }, initialLocation }: 
   const dispatch = useCallback((action: UiAction) => {
     // a change of what the board shows lets the current board leave visibly before the new one settles in
     if (replacesBoard(action, stateRef.current)) departBoard();
+    else departFiltered(action, stateRef.current);
     rawDispatch(action.type === 'navigate' && action.location.type === 'space' && !action.space ? { ...action, space: libraryRef.current.getSpace(action.location.spaceId) } : action);
   }, []);
   const [notice, setNotice] = useState<Notice | null>(null);

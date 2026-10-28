@@ -695,7 +695,7 @@ test('P20', 'image mode: branded frame; ⌘V saves via Universal Paste and retur
   const frame = await page.evaluate(() => {
     const box = (sel) => document.querySelector(sel).getBoundingClientRect();
     const apart = (a, b) => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
-    const exit = box('.cb-cinema__exit');
+    const exit = box('.cb-cinema__actions');
     return {
       logo: !!document.querySelector('.cb-cinema__brand .cb-logo'),
       hint: document.querySelector('.cb-cinema__hint')?.textContent,

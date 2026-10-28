@@ -23,8 +23,17 @@ const CINEMA_IDLE_MS = 3600;
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
-/** Leaves image mode and hands focus back to its entry in the credit. */
+/** Browser fullscreen (Fullscreen API) of image mode; only ever requested from an explicit user action. */
+const fullscreenAvailable = () => typeof document !== 'undefined' && !!document.fullscreenEnabled && typeof document.documentElement.requestFullscreen === 'function';
+
+/** Ends a fullscreen the page holds (no-op otherwise; the browser's own F11-style window fullscreen is not touched). */
+function exitFullscreen() {
+  if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+}
+
+/** Leaves image mode (and its fullscreen, if any) and hands focus back to its entry in the credit. */
 export function leaveCinema(dispatch: PreviewContextValue['dispatch']) {
+  exitFullscreen();
   dispatch({ type: 'setCinema', on: false });
   requestAnimationFrame(() => document.querySelector<HTMLElement>('.cb-scene-credit__cinema')?.focus({ preventScroll: true }));
 }
@@ -100,11 +109,46 @@ function useProximityReveal(sceneRef: RefObject<HTMLDivElement | null>, creditRe
  * While it is open it owns keyboard and context menu, so no board operation can happen behind it; ⌘V is the one
  * exception: Universal Paste (AppShell) saves the clipboard and returns to the workspace once the save is confirmed.
  * Escape or the exit control return to the untouched workspace (same space, folder, selection, filter and scroll position).
+ * "Vollbild" (or F) asks the browser for real fullscreen of the page; the state follows `fullscreenchange`, so the browser's
+ * own Escape (which only ends fullscreen), the button and leaving image mode in any way (exit, Escape, a saved paste) stay
+ * in sync. Where the browser refuses or lacks the API, a notice says so and image mode simply stays in the window.
  */
 function CinemaLayer({ scene, index, total, leaving }: { scene: Scene; index: number; total: number; leaving: boolean }) {
-  const { dispatch } = usePreview();
+  const { dispatch, notify } = usePreview();
   const ref = useRef<HTMLDivElement>(null);
   const [idle, setIdle] = useState(false);
+  const [fullscreen, setFullscreen] = useState(() => typeof document !== 'undefined' && !!document.fullscreenElement);
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(!!document.fullscreenElement);
+    const onError = () => {
+      setFullscreen(!!document.fullscreenElement);
+      notify('Der Browser hat das Vollbild nicht erlaubt. Der Bildmodus bleibt im Fenster.');
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('fullscreenerror', onError);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('fullscreenerror', onError);
+      // however image mode ends, its fullscreen ends with it
+      exitFullscreen();
+    };
+  }, [notify]);
+  useEffect(() => {
+    if (leaving) exitFullscreen();
+  }, [leaving]);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) return exitFullscreen();
+    if (!fullscreenAvailable()) {
+      notify('Vollbild wird von diesem Browser nicht unterstützt (zum Beispiel auf dem iPhone). Der Bildmodus funktioniert weiter im Fenster.');
+      return;
+    }
+    // the rejection is reported through `fullscreenerror` as well
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => undefined);
+  };
+  const toggleRef = useRef(toggleFullscreen);
+  toggleRef.current = toggleFullscreen;
   // where a paste in image mode lands (the same placement useCapture uses)
   const folder = useOpenFolder();
   const space = useCaptureSpace();
@@ -134,6 +178,10 @@ function CinemaLayer({ scene, index, total, leaving }: { scene: Scene; index: nu
       if (event.key === 'Escape') {
         event.preventDefault();
         leaveCinema(dispatch);
+      } else if (event.key.toLowerCase() === 'f' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat) {
+        event.preventDefault();
+        wake();
+        toggleRef.current();
       } else wake();
     };
     window.addEventListener('keydown', onKey, true);
@@ -177,15 +225,30 @@ function CinemaLayer({ scene, index, total, leaving }: { scene: Scene; index: nu
           </span>
         )}
       </p>
-      <button type="button" className="cb-cinema__exit" aria-keyshortcuts="Escape" onClick={() => leaveCinema(dispatch)}>
-        <span className="cb-cinema__exit-icon">
-          <Icon name="shrink" size={16} />
-        </span>
-        <span className="cb-cinema__exit-label">Bildmodus beenden</span>
-        <kbd className="cb-cinema__kbd" aria-hidden="true">
-          esc
-        </kbd>
-      </button>
+      <div className="cb-cinema__actions">
+        <button
+          type="button"
+          className="cb-cinema__exit cb-cinema__fullscreen"
+          aria-pressed={fullscreen}
+          aria-keyshortcuts="F"
+          title={fullscreen ? 'Vollbild beenden (F)' : 'Vollbild (F)'}
+          onClick={toggleFullscreen}
+        >
+          <span className="cb-cinema__exit-icon">
+            <Icon name={fullscreen ? 'shrink' : 'expand'} size={16} />
+          </span>
+          <span className="cb-cinema__exit-label">{fullscreen ? 'Vollbild beenden' : 'Vollbild'}</span>
+        </button>
+        <button type="button" className="cb-cinema__exit" aria-keyshortcuts="Escape" onClick={() => leaveCinema(dispatch)}>
+          <span className="cb-cinema__exit-icon">
+            <Icon name="x" size={16} />
+          </span>
+          <span className="cb-cinema__exit-label">Bildmodus beenden</span>
+          <kbd className="cb-cinema__kbd" aria-hidden="true">
+            esc
+          </kbd>
+        </button>
+      </div>
       <div key={scene.id} className="cb-cinema__caption">
         <p className="cb-cinema__index" aria-hidden="true">
           {String(index + 1).padStart(2, '0')}

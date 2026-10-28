@@ -24,19 +24,100 @@ import { SegmentedControl } from '../../components/SegmentedControl';
 import { lightScenes, scenes, type Scene } from '../shell/scenes';
 import { SHOWCASE_SPACE_ID } from '../../data/showcase';
 
-const sections: readonly { id: SettingsSection; label: string; icon: IconName }[] = [
-  { id: 'general', label: 'Allgemein & Darstellung', icon: 'palette' },
-  { id: 'data', label: 'Daten & Synchronisierung', icon: 'cloud' },
-  { id: 'security', label: 'Sicherheit & Datenschutz', icon: 'shield' },
+const sections: readonly { id: SettingsSection; label: string; icon: IconName; summary: string; intro: string }[] = [
+  {
+    id: 'general',
+    label: 'Allgemein & Darstellung',
+    icon: 'palette',
+    summary: 'Design, Hintergrund, Bewegung',
+    intro: 'Wie CopyBoard aussieht und sich bewegt. Alles wird auf diesem Gerät gemerkt.',
+  },
+  {
+    id: 'data',
+    label: 'Daten & Synchronisierung',
+    icon: 'cloud',
+    summary: 'Speicher und Testdaten',
+    intro: 'Wo deine Inhalte liegen und womit du die Oberfläche ausprobieren kannst.',
+  },
+  {
+    id: 'security',
+    label: 'Sicherheit & Datenschutz',
+    icon: 'shield',
+    summary: 'Datenschutz und Sperren',
+    intro: 'Was CopyBoard liest, speichert und künftig schützen wird.',
+  },
 ];
 
 const step = (i: number) => ({ '--i': i }) as CSSProperties;
 
-function PreferenceRow<K extends keyof Preferences>({ definition, index, disabled = false }: { definition: PreferenceDefinition<K>; index: number; disabled?: boolean }) {
-  const { state, dispatch } = usePreview();
+/** Icon and one short line of help per preference; the definitions (labels, options) stay in app/preferences.ts. */
+const preferenceMeta: { readonly [K in keyof Preferences]: { icon: IconName; hint: string } } = {
+  theme: { icon: 'sun', hint: 'Hell, dunkel oder wie das System.' },
+  scene: { icon: 'image', hint: 'Naturfotografie, Lichtlinien oder ein ruhiger Verlauf.' },
+  slideshow: { icon: 'play', hint: 'Motive wechseln langsam oder bleiben stehen.' },
+  gradient: { icon: 'droplet', hint: 'Lichtstimmung des Verlaufs.' },
+  sceneBlur: { icon: 'eye', hint: 'Wie weich das Motiv hinter dem Glas liegt.' },
+  motion: { icon: 'move', hint: 'Reduziert schaltet räumliche Animationen ab.' },
+  intro: { icon: 'sunrise', hint: 'Signatur-Animation beim Start.' },
+  density: { icon: 'layout', hint: 'Abstände und Kartengröße im Board.' },
+  view: { icon: 'grid', hint: 'Raster, Liste oder Dateiliste.' },
+  sort: { icon: 'sortAsc', hint: 'Reihenfolge der Inhalte.' },
+};
+
+/** One setting: icon tile, label with a short hint, the control on the right (below it on narrow widths). */
+function SettingRow({
+  icon,
+  label,
+  hint,
+  children,
+  disabled = false,
+  pending = false,
+  className,
+}: {
+  icon: IconName;
+  label: ReactNode;
+  hint?: ReactNode;
+  children?: ReactNode;
+  disabled?: boolean;
+  pending?: boolean;
+  className?: string;
+}) {
   return (
-    <div className="cb-settings__row" style={step(index)} data-disabled={disabled || undefined} inert={disabled}>
-      <p className="cb-settings__label">{definition.label}</p>
+    <div
+      className={`cb-settings__row${pending ? ' cb-settings__row--pending' : ''}${className ? ` ${className}` : ''}`}
+      data-disabled={disabled || undefined}
+      inert={disabled}
+    >
+      <span className="cb-settings__icon" aria-hidden="true">
+        <Icon name={pending ? 'lock' : icon} size={18} />
+      </span>
+      <div className="cb-settings__text">
+        <p className="cb-settings__label">{label}</p>
+        {hint && <p className="cb-settings__hint">{hint}</p>}
+      </div>
+      {children && <div className="cb-settings__control">{children}</div>}
+    </div>
+  );
+}
+
+/** A titled group of rows inside a section; it only exists where real settings stand behind it. */
+function SettingGroup({ icon, title, index, children }: { icon: IconName; title: string; index: number; children: ReactNode }) {
+  return (
+    <section className="cb-settings__group" style={step(index)} aria-label={title}>
+      <h4 className="cb-settings__group-title">
+        <Icon name={icon} size={15} />
+        {title}
+      </h4>
+      <div className="cb-settings__rows">{children}</div>
+    </section>
+  );
+}
+
+function PreferenceRow<K extends keyof Preferences>({ definition, disabled = false, hint }: { definition: PreferenceDefinition<K>; disabled?: boolean; hint?: string }) {
+  const { state, dispatch } = usePreview();
+  const meta = preferenceMeta[definition.key];
+  return (
+    <SettingRow icon={meta.icon} label={definition.label} hint={hint ?? meta.hint} disabled={disabled}>
       <SegmentedControl
         label={definition.label}
         size="sm"
@@ -44,30 +125,30 @@ function PreferenceRow<K extends keyof Preferences>({ definition, index, disable
         value={state.prefs[definition.key]}
         onChange={(value) => dispatch({ type: 'setPreference', patch: { [definition.key]: value } as Partial<Preferences> })}
       />
-    </div>
+    </SettingRow>
   );
 }
 
 /** Placeholder row for a setting whose real implementation needs a later, separately approved run. */
-function PendingRow({ label, index, children }: { label: string; index: number; children: ReactNode }) {
+function PendingRow({ label, icon, children }: { label: string; icon: IconName; children: ReactNode }) {
   return (
-    <div className="cb-settings__row cb-settings__row--pending" style={step(index)}>
-      <span className="cb-settings__lock" aria-hidden="true">
-        <Icon name="lock" size={16} />
-      </span>
-      <p className="cb-settings__label">
-        {label} <DemoBadge>Noch nicht verfügbar</DemoBadge>
-      </p>
-      <p className="cb-settings__hint">{children}</p>
-    </div>
+    <SettingRow
+      pending
+      icon={icon}
+      label={
+        <>
+          {label} <DemoBadge>Noch nicht verfügbar</DemoBadge>
+        </>
+      }
+      hint={children}
+    />
   );
 }
 
 /** Photographers of the photo backgrounds (nature or light), linked to their Unsplash pages. */
-function SceneCredits({ index, set }: { index: number; set: readonly Scene[] }) {
+function SceneCredits({ set }: { set: readonly Scene[] }) {
   return (
-    <div className="cb-settings__row cb-settings__credits" style={step(index)}>
-      <p className="cb-settings__label">Fotografien</p>
+    <SettingRow icon="camera" label="Fotografien" hint="Lokal mitgeliefert unter der Unsplash-Lizenz. Es werden keine Bilder aus dem Netz nachgeladen." className="cb-settings__credits">
       <ul className="cb-credits">
         {set.map((scene) => (
           <li key={scene.id}>
@@ -83,8 +164,7 @@ function SceneCredits({ index, set }: { index: number; set: readonly Scene[] }) 
           </li>
         ))}
       </ul>
-      <p className="cb-settings__hint">Lokal mitgeliefert unter der Unsplash-Lizenz. Es werden keine Bilder aus dem Netz nachgeladen.</p>
-    </div>
+    </SettingRow>
   );
 }
 
@@ -92,7 +172,7 @@ function SceneCredits({ index, set }: { index: number; set: readonly Scene[] }) 
  * Explicit entry for the test space "Full" (data/showcase.ts): creates it once, or rebuilds the parts that are missing after
  * the user deleted them. Never overwrites or deletes anything; other spaces are not touched.
  */
-function ShowcaseRow({ index }: { index: number }) {
+function ShowcaseRow() {
   const { workspace, dispatch, notify } = usePreview();
   const [busy, setBusy] = useState(false);
   const { seeded, present } = workspace.showcase;
@@ -110,18 +190,37 @@ function ShowcaseRow({ index }: { index: number }) {
     }
   };
   return (
-    <div className="cb-settings__row" style={step(index)}>
-      <p className="cb-settings__label">
-        Test-Space „Full“ <DemoBadge>Testdaten</DemoBadge>
-      </p>
+    <SettingRow
+      icon="flask"
+      label={
+        <>
+          Test-Space „Full“ <DemoBadge>Testdaten</DemoBadge>
+        </>
+      }
+      hint="Über 60 synthetische Einträge aller Arten mit Ordnern in bis zu vier Ebenen, zum Ausprobieren von Scrollen, Suche, Ziehen, Auswahl und Editor. Ergänzt nur, was fehlt; bestehende Inhalte und andere Spaces bleiben unverändert."
+    >
       <button type="button" className="cb-button cb-button--sm" disabled={busy || !workspace.persistent} onClick={() => void run()}>
         {present ? 'Fehlende Einträge ergänzen' : seeded ? 'Neu aufbauen' : 'Erstellen'}
       </button>
-      <p className="cb-settings__hint">
-        Über 60 synthetische Einträge aller Arten mit Ordnern in bis zu vier Ebenen, zum Ausprobieren von Scrollen, Suche, Ziehen,
-        Auswahl und Editor. Ergänzt nur, was fehlt; bestehende Inhalte und andere Spaces bleiben unverändert.
-      </p>
-    </div>
+    </SettingRow>
+  );
+}
+
+/** Real status of the local store (IndexedDB available or blocked), not a setting. */
+function StorageRow() {
+  const { workspace } = usePreview();
+  const local = workspace.persistent;
+  return (
+    <SettingRow
+      icon="database"
+      label="Speicherort"
+      hint="Eingefügte Inhalte werden lokal in diesem Browser gespeichert (IndexedDB) und bleiben nach dem Neuladen erhalten. Die Beispielinhalte sind synthetisch. Die bisherige CopyBoard-App und ihre Daten bleiben unberührt."
+    >
+      <span className="cb-settings__status" data-tone={local ? 'ok' : 'warn'}>
+        <Icon name={local ? 'check' : 'info'} size={14} />
+        {local ? 'Lokal aktiv' : 'Blockiert'}
+      </span>
+    </SettingRow>
   );
 }
 
@@ -133,60 +232,67 @@ function SectionContent({ section }: { section: SettingsSection }) {
     case 'general':
       return (
         <>
-          <PreferenceRow definition={themePreference} index={0} />
-          <PreferenceRow definition={scenePreference} index={1} />
-          {scene === 'gradient' ? (
-            <PreferenceRow definition={gradientPreference} index={2} />
-          ) : (
-            <PreferenceRow definition={slideshowPreference} index={2} />
-          )}
-          <PreferenceRow definition={sceneBlurPreference} index={3} disabled={scene === 'gradient'} />
-          <PreferenceRow definition={motionPreference} index={4} />
-          <PreferenceRow definition={introPreference} index={5} />
-          <PreferenceRow definition={densityPreference} index={6} />
-          <PreferenceRow definition={viewPreference} index={7} />
-          <PreferenceRow definition={sortPreference} index={8} />
-          <PendingRow label="Sprache" index={9}>
-            Deutsch. Weitere Sprachen folgen.
-          </PendingRow>
-          {photoSet && <SceneCredits index={10} set={photoSet} />}
-          <p className="cb-settings__note" style={step(11)}>
+          <SettingGroup icon="palette" title="Design & Oberfläche" index={1}>
+            <PreferenceRow definition={themePreference} />
+            <PreferenceRow definition={densityPreference} />
+            <PreferenceRow definition={viewPreference} />
+            <PreferenceRow definition={sortPreference} />
+            <PendingRow label="Sprache" icon="globe">
+              Deutsch. Weitere Sprachen folgen.
+            </PendingRow>
+          </SettingGroup>
+          <SettingGroup icon="mountain" title="Hintergrund & Atmosphäre" index={2}>
+            <PreferenceRow definition={scenePreference} />
+            {scene === 'gradient' ? <PreferenceRow definition={gradientPreference} /> : <PreferenceRow definition={slideshowPreference} />}
+            <PreferenceRow definition={sceneBlurPreference} disabled={scene === 'gradient'} hint={scene === 'gradient' ? 'Nur bei Fotohintergründen.' : undefined} />
+            {photoSet && <SceneCredits set={photoSet} />}
+          </SettingGroup>
+          <SettingGroup icon="sparkles" title="Bewegung & Interaktion" index={3}>
+            <PreferenceRow definition={motionPreference} />
+            <PreferenceRow definition={introPreference} />
+          </SettingGroup>
+          <p className="cb-settings__note" style={step(4)}>
             <Icon name="info" size={16} />
-            Darstellung wird auf diesem Gerät gemerkt. Standard ist das helle Design mit wechselnden Naturmotiven. Bei reduzierter Bewegung bleibt das Hintergrundbild stehen und die Startanimation entfällt. Spaces können eigene Voreinstellungen haben.
+            Standard ist das helle Design mit wechselnden Naturmotiven. Bei reduzierter Bewegung bleibt das Hintergrundbild stehen und die Startanimation entfällt. Spaces können eigene Voreinstellungen haben.
           </p>
         </>
       );
     case 'data':
       return (
         <>
-          <div className="cb-settings__row" style={step(0)}>
-            <p className="cb-settings__label">Speicherort</p>
-            <p className="cb-settings__hint">
-              Eingefügte Inhalte werden lokal in diesem Browser gespeichert (IndexedDB) und bleiben nach dem Neuladen erhalten.
-              Die Beispielinhalte sind synthetisch. Die bisherige CopyBoard-App und ihre Daten bleiben unberührt.
-            </p>
-          </div>
-          <ShowcaseRow index={1} />
-          <PendingRow label="Konto & Cloud" index={2}>
-            Keine Anmeldung und keine Synchronisierung in der Vorschau.
-          </PendingRow>
-          <PendingRow label="Export & Backup" index={3}>
-            Folgt mit dem Datenadapter eines späteren Runs.
-          </PendingRow>
+          <SettingGroup icon="database" title="Speicher & Testdaten" index={1}>
+            <StorageRow />
+            <ShowcaseRow />
+          </SettingGroup>
+          <SettingGroup icon="cloud" title="Konto & Sicherung" index={2}>
+            <PendingRow label="Konto & Cloud" icon="cloud">
+              Keine Anmeldung und keine Synchronisierung in der Vorschau.
+            </PendingRow>
+            <PendingRow label="Export & Backup" icon="download">
+              Folgt mit dem Datenadapter eines späteren Runs.
+            </PendingRow>
+          </SettingGroup>
         </>
       );
     case 'security':
       return (
         <>
-          <PendingRow label="Mikrofon" index={0}>
-            Es wird keine Berechtigung angefragt; der Recorder ist eine reine Oberfläche.
-          </PendingRow>
-          <PendingRow label="PIN-Schutz" index={1}>
-            Gesperrte Inhalte und PIN-Entsperrung folgen später.
-          </PendingRow>
-          <PendingRow label="Datenschutz" index={2}>
-            Keine Netzwerkverbindungen. Die Zwischenablage wird nur beim Einfügen durch dich gelesen.
-          </PendingRow>
+          <SettingGroup icon="shield" title="Datenschutz" index={1}>
+            <SettingRow icon="shield" label="Lokal & ohne Netzwerk" hint="Keine Netzwerkverbindungen. Die Zwischenablage wird nur beim Einfügen durch dich gelesen.">
+              <span className="cb-settings__status" data-tone="ok">
+                <Icon name="check" size={14} />
+                Aktiv
+              </span>
+            </SettingRow>
+          </SettingGroup>
+          <SettingGroup icon="lock" title="Berechtigungen & Sperre" index={2}>
+            <PendingRow label="Mikrofon" icon="mic">
+              Es wird keine Berechtigung angefragt; der Recorder ist eine reine Oberfläche.
+            </PendingRow>
+            <PendingRow label="PIN-Schutz" icon="key">
+              Gesperrte Inhalte und PIN-Entsperrung folgen später.
+            </PendingRow>
+          </SettingGroup>
         </>
       );
   }
@@ -194,11 +300,16 @@ function SectionContent({ section }: { section: SettingsSection }) {
 
 function SettingsPanel({ section }: { section: SettingsSection }) {
   const ref = useRef<HTMLDivElement>(null);
+  const meta = sections.find((s) => s.id === section);
   useScrollFade(ref);
   return (
     <div ref={ref} role="tabpanel" id="cb-settings-panel" aria-labelledby={`cb-settings-tab-${section}`} className="cb-settings__panel cb-scroll">
       {/* Keyed content replays the section reveal; the scroller itself stays. */}
       <div key={section} className="cb-settings__section">
+        <header className="cb-settings__intro" style={step(0)}>
+          <h3>{meta?.label}</h3>
+          <p>{meta?.intro}</p>
+        </header>
         <SectionContent section={section} />
       </div>
     </div>
@@ -249,8 +360,13 @@ export function SettingsStudio() {
                 className="cb-settings__tab"
                 onClick={() => dispatch({ type: 'setSettingsSection', section: section.id })}
               >
-                <Icon name={section.icon} size={18} />
-                {section.label}
+                <span className="cb-settings__tab-icon" aria-hidden="true">
+                  <Icon name={section.icon} size={18} />
+                </span>
+                <span className="cb-settings__tab-text">
+                  <span>{section.label}</span>
+                  <span className="cb-settings__tab-summary">{section.summary}</span>
+                </span>
               </button>
             ))}
           </div>

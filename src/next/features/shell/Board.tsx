@@ -1,6 +1,7 @@
 import { useMemo, type RefObject } from 'react';
 import { usePreview } from '../../app/context';
 import type { BoardFilter } from '../../app/state';
+import { Icon } from '../../components/Icon';
 import { useScrollInertia } from '../../components/motion';
 import type { SegmentOption } from '../../components/SegmentedControl';
 import { kindOrder } from '../../domain/kinds';
@@ -85,14 +86,19 @@ export function Board({ scrollRoot }: { scrollRoot: RefObject<HTMLElement | null
         {hasContent ? (
           <>
             {filter !== 'all' && (
-              <p className="cb-board__filter-note" role="status">
-                {visibleCount === 1 ? '1 Eintrag' : `${visibleCount} Einträge`} · gefiltert nach {options.find((o) => o.value === filter)?.label}
-              </p>
+              <div className="cb-board__filter-note">
+                <p role="status">
+                  {visibleCount === 1 ? '1 Eintrag' : `${visibleCount} Einträge`} · gefiltert nach {options.find((o) => o.value === filter)?.label}
+                </p>
+                <button type="button" className="cb-board__filter-reset" onClick={() => dispatch({ type: 'setFilter', filter: 'all' })}>
+                  <Icon name="x" size={12} />
+                  Alle zeigen
+                </button>
+              </div>
             )}
             <BoardGrid
               folders={entries.folders}
               items={entries.items}
-              filter={filter}
               label={`Inhalte in ${title}`}
               placement={placement}
               selection={selection}

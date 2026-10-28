@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from 'react';
+import { useRef, type CSSProperties, type KeyboardEvent } from 'react';
 import { Icon, type IconName } from './Icon';
 import { useGlider } from './motion';
 
@@ -80,6 +80,7 @@ export function SegmentedControl<V extends string>({
             tabIndex={checked ? 0 : -1}
             disabled={option.disabled}
             className="cb-segmented__option"
+            style={{ '--i': index } as CSSProperties}
             onClick={() => onChange(option.value)}
           >
             {option.icon && <Icon name={option.icon} size={size === 'sm' ? 16 : 18} />}

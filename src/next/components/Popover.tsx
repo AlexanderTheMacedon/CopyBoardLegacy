@@ -12,8 +12,10 @@ interface PopoverProps {
   /** Optional visible trigger text next to the icon. */
   text?: string;
   textClassName?: string;
-  placement?: 'bottom-end' | 'top-start' | 'right-end';
+  placement?: 'bottom-end' | 'top-start' | 'right-end' | 'left-center';
   triggerClassName?: string;
+  /** Marks the trigger as carrying an active state (`data-active`), e.g. a filter that is applied. */
+  active?: boolean;
   panelClassName?: string;
   /**
    * Render the panel in the app's floating layer (a portal into `.cb-app`, fixed at the trigger, kept inside the viewport)
@@ -31,6 +33,13 @@ const GAP = 8;
 function layerPosition(trigger: DOMRect, panel: { width: number; height: number }, placement: NonNullable<PopoverProps['placement']>): CSSProperties {
   const maxLeft = window.innerWidth - panel.width - EDGE;
   const maxTop = window.innerHeight - panel.height - EDGE;
+  if (placement === 'left-center') {
+    // beside a vertical dock: the panel hangs off the trigger's left edge, centred on it, and grows out of that edge
+    const left = Math.max(EDGE, trigger.left - GAP * 1.5 - panel.width);
+    const top = Math.max(EDGE, Math.min(trigger.top + trigger.height / 2 - panel.height / 2, maxTop));
+    const originY = Math.max(0, Math.min(panel.height, trigger.top + trigger.height / 2 - top));
+    return { left, top, transformOrigin: `right ${originY}px` };
+  }
   let left = placement === 'bottom-end' ? trigger.right - panel.width : placement === 'top-start' ? trigger.left : trigger.right + GAP;
   let top = placement === 'bottom-end' ? trigger.bottom + GAP : placement === 'top-start' ? trigger.top - GAP - panel.height : trigger.bottom - panel.height;
   let originY = placement === 'bottom-end' ? 'top' : 'bottom';
@@ -57,6 +66,7 @@ export function Popover({
   textClassName,
   placement = 'bottom-end',
   triggerClassName,
+  active,
   panelClassName,
   layer = false,
   children,
@@ -140,6 +150,7 @@ export function Popover({
         aria-label={label}
         title={tip ? undefined : label}
         data-tip={tip}
+        data-active={active || undefined}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((v) => !v)}

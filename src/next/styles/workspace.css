@@ -205,35 +205,110 @@
   margin: 0;
   animation: none;
 }
-/* Filter chips fold open under the identity row (grid rows 0fr → 1fr; same technique as the dock folds) */
+/* Filter chips fold open under the identity row: the height glides (grid rows 0fr → 1fr, the dock folds' technique) while
+   the row is revealed top-down by a clip and its chips follow one after another; closing reverses it, faster, without the
+   stagger. The board below rides on the glide, so it never jumps. Interruptible at any point (pure transitions). */
 .cb-hero__filters-fold {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows var(--cb-dur-panel) var(--cb-ease-glide);
+  transition: grid-template-rows var(--cb-dur-standard) var(--cb-ease-glide);
 }
 .cb-hero__filters-fold > div {
   min-height: 0;
   overflow: hidden;
+  /* room for the chips' shadows inside the clip */
+  margin: 0 -12px;
+  padding: 0 12px;
   opacity: 0;
-  transform: translateY(-6px);
-  transition: opacity var(--cb-dur-swift) var(--cb-ease-out), transform var(--cb-dur-panel) var(--cb-spring);
+  clip-path: inset(0 0 100% 0 round 18px);
+  transition: opacity var(--cb-dur-swift) var(--cb-ease-out), clip-path var(--cb-dur-standard) var(--cb-ease-glide);
 }
 .cb-hero__filters-fold[data-open] {
   grid-template-rows: 1fr;
+  transition-duration: var(--cb-dur-panel);
 }
 .cb-hero__filters-fold[data-open] > div {
   opacity: 1;
-  transform: none;
-  transition-delay: 60ms;
+  clip-path: inset(-12px -12px -24px -12px round 18px);
+  transition-duration: var(--cb-dur-swift), var(--cb-dur-panel);
+  transition-delay: calc(var(--cb-stagger) * 1.5), 0ms;
 }
 .cb-hero__filters-fold .cb-hero__filters {
   margin-top: 16px;
   animation: none;
 }
+.cb-hero__filters-fold .cb-segmented__option {
+  opacity: 0;
+  translate: 0 -8px;
+  scale: 0.96;
+  transition: opacity var(--cb-dur-micro) var(--cb-ease-out), translate var(--cb-dur-swift) var(--cb-ease-out), scale var(--cb-dur-swift) var(--cb-ease-out),
+    background-color var(--cb-dur-hover) var(--cb-ease-out), color var(--cb-dur-select) var(--cb-ease-out);
+}
+.cb-hero__filters-fold[data-open] .cb-segmented__option {
+  opacity: 1;
+  translate: none;
+  scale: none;
+  transition-duration: var(--cb-dur-standard), var(--cb-dur-panel), var(--cb-dur-panel), var(--cb-dur-hover), var(--cb-dur-select);
+  transition-timing-function: var(--cb-ease-out), var(--cb-spring), var(--cb-spring), var(--cb-ease-out), var(--cb-ease-out);
+  /* stagger from the motion tokens: reduced motion collapses it to an instant reveal */
+  --cb-chip-delay: calc((min(var(--i, 0), 9) * 0.85 + 2.7) * var(--cb-stagger));
+  transition-delay: var(--cb-chip-delay), var(--cb-chip-delay), var(--cb-chip-delay), 0ms, 0ms;
+}
+/* the glider rides in with the chips */
+.cb-hero__filters-fold:not([data-open]) .cb-glider {
+  opacity: 0;
+}
 .cb-board__filter-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cb-space-2) var(--cb-space-3);
   font: var(--cb-text-meta);
   color: var(--cb-text-tertiary);
   margin-top: calc(var(--cb-space-2) * -1);
+  animation: cb-note-in var(--cb-dur-standard) var(--cb-spring) backwards;
+}
+@keyframes cb-note-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.cb-board__filter-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--cb-radius-pill, 999px);
+  background: color-mix(in srgb, var(--cb-glass-solid) 70%, transparent);
+  border: 1px solid var(--cb-glass-rim);
+  color: var(--cb-text-secondary);
+  font: var(--cb-text-caption);
+  font-weight: 600;
+  transition: background-color var(--cb-dur-hover) var(--cb-ease-out), color var(--cb-dur-hover) var(--cb-ease-out),
+    transform var(--cb-dur-select) var(--cb-spring);
+}
+.cb-board__filter-reset:hover {
+  background: var(--cb-glass-solid);
+  color: var(--cb-text-primary);
+}
+.cb-board__filter-reset:active {
+  transform: scale(0.96);
+}
+/* Filter change, exit leg (board-departure.ts departFiltered): still copies of the dropped cards over the live grid */
+.cb-grid.cb-filter-departure {
+  position: fixed;
+  z-index: 1;
+  inset: 0;
+  display: block;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+.cb-filter-departure * {
+  animation: none !important;
+  transition: none !important;
 }
 .cb-board-root {
   display: flex;

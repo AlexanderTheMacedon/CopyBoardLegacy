@@ -444,12 +444,19 @@ body {
    centre line (no inner well that would make the left edge heavier than the right). Hover lifts it and draws the arrows in.
    Scoped to the layer: the app's button reset (`.cb-app :where(button)`, later in this file) would otherwise win the tie
    and strip padding and rim. */
-.cb-cinema .cb-cinema__exit {
-  --cb-exit-h: 42px;
-  --cb-exit-pad: 14px;
+/* exit and fullscreen share one top-right row */
+.cb-cinema__actions {
   position: absolute;
   top: var(--cb-cinema-inset-top);
   right: var(--cb-cinema-inset-x);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cb-cinema .cb-cinema__exit {
+  --cb-exit-h: 42px;
+  --cb-exit-pad: 14px;
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -493,6 +500,16 @@ body {
   transition: scale var(--cb-dur-select) var(--cb-spring-bouncy);
 }
 .cb-cinema__exit:hover .cb-cinema__exit-icon .cb-icon {
+  scale: 0.82;
+}
+/* the fullscreen key arrives just after the exit, and its arrows open on hover instead of closing */
+.cb-cinema .cb-cinema__fullscreen {
+  animation-delay: 280ms;
+}
+.cb-cinema__fullscreen:hover .cb-cinema__exit-icon .cb-icon {
+  scale: 1.14;
+}
+.cb-cinema__fullscreen[aria-pressed='true']:hover .cb-cinema__exit-icon .cb-icon {
   scale: 0.82;
 }
 .cb-cinema__kbd {

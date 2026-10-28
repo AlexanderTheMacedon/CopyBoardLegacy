@@ -69,6 +69,7 @@ export function ItemTile({ item, index, showSpace, placement, selection }: ItemT
       ref={tileRef}
       className="cb-tile"
       data-kind={item.kind}
+      data-favorite={item.favorite || undefined}
       data-selected={inspected || undefined}
       data-checked={checked || undefined}
       data-fresh={freshIds.has(item.id) || undefined}
