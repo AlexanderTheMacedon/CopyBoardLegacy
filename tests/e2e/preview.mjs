@@ -834,14 +834,16 @@ test('P23', 'Dokument: create in a nested folder, format (heading, bold, list, l
   await page.keyboard.type('Punkt B');
   await page.keyboard.press('Enter');
   await page.keyboard.press('Enter');
-  await page.click('[aria-label="Tabelle einfügen"]');
+  await page.click('[aria-label="Tabelle"]');
+  await page.click('[aria-label="Tabelle 3 × 3 einfügen"]');
   await page.keyboard.type('H1');
   await page.keyboard.press('Tab');
   await page.keyboard.type('H2');
   // heading on the first line, link on a word through the link panel
   await page.click('.cb-doc__prose > p:first-child');
   await page.waitForTimeout(150); // ProseMirror reads the new selection on the next selectionchange
-  await page.selectOption('.cb-canvas-bar select', '1');
+  await page.click('[aria-label="Absatzformat"]');
+  await page.click('.cb-doc-pop [role="menuitemradio"]:has-text("Titel")');
   await page.click('.cb-doc__prose strong', { clickCount: 2 });
   await page.waitForTimeout(150);
   await page.keyboard.press('ControlOrMeta+K');
@@ -1278,6 +1280,319 @@ test('P31', 'Bildstudio on a phone in dark mode: no horizontal overflow, one clo
 });
 
 browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+// --- Writing studio (Run C): typography, paragraph format, contextual bubble, status bar, schema 2, responsive ---------
+const SHOTS = path.join(OUT, 'run-c');
+const shot = async (page, name) => {
+  fs.mkdirSync(SHOTS, { recursive: true });
+  await page.waitForTimeout(450); // popovers finish their entrance, counts their debounce
+  await settle(page);
+  await page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
+};
+/** Selects the first occurrence of `text` in the page as a real DOM selection (ProseMirror reads it on selectionchange). */
+const selectText = async (page, text) => {
+  const found = await page.evaluate((t) => {
+    const root = document.querySelector('.cb-doc__prose');
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const at = node.data.indexOf(t);
+      if (at < 0 || node.parentElement.closest('[contenteditable="false"]')) continue;
+      root.focus();
+      const range = document.createRange();
+      range.setStart(node, at);
+      range.setEnd(node, at + t.length);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return true;
+    }
+    return false;
+  }, text);
+  if (!found) throw new Error(`text "${text}" not found`);
+  await page.waitForTimeout(120);
+};
+const caretInto = async (page, text) => {
+  await selectText(page, text);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(80);
+};
+const pick = async (page, trigger, item) => {
+  await page.click(`[aria-label="${trigger}"]`);
+  await page.click(`.cb-doc-pop [role="menuitemradio"]:has-text("${item}")`);
+  await page.waitForTimeout(80);
+};
+const docState = (page) =>
+  page.evaluate(() => {
+    const q = (sel) => document.querySelector(`.cb-doc__prose ${sel}`);
+    const second = [...document.querySelectorAll('.cb-doc__prose p')].find((p) => p.textContent.includes('Zweiter Absatz'));
+    return {
+      h2: q('h2')?.textContent,
+      styled: q('span[data-font="serif"][data-size="25"][data-text-color="#2563eb"]')?.textContent,
+      green: q('mark[data-color="green"]')?.textContent,
+      yellow: q('mark[data-color="yellow"]')?.textContent,
+      strike: q('s')?.textContent,
+      bold: !!q('strong'),
+      para: second ? { indent: second.dataset.indent, lh: second.dataset.lineHeight, spacing: second.dataset.spacing, align: second.style.textAlign } : null,
+    };
+  });
+
+test('P32', 'Schreibstudio: Schrift, Größe, Farbe, Marker, Blocksatz, Einzug, Abstände, Formatierung entfernen; Shortcuts; Export, Zoom und Reload behalten alles', async ({ page, clean }) => {
+  await newDocument(page);
+  await page.keyboard.type('Studio');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Alpha Beta Gamma Delta Epsilon');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Zweiter Absatz mit genug Text für den Blocksatz.');
+  // typography on "Beta": typeface through the menu, size through the stepper (17 → 20 → 25), colour through the popover
+  await selectText(page, 'Beta');
+  await pick(page, 'Schriftart', 'Serif');
+  await page.click('[aria-label="Schrift vergrößern"]');
+  await page.click('[aria-label="Schrift vergrößern"]');
+  await page.click('[aria-label="Textfarbe"]');
+  await page.click('.cb-doc-pop [aria-label="Textfarbe Blau"]');
+  const sizeShown = await page.$eval('.cb-doc-size .cb-doc-size__value', (e) => e.textContent.trim());
+  // marker through the contextual bubble, a second one and strike through the keyboard
+  await selectText(page, 'Gamma');
+  await page.waitForSelector('.cb-bubble', { state: 'visible' });
+  await page.click('.cb-bubble [aria-label="Farbe und Textmarker"]');
+  await page.click('.cb-bubble [aria-label="Textmarker Grün"]');
+  await selectText(page, 'Delta');
+  await page.keyboard.press('ControlOrMeta+Shift+H');
+  await selectText(page, 'Epsilon');
+  await page.keyboard.press('ControlOrMeta+Shift+S');
+  // clear formatting removes emphasis again
+  await selectText(page, 'Alpha');
+  await page.keyboard.press('ControlOrMeta+B');
+  await page.keyboard.press('ControlOrMeta+\\');
+  // paragraph format on the second paragraph
+  await caretInto(page, 'Zweiter');
+  await page.click('[aria-label="Blocksatz"]');
+  await page.keyboard.press('ControlOrMeta+]');
+  await page.click('[aria-label="Einzug vergrößern"]');
+  await pick(page, 'Zeilen- und Absatzabstand', 'Doppelt');
+  await pick(page, 'Zeilen- und Absatzabstand', 'Groß');
+  await caretInto(page, 'Studio');
+  await pick(page, 'Absatzformat', 'Überschrift');
+  await savedStatus(page);
+  const live = await docState(page);
+  const counts = await page.waitForFunction(() => /14 Wörter/.test(document.querySelector('.cb-doc__counts')?.textContent ?? '') && document.querySelector('.cb-doc__counts').textContent).then((h) => h.jsonValue());
+  await shot(page, 'desktop-light-studio');
+  // export: the file carries the formatting as inline styles
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('[aria-label="Exportieren"]')]);
+  const exported = fs.readFileSync(await download.path(), 'utf8');
+  const exportChecks = { font: /data-font="serif"/, size: /font-size: 25px/, mark: /<mark[^>]*data-color="green"[^>]*background-color: (#bbf7d0|rgb\(187, 247, 208\))/, indent: /margin-left: 3em/, lh: /line-height: 2/, justify: /text-align: justify/ };
+  const exportMiss = Object.keys(exportChecks).filter((k) => !exportChecks[k].test(exported));
+  const exportOk = !exportMiss.length && !/<script/i.test(exported);
+  // zoom is a view setting: text grows, the stored size stays 25
+  await page.click('.cb-doc__zoom [aria-label="Vergrößern"]');
+  const zoomed = await page.evaluate(() => ({ p: getComputedStyle(document.querySelector('.cb-doc__prose p')).fontSize, beta: getComputedStyle(document.querySelector('.cb-doc__prose [data-size="25"]')).fontSize, label: document.querySelector('.cb-doc__zoom-value').textContent }));
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-tile[data-kind="document"]');
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  await reopenByTitle(page, 'Studio');
+  await page.waitForSelector('.cb-doc__prose h2');
+  const reloaded = await docState(page);
+  const zoomAfter = await page.$eval('.cb-doc__zoom-value', (e) => e.textContent);
+  const problems = await clean();
+  const expected = { h2: 'Studio', styled: 'Beta', green: 'Gamma', yellow: 'Delta', strike: 'Epsilon', bold: false, para: { indent: '2', lh: '2', spacing: 'large', align: 'justify' } };
+  const same = (x) => JSON.stringify(x) === JSON.stringify(expected);
+  const ok = same(live) && same(reloaded) && sizeShown === '25' && exportOk && zoomed.p === '18.7px' && zoomed.beta === '27.5px' && zoomAfter.includes('110') && !problems.length;
+  return { ok, observed: `live=${JSON.stringify(live)}, reloaded same=${same(reloaded)}, size=${sizeShown}, counts="${counts}", export=${exportOk}${exportMiss.length ? ` missing ${exportMiss} in ${exported.slice(exported.indexOf('<body>'), exported.indexOf('<body>') + 600)}` : ''}, zoom=${JSON.stringify(zoomed)} → after reload ${zoomAfter}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P33', 'Schreibstudio: Auswahl bleibt über Menüs erhalten, aktive Zustände stimmen, Undo/Redo, Tabellen-Picker und -Werkzeuge, Link über die Bubble', async ({ page, clean }) => {
+  await newDocument(page);
+  await page.keyboard.type('Eins zwei drei');
+  await selectText(page, 'zwei');
+  await pick(page, 'Absatzformat', 'Titel');
+  const afterMenu = await page.evaluate(() => ({ sel: getSelection().toString(), h1: document.querySelector('.cb-doc__prose h1')?.textContent, label: document.querySelector('[aria-label="Absatzformat"]').textContent }));
+  await page.click('[aria-label="Textfarbe"]');
+  await page.click('.cb-doc-pop [aria-label="Textfarbe Orange"]');
+  await page.keyboard.press('ControlOrMeta+B');
+  const coloured = await page.evaluate(() => ({
+    span: [...document.querySelectorAll('.cb-doc__prose [data-text-color]')].map((e) => e.textContent).join('|'),
+    active: document.querySelector('[aria-label="Textfarbe"]').hasAttribute('data-active'),
+    bold: document.querySelector('.cb-canvas-bar [aria-label="Fett"]').getAttribute('aria-pressed'),
+  }));
+  await page.keyboard.press('ControlOrMeta+Z');
+  await page.keyboard.press('ControlOrMeta+Z');
+  const undone = await page.evaluate(() => document.querySelectorAll('.cb-doc__prose [data-text-color], .cb-doc__prose strong').length);
+  await page.keyboard.press('ControlOrMeta+Shift+Z');
+  const redone = await page.evaluate(() => document.querySelectorAll('.cb-doc__prose [data-text-color]').length);
+  // link through the bubble on a fresh selection
+  await selectText(page, 'Eins');
+  await page.waitForSelector('.cb-bubble', { state: 'visible' });
+  await page.click('.cb-bubble [aria-label="Link"]');
+  await page.fill('.cb-link-panel input', 'example.org/eins');
+  await page.keyboard.press('Enter');
+  // table: size picker, then the contextual operations
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.click('[aria-label="Tabelle"]');
+  await page.hover('[aria-label="Tabelle 2 × 4 einfügen"]');
+  const pickLabel = await page.$eval('.cb-doc-table-pick__size', (e) => e.textContent.replace(/\s+/g, ' ').trim());
+  await page.click('[aria-label="Tabelle 2 × 4 einfügen"]');
+  const cells = () => page.$$eval('.cb-doc__prose :is(td, th)', (els) => els.length);
+  const c1 = await cells();
+  await page.click('[aria-label="Tabelle bearbeiten"]');
+  await page.click('.cb-doc-pop [role="menuitem"]:has-text("Zeile unterhalb einfügen")');
+  const c2 = await cells();
+  await page.click('[aria-label="Tabelle bearbeiten"]');
+  await page.click('.cb-doc-pop [role="menuitem"]:has-text("Spalte löschen")');
+  const c3 = await cells();
+  await savedStatus(page);
+  const link = await page.$eval('.cb-doc__prose a', (e) => e.getAttribute('href'));
+  const problems = await clean();
+  const ok = afterMenu.sel === 'zwei' && afterMenu.h1 === 'Eins zwei drei' && afterMenu.label.includes('Titel') && coloured.span === 'zwei' && coloured.active && coloured.bold === 'true' && undone === 0 && redone === 1 && link === 'https://example.org/eins' && pickLabel === '2 × 4' && c1 === 8 && c2 === 12 && c3 === 9 && !problems.length;
+  return { ok, observed: `menu=${JSON.stringify(afterMenu)}, colour=${JSON.stringify(coloured)}, undo→${undone}, redo→${redone}, link=${link}, picker="${pickLabel}", cells ${c1}→${c2}→${c3}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P34', 'Schreibstudio: ein gespeichertes Schema-1-Dokument öffnet unverändert, wird beim Öffnen nicht umgeschrieben und speichert nach einer Änderung verlustfrei als Schema 2', async ({ page, clean }) => {
+  await newDocument(page);
+  await page.keyboard.type('Altbestand');
+  await savedStatus(page);
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-tile[data-kind="document"]');
+  const readItem = () =>
+    page.evaluate(
+      () =>
+        new Promise((resolve, reject) => {
+          const open = indexedDB.open('copyboard-next');
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const db = open.result;
+            const req = db.transaction('items').objectStore('items').getAll();
+            req.onsuccess = () => {
+              db.close();
+              resolve(req.result.find((i) => i.kind === 'document' && i.title === 'Altbestand'));
+            };
+          };
+        }),
+    );
+  const fresh = await readItem();
+  const v1 = {
+    schema: 1,
+    doc: {
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2, textAlign: 'center' }, content: [{ type: 'text', text: 'Altbestand' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'rot', marks: [{ type: 'textStyle', attrs: { color: '#be123c' } }, { type: 'italic' }] }] },
+        { type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: true }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'erledigt' }] }] }] },
+      ],
+    },
+  };
+  await page.evaluate(
+    ({ item }) =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open('copyboard-next');
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction('items', 'readwrite');
+          tx.objectStore('items').put(item);
+          tx.oncomplete = () => (db.close(), resolve(true));
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    { item: { ...fresh, content: v1, text: 'Altbestand\nrot\nerledigt' } },
+  );
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  await reopenByTitle(page, 'Altbestand');
+  await page.waitForSelector('.cb-doc__prose h2');
+  const shown = await page.evaluate(() => ({
+    h2: document.querySelector('.cb-doc__prose h2')?.style.textAlign,
+    red: document.querySelector('.cb-doc__prose em [data-text-color="#be123c"], .cb-doc__prose [data-text-color="#be123c"] em, .cb-doc__prose [data-text-color="#be123c"]')?.textContent,
+    task: document.querySelector('.cb-doc__prose li[data-checked="true"] > div')?.textContent,
+  }));
+  await page.waitForTimeout(1200);
+  const untouched = await readItem();
+  await selectText(page, 'erledigt');
+  await page.keyboard.type('erledigt!');
+  await page.waitForFunction(() => document.querySelector('.cb-composer__status')?.dataset.state !== 'saved').catch(() => {});
+  await savedStatus(page);
+  const saved = await readItem();
+  const problems = await clean();
+  const expectDoc = JSON.parse(JSON.stringify(v1.doc));
+  expectDoc.content[2].content[0].content[0].content[0].text = 'erledigt!';
+  const ok = shown.h2 === 'center' && shown.red === 'rot' && shown.task === 'erledigt' && untouched.content.schema === 1 && saved.content.schema === 2 && JSON.stringify(saved.content.doc) === JSON.stringify(expectDoc) && !problems.length;
+  return { ok, observed: `shown=${JSON.stringify(shown)}, after open schema=${untouched.content.schema}, after edit schema=${saved.content.schema}, lossless=${JSON.stringify(saved.content.doc) === JSON.stringify(expectDoc)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P35', 'Schreibstudio auf dem Phone im Dark Mode: Prioritätszeile passt, Mehr-Blatt im Viewport und funktional, Statusleiste sichtbar; Druckansicht nur Seite', { touch: true }, async ({ page, clean }) => {
+  // the theme is chosen in the desktop dock, then the same touch device turns into a phone
+  await dockItem(page, 'Dunkles Design');
+  await page.waitForTimeout(150);
+  await page.setViewportSize(PHONE);
+  await page.waitForTimeout(300);
+  await page.click('#cb-capture-input');
+  await page.click('[aria-label="Neues Dokument"]', { force: true });
+  await page.waitForSelector('.cb-doc__prose');
+  await page.keyboard.type('Unterwegs schreiben');
+  const bar = await page.evaluate(() => {
+    const tools = document.querySelector('.cb-doc-tools');
+    const r = tools.getBoundingClientRect();
+    return { layout: tools.dataset.layout, fits: tools.scrollWidth <= tools.clientWidth + 1 && r.right <= innerWidth + 0.5, overflow: document.documentElement.scrollWidth > innerWidth, status: !!document.querySelector('.cb-doc__status')?.getBoundingClientRect().height };
+  });
+  await page.click('[aria-label="Weitere Formatierung"]');
+  await page.waitForSelector('.cb-doc-more');
+  const sheet = await page.$eval('.cb-doc-more', (e) => {
+    const r = e.getBoundingClientRect();
+    return { inside: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, theme: document.querySelector('.cb-app').dataset.theme };
+  });
+  await shot(page, 'phone-dark-more-sheet');
+  await page.click('.cb-doc-more [aria-label="Nummerierung"]');
+  await page.click('.cb-doc-more .cb-doc-chip:has-text("Mono")');
+  const applied = await page.evaluate(() => ({ ol: !!document.querySelector('.cb-doc__prose ol'), mono: document.querySelector('.cb-doc-more .cb-doc-chip[aria-pressed="true"]')?.textContent }));
+  await page.keyboard.press('Escape');
+  await shot(page, 'phone-dark-studio');
+  await page.emulateMedia({ media: 'print' });
+  const print = await page.evaluate(() => ({ bar: getComputedStyle(document.querySelector('.cb-canvas-bar')).display, status: getComputedStyle(document.querySelector('.cb-doc__status')).display, prose: getComputedStyle(document.querySelector('.cb-doc__prose')).display }));
+  await page.emulateMedia({ media: 'screen' });
+  const problems = await clean();
+  const ok = bar.layout === 'phone' && bar.fits && !bar.overflow && bar.status && sheet.inside && sheet.theme === 'dark' && applied.ol && print.bar === 'none' && print.status === 'none' && print.prose !== 'none' && !problems.length;
+  return { ok, observed: `bar=${JSON.stringify(bar)}, sheet=${JSON.stringify(sheet)}, applied=${JSON.stringify(applied)}, print=${JSON.stringify(print)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P36', 'Schreibstudio auf Tablet und Desktop (dunkel): Werkzeugzeilen brechen kontrolliert um, kein Werkzeug außerhalb, keine Überbreite; Code/Markdown/Bild unverändert erreichbar', { viewport: { width: 820, height: 1180 } }, async ({ page, clean }) => {
+  await newDocument(page);
+  await page.keyboard.type('Tablet');
+  const check = () =>
+    page.evaluate(() => {
+      const controls = [...document.querySelectorAll('.cb-canvas-bar button')].filter((b) => b.offsetParent);
+      const out = controls.filter((b) => {
+        const r = b.getBoundingClientRect();
+        return r.left < 0 || r.right > innerWidth + 0.5;
+      });
+      return { controls: controls.length, outside: out.map((b) => b.getAttribute('aria-label')), overflow: document.documentElement.scrollWidth > innerWidth, rows: document.querySelectorAll('.cb-doc-tools__row').length };
+    });
+  const tablet = await check();
+  await shot(page, 'tablet-light-studio');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-tile[data-kind="document"]');
+  await dockItem(page, 'Dunkles Design');
+  await page.waitForTimeout(150);
+  await reopenByTitle(page, 'Tablet');
+  await page.waitForSelector('.cb-doc__prose');
+  await selectText(page, 'Tablet');
+  await page.waitForSelector('.cb-bubble', { state: 'visible' });
+  await page.click('.cb-bubble [aria-label="Farbe und Textmarker"]');
+  const desktop = await check();
+  await shot(page, 'desktop-dark-bubble');
+  await page.click('[aria-label="Textmarker"]');
+  await shot(page, 'desktop-dark-marker-menu');
+  await page.keyboard.press('Escape');
+  await page.click('[aria-label="Editor schließen"]');
+  // the other Canvas editors still open in their own surfaces
+  await page.click('.cb-tile[data-item-id="it-prompt-review"] .cb-tile__open');
+  await page.click('.cb-inspector button:has-text("Bearbeiten")');
+  const md = await page.waitForSelector('.cb-md .cm-content').then(() => true, () => false);
+  const problems = await clean();
+  const ok = tablet.rows === 2 && !tablet.outside.length && !tablet.overflow && !desktop.outside.length && !desktop.overflow && md && !problems.length;
+  return { ok, observed: `tablet=${JSON.stringify(tablet)}, desktop=${JSON.stringify(desktop)}, markdown=${md}, problems=${problems.join(' | ') || '-'}` };
+});
+
 const ONLY = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY) : null; // e.g. E2E_ONLY='^(P6|P23)$' for a focused run
 for (const t of tests) {
   if (ONLY && !ONLY.test(t.id)) continue;

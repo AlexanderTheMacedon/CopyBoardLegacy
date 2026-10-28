@@ -33,7 +33,7 @@ describe('document model', () => {
       },
     };
     const clean = sanitizeDocument(doc);
-    expect(clean).toEqual(doc);
+    expect(clean).toEqual({ ...doc, schema: 2 }); // a schema-1 tree is migrated by restamping: nothing is lost
     expect(documentText(clean.doc)).toBe('Titel\nfett\nerledigt');
     expect(documentOutline(clean.doc)).toEqual([{ level: 2, text: 'Titel' }]);
   });

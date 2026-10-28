@@ -85,9 +85,12 @@ export interface DocNode {
   readonly text?: string;
 }
 
-/** Versioned, validated document content. `schema` is bumped only together with a migration in domain/document.ts. */
+/**
+ * Versioned, validated document content. `schema` is bumped only together with a migration in domain/document.ts; stored
+ * items may still carry an older version, which `sanitizeDocument` migrates on load. Written content is always current.
+ */
 export interface DocumentContent {
-  readonly schema: 1;
+  readonly schema: 1 | 2;
   readonly doc: DocNode;
 }
 

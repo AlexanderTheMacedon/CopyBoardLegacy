@@ -69,6 +69,8 @@ interface RailProps {
 /** Context Rail (D-010): belongs to the editor, not a second inspector. Its own ✕ is the only close control while open. */
 function ContextRail({ item, place, stats, outline, prefs, onPrefs, onClose }: RailProps) {
   const hasWidth = item.kind === 'document' || item.kind === 'markdown' || item.kind === 'text';
+  // a document scales through the page zoom in its status bar; its font sizes are document formatting, not a view setting
+  const hasFontSize = item.kind !== 'document';
   return (
     <aside className="cb-rail" aria-labelledby="cb-rail-title">
       <div className="cb-rail__header" style={step(0)}>
@@ -115,20 +117,22 @@ function ContextRail({ item, place, stats, outline, prefs, onPrefs, onClose }: R
           <Icon name="sliders" size={14} />
           Ansicht
         </h4>
-        <div className="cb-rail__field">
-          <span id="cb-rail-font">Schriftgröße</span>
-          <SegmentedControl
-            label="Schriftgröße"
-            size="sm"
-            options={[
-              { value: '13', label: 'S' },
-              { value: '14', label: 'M' },
-              { value: '16', label: 'L' },
-            ]}
-            value={String(prefs.fontSize) as '13' | '14' | '16'}
-            onChange={(v) => onPrefs({ fontSize: Number(v) as EditorPrefs['fontSize'] })}
-          />
-        </div>
+        {hasFontSize && (
+          <div className="cb-rail__field">
+            <span id="cb-rail-font">Schriftgröße</span>
+            <SegmentedControl
+              label="Schriftgröße"
+              size="sm"
+              options={[
+                { value: '13', label: 'S' },
+                { value: '14', label: 'M' },
+                { value: '16', label: 'L' },
+              ]}
+              value={String(prefs.fontSize) as '13' | '14' | '16'}
+              onChange={(v) => onPrefs({ fontSize: Number(v) as EditorPrefs['fontSize'] })}
+            />
+          </div>
+        )}
         {hasWidth && (
           <div className="cb-rail__field">
             <span>Lesebreite</span>
@@ -502,7 +506,9 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
         )}
         {item.kind !== 'image' && (
           <div className="cb-composer__panes" data-width={prefs.width}>
-            {item.kind === 'document' && <DocumentEditor initial={item.content} title={title} editable={writable} onChange={onDocChange} onHistory={setHistory} onReady={onHandle} />}
+            {item.kind === 'document' && (
+              <DocumentEditor initial={item.content} title={title} editable={writable} onChange={onDocChange} onHistory={setHistory} onReady={onHandle} zoom={prefs.zoom} onZoom={(z) => changePrefs({ zoom: z })} />
+            )}
             {item.kind === 'markdown' && (
               <MarkdownEditor initial={item.body} mode={effectiveMode} readOnly={!writable} prefs={prefs} title={title} onChange={onText} onHistory={setHistory} onReady={onHandle} />
             )}

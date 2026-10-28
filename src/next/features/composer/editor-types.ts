@@ -28,9 +28,14 @@ export interface EditorPrefs {
   readonly width: 'narrow' | 'normal' | 'wide';
   readonly lineNumbers: boolean;
   readonly focus: boolean;
+  /** Display zoom of the document page in percent: a view setting, never part of the document's formatting. */
+  readonly zoom: number;
 }
 
-export const defaultEditorPrefs: EditorPrefs = { wrap: true, tabSize: 2, fontSize: 14, width: 'normal', lineNumbers: true, focus: false };
+/** Zoom steps of the document page (status bar). */
+export const DOC_ZOOM_STEPS: readonly number[] = [75, 90, 100, 110, 125, 150, 175, 200];
+
+export const defaultEditorPrefs: EditorPrefs = { wrap: true, tabSize: 2, fontSize: 14, width: 'normal', lineNumbers: true, focus: false, zoom: 100 };
 
 /** Validates stored preferences (kept in the app's own IndexedDB meta; the app uses no other browser storage). */
 export function normalizeEditorPrefs(raw: unknown): EditorPrefs {
@@ -42,6 +47,7 @@ export function normalizeEditorPrefs(raw: unknown): EditorPrefs {
     width: r.width === 'narrow' || r.width === 'wide' ? r.width : 'normal',
     lineNumbers: typeof r.lineNumbers === 'boolean' ? r.lineNumbers : true,
     focus: false,
+    zoom: typeof r.zoom === 'number' && DOC_ZOOM_STEPS.includes(r.zoom) ? r.zoom : 100,
   };
 }
 

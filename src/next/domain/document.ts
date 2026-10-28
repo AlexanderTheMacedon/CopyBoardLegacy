@@ -3,8 +3,12 @@ import type { DocNode, DocumentContent } from './types';
 // Document model helpers (pure, no editor library). The stored tree is a whitelisted subset of ProseMirror JSON; everything
 // that enters it, whether typed, pasted or loaded from disk, passes `sanitizeDocument`, so unknown nodes, unsafe link targets
 // and arbitrary colours never reach storage or the editor.
+//
+// Schema history: 1 = Run A (structure, emphasis, links, palette colour, alignment, tables, task lists).
+//                 2 = Run C adds curated typography (font family, font size, highlight) and paragraph format (indent, line
+//                     height, paragraph spacing). Every v1 tree is a valid v2 tree, so the migration only restamps it.
 
-export const DOCUMENT_SCHEMA = 1 as const;
+export const DOCUMENT_SCHEMA = 2 as const;
 export const DEFAULT_DOCUMENT_TITLE = 'Unbenanntes Dokument';
 
 /** Curated text colours (label for the tooltip, value stored). The default colour carries no mark at all. */
@@ -17,10 +21,73 @@ export const TEXT_COLORS: readonly { readonly label: string; readonly value: str
   { label: 'Grau', value: '#64748b' },
 ];
 
+/** Highlighter palette: the stored key names the colour; light and dark tints are chosen by the surface rendering it. */
+export const HIGHLIGHT_COLORS: readonly { readonly label: string; readonly value: string; readonly hex: string }[] = [
+  { label: 'Gelb', value: 'yellow', hex: '#fde68a' },
+  { label: 'Orange', value: 'orange', hex: '#fed7aa' },
+  { label: 'Grün', value: 'green', hex: '#bbf7d0' },
+  { label: 'Blau', value: 'blue', hex: '#bfdbfe' },
+  { label: 'Violett', value: 'violet', hex: '#ddd6fe' },
+  { label: 'Rosé', value: 'pink', hex: '#fecdd3' },
+];
+
+/** Curated font families (key stored, stack rendered). The document's own face carries no mark at all. */
+export const FONT_FAMILIES: readonly { readonly label: string; readonly value: string; readonly stack: string }[] = [
+  { label: 'Serif', value: 'serif', stack: "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif" },
+  { label: 'Editorial', value: 'display', stack: "'Instrument Serif', 'Iowan Old Style', Georgia, serif" },
+  { label: 'Rund', value: 'rounded', stack: "ui-rounded, 'SF Pro Rounded', system-ui, sans-serif" },
+  { label: 'Mono', value: 'mono', stack: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace" },
+];
+
+/** Font sizes a selection can carry (px at 100 % zoom). Paragraph text is 17, headings 38 / 25 / 20. */
+export const FONT_SIZES: readonly number[] = [12, 14, 15, 17, 20, 25, 32, 38, 48, 64];
+export const FONT_SIZE_MIN = 12;
+export const FONT_SIZE_MAX = 64;
+export const BLOCK_FONT_SIZE: Readonly<Record<string, number>> = { paragraph: 17, h1: 38, h2: 25, h3: 20 };
+
+/** Paragraph format: line height (unitless) and space before a block (em). Absent = the page's calm default. */
+export const LINE_HEIGHTS: readonly { readonly label: string; readonly value: string }[] = [
+  { label: 'Einfach', value: '1.2' },
+  { label: '1,5-fach', value: '1.5' },
+  { label: 'Doppelt', value: '2' },
+];
+export const PARAGRAPH_SPACINGS: readonly { readonly label: string; readonly value: string; readonly em: number }[] = [
+  { label: 'Ohne', value: 'none', em: 0 },
+  { label: 'Klein', value: 'small', em: 0.35 },
+  { label: 'Groß', value: 'large', em: 1.4 },
+];
+export const MAX_INDENT = 8;
+
 const MAX_DEPTH = 24;
 const ALIGNMENTS = new Set(['left', 'center', 'right', 'justify']);
 const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 const COLOR_VALUES = new Set(TEXT_COLORS.map((c) => c.value));
+const HIGHLIGHT_VALUES = new Set(HIGHLIGHT_COLORS.map((c) => c.value));
+const FONT_VALUES = new Set(FONT_FAMILIES.map((f) => f.value));
+const LINE_HEIGHT_VALUES = new Set(LINE_HEIGHTS.map((l) => l.value));
+const SPACING_VALUES = new Set(PARAGRAPH_SPACINGS.map((p) => p.value));
+
+/** A palette text colour from `#rrggbb` or the browser's canonical `rgb(r, g, b)`; anything else is no colour. */
+export function paletteColor(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  let value = raw.trim().toLowerCase();
+  const rgb = /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/.exec(value);
+  if (rgb) value = `#${rgb.slice(1).map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
+  return COLOR_VALUES.has(value) ? value : undefined;
+}
+export const highlightColor = (raw: unknown): string | undefined => (typeof raw === 'string' && HIGHLIGHT_VALUES.has(raw) ? raw : undefined);
+export const fontFamilyKey = (raw: unknown): string | undefined => (typeof raw === 'string' && FONT_VALUES.has(raw) ? raw : undefined);
+/** A curated size as stored (`"20"`), from `20`, `"20"` or `"20px"`. */
+export function fontSizeValue(raw: unknown): string | undefined {
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim().replace(/px$/, '')) : NaN;
+  return FONT_SIZES.includes(n) ? String(n) : undefined;
+}
+export const lineHeightValue = (raw: unknown): string | undefined => (typeof raw === 'string' && LINE_HEIGHT_VALUES.has(raw) ? raw : typeof raw === 'number' && LINE_HEIGHT_VALUES.has(String(raw)) ? String(raw) : undefined);
+export const spacingValue = (raw: unknown): string | undefined => (typeof raw === 'string' && SPACING_VALUES.has(raw) ? raw : undefined);
+export const indentValue = (raw: unknown): number | undefined => {
+  const n = typeof raw === 'string' ? Number(raw) : raw;
+  return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= MAX_INDENT ? n : undefined;
+};
 
 type Attrs = Record<string, string | number | boolean | null | readonly (number | null)[]>;
 
@@ -71,7 +138,15 @@ const nodeAttrs = (type: string, raw: Record<string, unknown>): Attrs | undefine
       break;
     }
   }
-  if ((type === 'paragraph' || type === 'heading') && typeof raw.textAlign === 'string' && ALIGNMENTS.has(raw.textAlign)) attrs.textAlign = raw.textAlign;
+  if (type === 'paragraph' || type === 'heading') {
+    if (typeof raw.textAlign === 'string' && ALIGNMENTS.has(raw.textAlign)) attrs.textAlign = raw.textAlign;
+    const indent = indentValue(raw.indent);
+    if (indent) attrs.indent = indent;
+    const lineHeight = lineHeightValue(raw.lineHeight);
+    if (lineHeight) attrs.lineHeight = lineHeight;
+    const spacing = spacingValue(raw.spacing);
+    if (spacing) attrs.spacing = spacing;
+  }
   return Object.keys(attrs).length ? attrs : undefined;
 };
 
@@ -90,8 +165,19 @@ const markOf = (raw: unknown): { type: string; attrs?: Record<string, string> } 
       return href ? { type: 'link', attrs: { href } } : undefined;
     }
     case 'textStyle': {
-      const color = typeof attrs?.color === 'string' ? attrs.color.toLowerCase() : '';
-      return COLOR_VALUES.has(color) ? { type: 'textStyle', attrs: { color } } : undefined;
+      // one span may carry several curated properties; each is validated on its own, an empty style is no mark
+      const kept: Record<string, string> = {};
+      const color = paletteColor(attrs?.color);
+      if (color) kept.color = color;
+      const fontFamily = fontFamilyKey(attrs?.fontFamily);
+      if (fontFamily) kept.fontFamily = fontFamily;
+      const fontSize = fontSizeValue(attrs?.fontSize);
+      if (fontSize) kept.fontSize = fontSize;
+      return Object.keys(kept).length ? { type: 'textStyle', attrs: kept } : undefined;
+    }
+    case 'highlight': {
+      const color = highlightColor(attrs?.color);
+      return color ? { type: 'highlight', attrs: { color } } : undefined;
     }
     default:
       return undefined;
@@ -132,7 +218,10 @@ export const documentFromText = (text: string): DocumentContent => ({
 
 export const emptyDocument = (): DocumentContent => ({ schema: DOCUMENT_SCHEMA, doc: { type: 'doc', content: [{ type: 'paragraph' }] } });
 
-/** Whitelists a stored or editor-produced tree. Never throws; the result always has at least one block. */
+/**
+ * Whitelists a stored or editor-produced tree and stamps the current schema. Never throws; the result always has at least
+ * one block. Accepts schema 1 (migrated: a v1 tree is a valid v2 tree) and schema 2; a bare ProseMirror `doc` is read too.
+ */
 export function sanitizeDocument(raw: unknown): DocumentContent {
   const root = raw && typeof raw === 'object' && 'doc' in raw && (raw as { schema?: unknown }).schema !== undefined ? (raw as { doc: unknown }).doc : raw;
   const content = root && typeof root === 'object' && Array.isArray((root as { content?: unknown }).content) ? ((root as { content: unknown[] }).content) : [];

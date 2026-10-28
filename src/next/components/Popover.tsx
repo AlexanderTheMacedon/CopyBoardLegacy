@@ -11,8 +11,11 @@ interface PopoverProps {
   iconSize?: number;
   /** Optional visible trigger text next to the icon. */
   text?: string;
+  /** Custom trigger content drawn instead of icon and text (e.g. a live colour sample); `label` stays the accessible name. */
+  face?: ReactNode;
   textClassName?: string;
-  placement?: 'bottom-end' | 'top-start' | 'right-end' | 'left-center';
+  placement?: 'bottom-end' | 'bottom-start' | 'top-start' | 'right-end' | 'left-center';
+  disabled?: boolean;
   triggerClassName?: string;
   /** Marks the trigger as carrying an active state (`data-active`), e.g. a filter that is applied. */
   active?: boolean;
@@ -23,7 +26,8 @@ interface PopoverProps {
    * in the grid: there an in-place panel would paint below the next card.
    */
   layer?: boolean;
-  children: (close: () => void) => ReactNode;
+  /** `close(false)` leaves focus where the action put it (e.g. back in an editor) instead of returning it to the trigger. */
+  children: (close: (returnFocus?: boolean) => void) => ReactNode;
 }
 
 const EDGE = 8;
@@ -40,10 +44,11 @@ function layerPosition(trigger: DOMRect, panel: { width: number; height: number 
     const originY = Math.max(0, Math.min(panel.height, trigger.top + trigger.height / 2 - top));
     return { left, top, transformOrigin: `right ${originY}px` };
   }
-  let left = placement === 'bottom-end' ? trigger.right - panel.width : placement === 'top-start' ? trigger.left : trigger.right + GAP;
-  let top = placement === 'bottom-end' ? trigger.bottom + GAP : placement === 'top-start' ? trigger.top - GAP - panel.height : trigger.bottom - panel.height;
-  let originY = placement === 'bottom-end' ? 'top' : 'bottom';
-  if (placement === 'bottom-end' && top > maxTop && trigger.top - GAP - panel.height >= EDGE) {
+  const below = placement === 'bottom-end' || placement === 'bottom-start';
+  let left = placement === 'bottom-end' ? trigger.right - panel.width : placement === 'top-start' || placement === 'bottom-start' ? trigger.left : trigger.right + GAP;
+  let top = below ? trigger.bottom + GAP : placement === 'top-start' ? trigger.top - GAP - panel.height : trigger.bottom - panel.height;
+  let originY = below ? 'top' : 'bottom';
+  if (below && top > maxTop && trigger.top - GAP - panel.height >= EDGE) {
     top = trigger.top - GAP - panel.height;
     originY = 'bottom';
   } else if (placement === 'top-start' && top < EDGE && trigger.bottom + GAP <= maxTop) {
@@ -64,7 +69,9 @@ export function Popover({
   iconSize = 20,
   text,
   textClassName,
+  face,
   placement = 'bottom-end',
+  disabled,
   triggerClassName,
   active,
   panelClassName,
@@ -136,7 +143,7 @@ export function Popover({
       className={`cb-popover__panel cb-popover__panel--${layer ? 'layer' : placement}${panelClassName ? ` ${panelClassName}` : ''}`}
       style={layer ? (layerStyle ?? { opacity: 0 }) : undefined}
     >
-      {children(() => close())}
+      {children((returnFocus = true) => close(returnFocus))}
     </div>
   );
   const host = layer && open ? (triggerRef.current?.closest('.cb-app') ?? document.body) : null;
@@ -152,11 +159,16 @@ export function Popover({
         data-tip={tip}
         data-active={active || undefined}
         aria-expanded={open}
+        disabled={disabled}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((v) => !v)}
       >
-        <Icon name={icon} size={iconSize} />
-        {text && <span className={textClassName}>{text}</span>}
+        {face ?? (
+          <>
+            <Icon name={icon} size={iconSize} />
+            {text && <span className={textClassName}>{text}</span>}
+          </>
+        )}
       </button>
       {host ? createPortal(panel, host) : panel}
     </div>
