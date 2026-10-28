@@ -1429,6 +1429,9 @@
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), inset 0 0 0 1px color-mix(in srgb, var(--cb-kind) 30%, transparent);
   color: color-mix(in oklab, var(--cb-kind) 60%, white);
 }
+.cb-files__thumb[data-kind='document'] {
+  --cb-kind: var(--cb-kind-document);
+}
 .cb-files__thumb[data-kind='text'] {
   --cb-kind: var(--cb-kind-text);
 }

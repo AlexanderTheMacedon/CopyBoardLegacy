@@ -1,4 +1,5 @@
-import type { Folder, Item, ItemAsset, Space } from '../domain/types';
+import { documentText, sanitizeDocument } from '../domain/document';
+import type { DocNode, DocumentContent, Folder, Item, ItemAsset, Space } from '../domain/types';
 import type { WriteBatch } from './store';
 
 // Showcase / test space "Full": a reproducible workspace with every content kind, 60+ entries and folders four levels deep,
@@ -49,12 +50,36 @@ const wave = (seed: number, bars = 48): number[] =>
   });
 
 type Draft =
+  | { kind: 'document'; title: string; outline: string; folder?: string; fav?: boolean; tags?: string[] }
   | { kind: 'text' | 'markdown'; title: string; body: string; folder?: string; fav?: boolean; tags?: string[] }
   | { kind: 'code'; title: string; language: string; body: string; folder?: string; fav?: boolean; tags?: string[] }
   | { kind: 'link'; title: string; url: string; folder?: string; fav?: boolean; tags?: string[] }
   | { kind: 'image'; title: string; alt: string; size: [number, number]; palette: [string, string, string]; media?: number; folder?: string; fav?: boolean; tags?: string[] }
   | { kind: 'file'; title: string; fileName: string; sizeBytes: number; media?: keyof ShowcaseMedia['files']; folder?: string; fav?: boolean; tags?: string[] }
   | { kind: 'audio'; title: string; durationSec: number; media?: number; folder?: string; fav?: boolean; tags?: string[] };
+
+/** A small rich-text document from a tiny outline: `# ` / `## ` headings, `- ` bullets, anything else a paragraph. */
+function documentFromOutline(outline: string): DocumentContent {
+  const blocks: DocNode[] = [];
+  let list: DocNode[] = [];
+  const flush = () => {
+    if (list.length) blocks.push({ type: 'bulletList', content: list });
+    list = [];
+  };
+  const text = (t: string): DocNode[] => [{ type: 'text', text: t }];
+  for (const line of outline.split('\n')) {
+    const heading = /^(#{1,2})\s+(.*)$/.exec(line);
+    const bullet = /^-\s+(.*)$/.exec(line);
+    if (bullet) list.push({ type: 'listItem', content: [{ type: 'paragraph', content: text(bullet[1] ?? '') }] });
+    else {
+      flush();
+      if (heading) blocks.push({ type: 'heading', attrs: { level: heading[1]?.length ?? 1 }, content: text(heading[2] ?? '') });
+      else if (line.trim()) blocks.push({ type: 'paragraph', content: text(line) });
+    }
+  }
+  flush();
+  return sanitizeDocument({ type: 'doc', content: blocks });
+}
 
 const LOREM =
   'Gute Werkzeuge verschwinden im Gebrauch. Sie nehmen auf, was gerade wichtig ist, und geben es im richtigen Moment wieder her. ';
@@ -139,6 +164,9 @@ const drafts: readonly Draft[] = [
   { kind: 'image', title: 'Nachtglas', alt: 'Synthetisches Testbild in dunklem Blau', size: [1600, 900], palette: ['#C8D0E0', '#5B6A8E', '#151C2E'] },
   { kind: 'file', title: 'Rechnung 2026-10 (Test).pdf', fileName: 'rechnung-2026-10-test.pdf', sizeBytes: 182_400, fav: true },
   { kind: 'text', title: 'Gedanke', body: LOREM },
+  // appended last: item ids follow the draft order, so earlier ids stay stable on devices that already seeded the space
+  { kind: 'document', title: 'Produktvision 2027', outline: '# Produktvision 2027\nCopyBoard bleibt ein ruhiger Ort für alles, was du sammelst.\n## Leitplanken\n- Lokal zuerst\n- Eine Oberfläche für Text, Code und Bild\n- Schnell, auch mit tausenden Einträgen', fav: true },
+  { kind: 'document', title: 'Interview-Notizen (Dokument)', outline: '# Interview 14\nDie Befragte sammelt Screenshots, Links und Zitate in drei verschiedenen Apps.\n## Aufgefallen\n- Wiederfinden dauert länger als Sammeln\n- Ordner werden selten gepflegt', folder: F.research },
 ];
 
 /** Builds the showcase records. Timestamps fan out backwards from `now` (newest first), so sorting is meaningful. */
@@ -191,6 +219,10 @@ export function buildShowcase(now: Date, media: ShowcaseMedia): ShowcaseData {
       origin: 'local' as const,
     };
     switch (draft.kind) {
+      case 'document': {
+        const content = documentFromOutline(draft.outline);
+        return { ...base, kind: 'document', content, text: documentText(content.doc) };
+      }
       case 'text':
       case 'markdown':
         return { ...base, kind: draft.kind, body: draft.body };

@@ -14,6 +14,8 @@ export const tokenize = (query: string): string[] => normalize(query).split(/\s+
 
 function secondaryText(item: Item): string {
   switch (item.kind) {
+    case 'document':
+      return item.text;
     case 'text':
     case 'markdown':
       return item.body;

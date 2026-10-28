@@ -1,0 +1,54 @@
+/** What the shared Canvas shell can ask of whichever editor is mounted. Each editor keeps its own native history. */
+export interface EditorHandle {
+  undo(): void;
+  redo(): void;
+  focus(): void;
+  /** Opens the editor's own find (and replace) UI; absent where the editor has none. */
+  find?(): void;
+  /** Whole content as plain text, for "copy everything". */
+  getText(): string;
+  /** A file the user can save: name without path, MIME type, content. */
+  exportFile(): { readonly name: string; readonly mime: string; readonly data: string };
+}
+
+export interface HistoryState {
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+}
+
+/** Per-viewer editor preferences (never part of an item). */
+export interface EditorPrefs {
+  readonly wrap: boolean;
+  readonly tabSize: 2 | 4 | 8;
+  readonly fontSize: 13 | 14 | 16;
+  readonly width: 'narrow' | 'normal' | 'wide';
+  readonly lineNumbers: boolean;
+  readonly focus: boolean;
+}
+
+export const defaultEditorPrefs: EditorPrefs = { wrap: true, tabSize: 2, fontSize: 14, width: 'normal', lineNumbers: true, focus: false };
+
+/** Validates stored preferences (kept in the app's own IndexedDB meta; the app uses no other browser storage). */
+export function normalizeEditorPrefs(raw: unknown): EditorPrefs {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<EditorPrefs>;
+  return {
+    wrap: typeof r.wrap === 'boolean' ? r.wrap : defaultEditorPrefs.wrap,
+    tabSize: r.tabSize === 4 || r.tabSize === 8 ? r.tabSize : 2,
+    fontSize: r.fontSize === 13 || r.fontSize === 16 ? r.fontSize : 14,
+    width: r.width === 'narrow' || r.width === 'wide' ? r.width : 'normal',
+    lineNumbers: typeof r.lineNumbers === 'boolean' ? r.lineNumbers : true,
+    focus: false,
+  };
+}
+
+/** Triggers a browser download of generated content; nothing leaves the device. */
+export function downloadText(name: string, mime: string, data: string): void {
+  const url = URL.createObjectURL(new Blob([data], { type: `${mime};charset=utf-8` }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export const safeFileName = (title: string, ext: string): string => `${title.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').trim().slice(0, 80) || 'Unbenannt'}.${ext}`;

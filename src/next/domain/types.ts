@@ -50,7 +50,7 @@ export interface Folder {
   readonly updatedAt: string;
 }
 
-export type ItemKind = 'text' | 'markdown' | 'code' | 'link' | 'image' | 'file' | 'audio';
+export type ItemKind = 'document' | 'text' | 'markdown' | 'code' | 'link' | 'image' | 'file' | 'audio';
 
 interface ItemBase {
   readonly id: ItemId;
@@ -65,11 +65,35 @@ interface ItemBase {
   readonly favorite: boolean;
   /** `local` = captured by the user and stored on this device; absent = synthetic fixture. */
   readonly origin?: 'local';
+  /** Set on a local copy made from an example item, so its provenance stays visible. */
+  readonly derivedFrom?: ItemId;
 }
 
 export interface TextItem extends ItemBase {
   readonly kind: 'text' | 'markdown';
   readonly body: string;
+}
+
+/** One node of the stored document tree (ProseMirror JSON subset). Plain, structured-cloneable data; see domain/document.ts. */
+export interface DocNode {
+  readonly type: string;
+  readonly attrs?: Readonly<Record<string, string | number | boolean | null | readonly (number | null)[]>>;
+  readonly content?: readonly DocNode[];
+  readonly marks?: readonly { readonly type: string; readonly attrs?: Readonly<Record<string, string>> }[];
+  readonly text?: string;
+}
+
+/** Versioned, validated document content. `schema` is bumped only together with a migration in domain/document.ts. */
+export interface DocumentContent {
+  readonly schema: 1;
+  readonly doc: DocNode;
+}
+
+/** Visual Rich Text document ("Dokument"): structured JSON is the source of truth, `text` its derived plain text for search and previews. */
+export interface DocumentItem extends ItemBase {
+  readonly kind: 'document';
+  readonly content: DocumentContent;
+  readonly text: string;
 }
 
 export interface CodeItem extends ItemBase {
@@ -115,7 +139,7 @@ export interface AudioItem extends ItemBase {
   readonly asset?: ItemAsset;
 }
 
-export type Item = TextItem | CodeItem | LinkItem | ImageItem | FileItem | AudioItem;
+export type Item = DocumentItem | TextItem | CodeItem | LinkItem | ImageItem | FileItem | AudioItem;
 
 /** Global quick-access views (D-018), subordinate to the spaces. */
 export type CollectionId = 'all' | 'favorites' | 'recent' | 'sessions';
@@ -139,6 +163,9 @@ export interface Placement {
 
 export const isTextual = (item: Item): item is TextItem | CodeItem =>
   item.kind === 'text' || item.kind === 'markdown' || item.kind === 'code';
+
+/** Items the Canvas can edit as text: body-bearing kinds and documents. Images and files come with the image studio. */
+export const isEditable = (item: Item): item is TextItem | CodeItem | DocumentItem => isTextual(item) || item.kind === 'document';
 
 export const isLocal = (item: Item): boolean => item.origin === 'local';
 

@@ -4,6 +4,7 @@ import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { readTransfer } from '../../data/clipboard';
 import { useCapture } from './useCapture';
+import { useCreateDocument } from './useCreateDocument';
 
 export const CAPTURE_INPUT_ID = 'cb-capture-input';
 const FILE_INPUT_ID = 'cb-capture-file';
@@ -28,6 +29,7 @@ export function SmartCapture() {
   const folder = useOpenFolder();
   const target = folder && space && folder.spaceId === space.id ? folder.name : space?.name;
   const capture = useCapture();
+  const createDocument = useCreateDocument();
   const [text, setText] = useState('');
   const [focused, setFocused] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,6 +91,7 @@ export function SmartCapture() {
           <span className="cb-capture__kbd" aria-hidden="true">
             <kbd className="cb-kbd">{isMac() ? '⌘V' : 'Strg V'}</kbd> überall
           </span>
+          <IconButton icon="fileText" label="Neues Dokument" onClick={() => void createDocument()} />
           <IconButton icon="paperclip" label="Dateien hinzufügen" onClick={() => fileRef.current?.click()} />
           <IconButton icon="mic" label="Aufnahme öffnen" onClick={() => dispatch({ type: 'setRecorderOpen', open: true })} />
         </div>

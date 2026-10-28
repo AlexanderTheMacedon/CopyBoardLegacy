@@ -56,7 +56,18 @@ export async function readSystemClipboard(): Promise<RawClipboard> {
 }
 
 /** Plain text that "Kopieren" puts on the clipboard, or undefined if the item has no copyable text. */
-export const copyText = (item: Item): string | undefined => (isTextual(item) ? item.body : item.kind === 'link' ? item.url : undefined);
+export const copyText = (item: Item): string | undefined => (isTextual(item) ? item.body : item.kind === 'document' ? item.text : item.kind === 'link' ? item.url : undefined);
+
+/** "Alles kopieren" of an editor: plain text to the clipboard. Rejects if the browser refuses. */
+export async function writeTextToClipboard(text: string): Promise<void> {
+  const clipboard = globalThis.navigator?.clipboard;
+  if (!clipboard) throw new ClipboardAccessError('unsupported');
+  try {
+    await clipboard.writeText(text);
+  } catch (error) {
+    throw new ClipboardAccessError(error instanceof DOMException && error.name === 'NotAllowedError' ? 'denied' : 'unsupported');
+  }
+}
 
 async function asPng(blob: Blob): Promise<Blob> {
   if (blob.type === 'image/png') return blob;

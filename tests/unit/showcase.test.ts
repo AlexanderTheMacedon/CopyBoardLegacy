@@ -17,7 +17,7 @@ describe('showcase space "Full"', () => {
 
   it('covers every kind with 60+ entries and folders four levels deep', () => {
     expect(data.items.length).toBeGreaterThanOrEqual(60);
-    expect(new Set(data.items.map((i) => i.kind))).toEqual(new Set(['text', 'markdown', 'code', 'link', 'image', 'file', 'audio']));
+    expect(new Set(data.items.map((i) => i.kind))).toEqual(new Set(['document', 'text', 'markdown', 'code', 'link', 'image', 'file', 'audio']));
     const depth = (id: string | null): number => (id ? 1 + depth(data.folders.find((f) => f.id === id)?.parentId ?? null) : 0);
     expect(Math.max(...data.folders.map((f) => depth(f.id)))).toBe(4);
     expect(data.items.some((i) => !i.folderId)).toBe(true);

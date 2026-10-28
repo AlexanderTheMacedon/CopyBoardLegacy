@@ -1,4 +1,5 @@
-import type { Item, ItemId, SpaceId } from '../domain/types';
+import { DEFAULT_DOCUMENT_TITLE, emptyDocument } from '../domain/document';
+import type { DocumentItem, FolderId, Item, ItemId, SpaceId } from '../domain/types';
 import { classifyText, deriveTitle, isGenericImageName, type CaptureSource } from './classify';
 
 // Turns capture sources into complete items. Image size and audio waveform are measured from the real data; when a
@@ -16,7 +17,7 @@ export class CaptureTooLargeError extends Error {
   }
 }
 
-const newId = (): ItemId =>
+export const newItemId = (): ItemId =>
   `it-local-${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`}`;
 
 const timeFormat = new Intl.DateTimeFormat('de-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -69,8 +70,13 @@ interface ItemContext {
 
 const base = (ctx: ItemContext, title: string) => {
   const iso = ctx.now.toISOString();
-  return { id: newId(), spaceId: ctx.spaceId, title, createdAt: iso, updatedAt: iso, tags: [], favorite: ctx.favorite, origin: 'local' } as const;
+  return { id: newItemId(), spaceId: ctx.spaceId, title, createdAt: iso, updatedAt: iso, tags: [], favorite: ctx.favorite, origin: 'local' } as const;
 };
+
+/** A new, empty rich-text document at a placement (space board or folder). Always the user's own, writable content. */
+export function createDocumentItem(spaceId: SpaceId, folderId: FolderId | null, now = new Date()): DocumentItem {
+  return { ...base({ spaceId, favorite: false, now }, DEFAULT_DOCUMENT_TITLE), kind: 'document', content: emptyDocument(), text: '', ...(folderId ? { folderId } : {}) };
+}
 
 export function textItem(text: string, ctx: ItemContext): Item {
   const cls = classifyText(text);

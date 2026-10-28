@@ -3,6 +3,7 @@ import type { Item, ItemKind } from '../../domain/types';
 export { spaceColorVar } from '../../components/SpaceIcon';
 
 export const kindLabel: Record<ItemKind, string> = {
+  document: 'Dokument',
   text: 'Text',
   markdown: 'Markdown',
   code: 'Code',
@@ -13,6 +14,7 @@ export const kindLabel: Record<ItemKind, string> = {
 };
 
 export const kindIcon: Record<ItemKind, IconName> = {
+  document: 'fileText',
   text: 'text',
   markdown: 'hash',
   code: 'code',
@@ -50,6 +52,10 @@ export const firstHeading = (body: string): string | undefined => /^#{1,6}\s+(.+
 
 /** Plain-text excerpt for previews; Markdown markers are stripped, nothing is interpreted as HTML. */
 export function excerpt(item: Item, max = 180, omitFirstHeading = false): string {
+  if (item.kind === 'document') {
+    const plain = item.text.replace(/\s*\n+\s*/g, ' ').trim();
+    return plain.length > max ? `${plain.slice(0, max - 1).trimEnd()}…` : plain;
+  }
   if (item.kind !== 'text' && item.kind !== 'markdown') return '';
   let body = item.body;
   if (omitFirstHeading) body = body.replace(/^#{1,6}\s+.+$/m, '');

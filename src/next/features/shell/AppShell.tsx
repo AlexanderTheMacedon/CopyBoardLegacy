@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode, type RefObject } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode, type RefObject } from 'react';
 import { isEditableTarget, isPasteShortcut, useMediaQuery } from '../../app/hooks';
 import { useInspectedItem, usePreview } from '../../app/context';
 import { usePresence, useScrollFade } from '../../components/motion';
@@ -8,7 +8,6 @@ import { isInternalDrag } from '../../data/dnd';
 import { useCapture } from '../capture/useCapture';
 import { ComposerDock } from '../capture/ComposerDock';
 import { ContextMenu } from '../context-menu/ContextMenu';
-import { Composer } from '../composer/Composer';
 import { WorkspaceDialogs } from '../dialogs/WorkspaceDialogs';
 import { useDragActive } from '../dnd/useDragDrop';
 import { FolderLayer } from '../folders/FolderWindow';
@@ -22,6 +21,9 @@ import { Dock } from './Dock';
 import { MobileDock } from './MobileDock';
 import { SignatureIntro } from './SignatureIntro';
 import { SpacesDrawer } from './SpacesDrawer';
+
+/** The editors (Tiptap, CodeMirror) load on first use, so the board itself stays light. */
+const Composer = lazy(() => import('../composer/Composer').then((m) => ({ default: m.Composer })));
 
 /** Exit window of the inspector: matches `--cb-dur-exit` + a frame of slack. */
 const INSPECTOR_EXIT_MS = 240;
@@ -173,7 +175,13 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <Dock />
       <div className="cb-stage" style={{ '--cb-inspector-w': `${inspectorWidth}px` } as CSSProperties} inert={state.cinema}>
         <main id="cb-main" ref={workspaceRef} className="cb-workspace cb-scroll" tabIndex={-1} aria-labelledby="cb-workspace-title" data-cb-context="board" inert={folderOpen}>
-          {state.composerItemId ? <Composer key={state.composerItemId} /> : <Board scrollRoot={workspaceRef} />}
+          {state.composerItemId ? (
+            <Suspense fallback={<section className="cb-composer cb-composer--loading" aria-busy="true" aria-label="Editor wird geladen" />}>
+              <Composer key={state.composerItemId} />
+            </Suspense>
+          ) : (
+            <Board scrollRoot={workspaceRef} />
+          )}
         </main>
         <FolderLayer />
         <ComposerDock hidden={composerHidden} />

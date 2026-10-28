@@ -228,19 +228,29 @@ test('P5', 'search palette finds fixtures, opens the inspector without switching
   return { ok, observed: `selected="${selected}", inspector=${inspected}, space stays=${space}, reveal=${revealed}, command view=${view}, empty="${empty}", problems=${problems.length}` };
 });
 
-test('P6', 'editor opens from the inspector with source/preview/split, safe preview, one close control top right', async ({ page, clean }) => {
+test('P6', 'editor opens from the inspector: read-only example with an explicit local copy, source/preview/split, safe preview, one close control top right', async ({ page, clean }) => {
   await page.click('.cb-tile[data-item-id="it-prompt-review"] .cb-tile__open');
   await page.click('.cb-inspector button:has-text("Bearbeiten")');
-  await page.waitForSelector('.cb-composer');
+  await page.waitForSelector('.cb-md .cm-content');
   const mode = await page.$eval('.cb-composer', (e) => e.dataset.mode);
   const panes = await page.$$eval('.cb-composer__pane', (els) => els.length);
   const inspectorHidden = !(await page.$('.cb-inspector'));
   const previewH1 = await page.$eval('.cb-markdown h1', (e) => e.textContent);
-  await page.fill('#cb-composer-source', '# Neu\n\n<img src=x onerror="window.__xss=1">');
-  const status = await page.$eval('.cb-composer__status', (e) => e.textContent);
-  const injected = await page.evaluate(() => ({ img: !!document.querySelector('.cb-markdown img'), xss: !!window.__xss }));
+  const readOnly = await page.evaluate(() => ({
+    editable: document.querySelector('.cb-md .cm-content').getAttribute('contenteditable'),
+    notice: !!document.querySelector('.cb-composer__notice'),
+    status: document.querySelector('.cb-composer__status').textContent,
+  }));
+  // the example is never written: editing needs an explicit local copy
+  await page.click('.cb-composer__notice button');
+  await page.waitForFunction(() => document.querySelector('#cb-composer-title')?.value?.endsWith('(Kopie)'));
+  await page.click('.cb-md .cm-content');
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.type('# Neu\n\n<img src=x onerror="window.__xss=1">');
+  await page.waitForFunction(() => /<img src=x/.test(document.querySelector('.cb-markdown').textContent));
+  const injected = await page.evaluate(() => ({ img: !!document.querySelector('.cb-markdown img'), xss: !!window.__xss, text: document.querySelector('.cb-markdown').textContent }));
   await page.click('.cb-composer [role="radio"]:has-text("Vorschau")');
-  const previewOnly = await page.$$eval('.cb-composer__pane', (els) => els.length);
+  const previewOnly = await page.evaluate(() => ({ panes: document.querySelectorAll('.cb-composer__pane:not([hidden])').length, sourceHidden: document.querySelector('.cb-md__source').hidden }));
   const rail = !!(await page.$('.cb-rail'));
   // Header: no back arrow; while the rail is open only the rail's own ✕ controls it; close sits at the far right.
   const header = await page.$eval('.cb-composer__header', (h) => ({
@@ -250,11 +260,12 @@ test('P6', 'editor opens from the inspector with source/preview/split, safe prev
   }));
   await page.click('[aria-label="Kontextleiste schließen"]');
   const reopen = await page.$$eval('.cb-composer__header [aria-label="Kontextleiste einblenden"]', (els) => els.length);
+  await page.waitForFunction(() => /Gespeichert/.test(document.querySelector('.cb-composer__status').textContent));
   await page.click('[aria-label="Editor schließen"]');
   await page.waitForSelector('.cb-inspector');
   const problems = await clean();
-  const ok = mode === 'split' && panes === 2 && inspectorHidden && previewH1 === 'Code-Review' && /nicht gespeichert/.test(status) && !injected.img && !injected.xss && previewOnly === 1 && rail && !header.back && !header.railToggle && header.lastIsClose && reopen === 1 && !problems.length;
-  return { ok, observed: `mode=${mode}, panes=${panes}->${previewOnly}, rail=${rail}, header=${JSON.stringify(header)}, reopen buttons=${reopen}, status="${status}", injected=${JSON.stringify(injected)}` };
+  const ok = mode === 'split' && panes === 2 && inspectorHidden && previewH1 === 'Code-Review' && readOnly.editable === 'false' && readOnly.notice && /schreibgeschützt/.test(readOnly.status) && !injected.img && !injected.xss && /<img src=x/.test(injected.text) && previewOnly.panes === 1 && previewOnly.sourceHidden && rail && !header.back && !header.railToggle && header.lastIsClose && reopen === 1 && !problems.length;
+  return { ok, observed: `mode=${mode}, panes=${panes}->${JSON.stringify(previewOnly)}, readOnly=${JSON.stringify(readOnly)}, rail=${rail}, header=${JSON.stringify(header)}, reopen buttons=${reopen}, injected=${JSON.stringify({ img: injected.img, xss: injected.xss })}, problems=${problems.join(' | ') || '-'}` };
 });
 
 test('P7', 'recorder shell shows demo states and never requests the microphone', async ({ page, clean }) => {
@@ -783,8 +794,288 @@ test('P22', 'magnetic grid: cards trail a scroll and settle; while dragging it r
   return { ok, observed: `drift while scrolling=${drifting}, scrollTop=${scrolled}, during drag=${JSON.stringify(duringDrag)}, created="${created}", problems=${problems.join(' | ') || '-'}` };
 });
 
+
+// --- Editor foundation (Run A): Dokument, Code, Markdown, persistence, paste, failure handling ---------------------------------
+const newDocument = async (page) => {
+  await page.click('[aria-label="Neues Dokument"]', { force: true });
+  await page.waitForSelector('.cb-doc__prose');
+};
+const reopenByTitle = async (page, title, kind = 'document') => {
+  await page.click(`.cb-tile[data-kind="${kind}"]:has-text("${title}") .cb-tile__open`);
+  await page.click('.cb-inspector button:has-text("Bearbeiten")');
+};
+const savedStatus = (page) => page.waitForFunction(() => document.querySelector('.cb-composer__status')?.dataset.state === 'saved');
+
+test('P23', 'Dokument: create in a nested folder, format (heading, bold, list, link, table), close, reload, reopen: structure kept', { clipboard: true }, async ({ page, clean }) => {
+  // a folder to put the document in: card on card, then open it
+  const a = await (await page.$('.cb-tile[data-item-id="it-note-standup"] .cb-tile__open')).boundingBox();
+  const b = await (await page.$('.cb-tile[data-item-id="it-snippet-debounce"] .cb-tile__open')).boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(a.x + a.width / 2 + 20, a.y + 20, { steps: 4 });
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 });
+  await page.waitForTimeout(380);
+  await page.mouse.up();
+  await page.waitForSelector('.cb-tile--folder');
+  await page.click('.cb-tile--folder .cb-tile__open');
+  await page.waitForSelector('.cb-folder-window, [data-cb-context="folder"]');
+  await newDocument(page);
+  const where = await page.$eval('.cb-composer__eyebrow', (e) => e.textContent);
+  await page.keyboard.type('Quartalsbericht');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Ergebnis mit ');
+  await page.keyboard.press('ControlOrMeta+B');
+  await page.keyboard.type('Fettdruck');
+  await page.keyboard.press('ControlOrMeta+B');
+  await page.keyboard.press('Enter');
+  await page.click('[aria-label="Aufzählung"]');
+  await page.keyboard.type('Punkt A');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Punkt B');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.click('[aria-label="Tabelle einfügen"]');
+  await page.keyboard.type('H1');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('H2');
+  // heading on the first line, link on a word through the link panel
+  await page.click('.cb-doc__prose > p:first-child');
+  await page.waitForTimeout(150); // ProseMirror reads the new selection on the next selectionchange
+  await page.selectOption('.cb-canvas-bar select', '1');
+  await page.click('.cb-doc__prose strong', { clickCount: 2 });
+  await page.waitForTimeout(150);
+  await page.keyboard.press('ControlOrMeta+K');
+  await page.fill('.cb-link-panel input', 'example.org/a');
+  await page.keyboard.press('Enter');
+  await savedStatus(page);
+  const live = await page.$eval('.cb-doc__prose', (e) => e.innerHTML);
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-inspector, .cb-tile');
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  await page.click('.cb-tile--folder .cb-tile__open');
+  await page.waitForSelector('.cb-tile[data-kind="document"]');
+  await reopenByTitle(page, 'Quartalsbericht');
+  await page.waitForSelector('.cb-doc__prose h1');
+  const html = await page.$eval('.cb-doc__prose', (e) => e.innerHTML);
+  const info = await page.evaluate(() => ({
+    h1: document.querySelector('.cb-doc__prose h1')?.textContent,
+    strong: document.querySelector('.cb-doc__prose strong')?.textContent,
+    link: document.querySelector('.cb-doc__prose a')?.getAttribute('href'),
+    items: [...document.querySelectorAll('.cb-doc__prose ul li')].map((e) => e.textContent),
+    cells: [...document.querySelectorAll('.cb-doc__prose table th, .cb-doc__prose table td')].length,
+    th: document.querySelector('.cb-doc__prose table th')?.textContent,
+    title: document.querySelector('#cb-composer-title').value,
+    ariaLabel: document.querySelector('.cb-doc__prose').getAttribute('aria-label'),
+  }));
+  const problems = await clean(['DataTransfer.']);
+  const ok = /Quartalsbericht|Neuer Ordner/.test(where) && info.h1 === 'Quartalsbericht' && info.strong === 'Fettdruck' && info.link === 'https://example.org/a' && info.items.join('|') === 'Punkt A|Punkt B' && info.cells === 9 && info.th === 'H1' && info.title === 'Quartalsbericht' && /<table/.test(live) && /<table/.test(html) && !problems.length;
+  return { ok, observed: `where="${where}", ${JSON.stringify(info)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P24', 'Dokument: pasted HTML keeps supported formatting and drops dangerous markup; ⌘V in the editor makes no card, ⌘V on the board does', { clipboard: true }, async ({ page, clean }) => {
+  const before = await tileCount(page);
+  await newDocument(page);
+  await page.evaluate(() => {
+    window.__xss = 0;
+    const el = document.querySelector('.cb-doc__prose');
+    el.focus();
+    const dt = new DataTransfer();
+    dt.setData('text/html', '<h2 style="color:red">Titel</h2><p onclick="window.__xss=1">Hallo <b>fett</b> <a href="javascript:window.__xss=2">böse</a> <a href="https://ok.example/x">gut</a><img src=x onerror="window.__xss=3"><script>window.__xss=4<\/script></p><iframe src="https://evil.example"></iframe><ul><li>eins</li></ul>');
+    dt.setData('text/plain', 'Titel Hallo');
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  await page.waitForTimeout(300);
+  const pasted = await page.$eval('.cb-doc__prose', (e) => ({
+    html: e.innerHTML,
+    bad: !!e.querySelector('script, iframe, img, [onclick], [onerror], a[href^="javascript"]'),
+    colour: !!e.querySelector('[style*="color"]'),
+    h2: e.querySelector('h2')?.textContent,
+    good: e.querySelector('a[href="https://ok.example/x"]')?.textContent,
+  }));
+  const xss = await page.evaluate(() => window.__xss);
+  // plain text through the real clipboard + keyboard: lands in the editor, no card
+  await page.evaluate(() => navigator.clipboard.writeText('Nur Text aus der Zwischenablage'));
+  await page.evaluate(() => (window.__cbHits.length = 0));
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.waitForTimeout(300);
+  const plain = await page.$eval('.cb-doc__prose', (e) => e.textContent.includes('Nur Text aus der Zwischenablage'));
+  await savedStatus(page);
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-tile[data-kind="document"]');
+  const afterEditor = await tileCount(page);
+  // on the board the same shortcut still captures
+  await page.mouse.click(720, 135);
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.waitForSelector('.cb-notice[data-tone="success"]');
+  const afterBoard = await tileCount(page);
+  const problems = await clean(['DataTransfer.']);
+  const ok = !pasted.bad && !pasted.colour && pasted.h2 === 'Titel' && pasted.good === 'gut' && xss === 0 && plain && afterEditor === before + 1 && afterBoard === before + 2 && !problems.length;
+  return { ok, observed: `bad=${pasted.bad}, colour=${pasted.colour}, h2=${pasted.h2}, link=${pasted.good}, xss=${xss}, plain paste=${plain}, tiles ${before}→${afterEditor} (document only)→${afterBoard} (board paste), problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P25', 'Code: CodeMirror highlights, indents and pairs brackets, searches, undoes; source and language persist across a reload', { clipboard: true }, async ({ page, clean }) => {
+  await page.evaluate(() => navigator.clipboard.writeText('function add(a: number, b: number) {\n  return a + b;\n}\nconst total = add(1, 2);'));
+  await page.mouse.click(720, 135);
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.waitForSelector('.cb-notice[data-tone="success"]');
+  await page.click('.cb-tile[data-kind="code"]:has-text("function add") .cb-tile__open');
+  await page.click('.cb-inspector button:has-text("Bearbeiten")');
+  await page.waitForSelector('.cb-cm .cm-content');
+  await page.waitForFunction(() => document.querySelector('.cb-cm .cm-line span[class]'), null, { timeout: 4000 }); // lazy language chunk highlighted something
+  const gutter = await page.$$eval('.cm-lineNumbers .cm-gutterElement', (e) => e.length);
+  await page.click('.cb-cm .cm-content');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('if (total) {');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('log(total);');
+  const typed = await page.evaluate(() => document.querySelector('.cb-cm .cm-content').innerText);
+  await page.keyboard.press('ControlOrMeta+F');
+  await page.waitForSelector('.cm-search');
+  await page.keyboard.type('total');
+  await page.keyboard.press('Enter');
+  const search = await page.evaluate(() => ({ matches: document.querySelectorAll('.cm-searchMatch').length, labelled: !!document.querySelector('.cm-search [name="replace"]') }));
+  await page.keyboard.press('Escape');
+  const stillOpen = !!(await page.$('.cb-composer'));
+  await page.click('.cb-cm .cm-content');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\nEND');
+  await page.click('[aria-label="Rückgängig"]');
+  await page.waitForTimeout(150);
+  const afterUndo = await page.evaluate(() => document.querySelector('.cb-cm .cm-content').innerText.includes('END'));
+  await page.click('[aria-label="Wiederholen"]');
+  const afterRedo = await page.evaluate(() => document.querySelector('.cb-cm .cm-content').innerText.includes('END'));
+  await page.selectOption('.cb-canvas-bar select >> nth=0', 'python');
+  await savedStatus(page);
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-inspector');
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  await page.click('.cb-tile[data-kind="code"]:has-text("function add") .cb-tile__open');
+  await page.click('.cb-inspector button:has-text("Bearbeiten")');
+  await page.waitForSelector('.cb-cm .cm-content');
+  const saved = await page.evaluate(() => ({ text: document.querySelector('.cb-cm .cm-content').innerText, lang: document.querySelector('.cb-canvas-bar select').value }));
+  const problems = await clean(['DataTransfer.']);
+  const ok = gutter >= 4 && /if \(total\) \{\n\s+log\(total\);\n\}/.test(typed) && search.matches >= 2 && search.labelled && stillOpen && !afterUndo && afterRedo && /END/.test(saved.text) && saved.lang === 'python' && !problems.length;
+  return { ok, observed: `gutter=${gutter}, typed=${JSON.stringify(typed.slice(-40))}, search=${JSON.stringify(search)}, Esc closed search only=${stillOpen}, undo/redo=${!afterUndo}/${afterRedo}, saved lang=${saved.lang}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P26', 'Markdown: source, preview and split correspond; an untouched card is never rewritten; edits persist byte for byte', async ({ page, clean }) => {
+  // open + close without edits: nothing is written (the example stays an example; a local note keeps its timestamp)
+  await page.evaluate(() => document.querySelector('[aria-label="Aufnahme öffnen"]'));
+  await page.click('[aria-label="Neuer Eintrag"], .cb-capture__input', { force: true }).catch(() => {});
+  await page.fill('#cb-capture-input', '# Notiz\n\n- eins\n- zwei\n\n**fett**');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await page.waitForSelector('.cb-notice[data-tone="success"]');
+  await page.click('.cb-tile[data-kind="markdown"]:has-text("Notiz") .cb-tile__open');
+  await page.click('.cb-inspector button:has-text("Bearbeiten")');
+  await page.waitForSelector('.cb-md .cm-content');
+  const before = await page.$eval('.cb-rail__facts', (e) => e.textContent);
+  await page.waitForTimeout(900);
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-inspector');
+  await page.click('.cb-inspector button:has-text("Bearbeiten")');
+  await page.waitForSelector('.cb-md .cm-content');
+  const after = await page.$eval('.cb-rail__facts', (e) => e.textContent);
+  // edit through the toolbar and keyboard; the preview follows
+  await page.click('.cb-md .cm-content');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\n\nSchluss mit ');
+  await page.keyboard.press('ControlOrMeta+B');
+  await page.keyboard.type('Betonung');
+  await page.waitForTimeout(400);
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.click('[aria-label="Checkliste"]');
+  await page.keyboard.type('Aufgabe');
+  await page.waitForTimeout(400);
+  const split = await page.evaluate(() => ({
+    strong: [...document.querySelectorAll('.cb-markdown strong')].map((e) => e.textContent),
+    task: document.querySelectorAll('.cb-markdown .cb-md-task').length,
+    scrollSync: typeof document.querySelector('.cb-md .cm-scroller').scrollTop === 'number',
+  }));
+  await page.click('.cb-composer [role="radio"]:has-text("Quelltext")');
+  const sourceOnly = await page.$$eval('.cb-composer__pane:not([hidden])', (e) => e.length);
+  await savedStatus(page);
+  const source = await page.evaluate(() => document.querySelector('.cb-md .cm-content').innerText);
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-inspector');
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  await page.click('.cb-tile[data-kind="markdown"]:has-text("Notiz") .cb-tile__open');
+  const inspector = await page.$eval('.cb-inspector__text', (e) => e.textContent);
+  const problems = await clean();
+  const ok = before === after && split.strong.includes('Betonung') && split.strong.includes('fett') && split.task === 1 && sourceOnly === 1 && /Schluss mit \*\*Betonung\*\*/.test(source) && /- \[ \] Aufgabe/.test(source) && /Schluss mit \*\*Betonung\*\*/.test(inspector) && !problems.length;
+  return { ok, observed: `untouched facts equal=${before === after}, split=${JSON.stringify(split)}, source panes=${sourceOnly}, persisted=${/Betonung/.test(inspector)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P27', 'saving is truthful: rapid typing + immediate close loses nothing; a failing commit shows an error, keeps the edits and recovers on retry', async ({ page, clean }) => {
+  await newDocument(page);
+  await page.keyboard.type('Erste Zeile');
+  await savedStatus(page);
+  // 1) fail every commit
+  await page.evaluate(() => {
+    window.__fail = true;
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args) {
+      if (window.__fail) throw new DOMException('quota', 'QuotaExceededError');
+      return put.apply(this, args);
+    };
+  });
+  await page.keyboard.type(' und mehr Text');
+  await page.waitForFunction(() => document.querySelector('.cb-composer__status')?.dataset.state === 'error', null, { timeout: 4000 });
+  const failed = await page.evaluate(() => ({ status: document.querySelector('.cb-composer__status').textContent, text: document.querySelector('.cb-doc__prose').textContent, saved: /Gespeichert/.test(document.querySelector('.cb-composer__status').textContent) }));
+  // closing with unsaved edits asks; declining keeps the editor and the text
+  let asked = '';
+  page.once('dialog', (d) => {
+    asked = d.message();
+    void d.dismiss();
+  });
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForTimeout(400);
+  const stillThere = await page.$eval('.cb-doc__prose', (e) => e.textContent.includes('und mehr Text'));
+  // 2) recover: retry succeeds, status truthful, then type and close at once
+  await page.evaluate(() => (window.__fail = false));
+  await page.click('.cb-composer__retry');
+  await savedStatus(page);
+  await page.click('.cb-doc__prose');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' LETZTE');
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-inspector');
+  await page.waitForTimeout(500);
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  await page.click('.cb-tile[data-kind="document"] .cb-tile__open');
+  const text = await page.$eval('.cb-inspector__text', (e) => e.textContent);
+  const problems = (await clean()).filter((p) => !/QuotaExceeded|quota/i.test(p));
+  const ok = /fehlgeschlagen/.test(failed.status) && !failed.saved && failed.text.includes('und mehr Text') && /nicht gespeichert|verwerfen/i.test(asked) && stillThere && text === 'Erste Zeile und mehr Text LETZTE' && !problems.length;
+  return { ok, observed: `failed status="${failed.status}", draft kept=${stillThere}, asked="${asked.slice(0, 40)}…", persisted="${text}", problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P28', 'editors on a phone in dark mode: no horizontal overflow, one close control, toolbar reachable', { viewport: PHONE, touch: true, colorScheme: 'dark' }, async ({ page, clean }) => {
+  await page.click('.cb-tile[data-item-id="it-prompt-review"] .cb-tile__open');
+  await page.click('.cb-inspector button:has-text("Bearbeiten")');
+  await page.waitForSelector('.cb-md .cm-content');
+  const md = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > innerWidth, split: document.querySelector('.cb-segmented [aria-checked="true"]').textContent, close: document.querySelectorAll('[aria-label="Editor schließen"]').length, panes: document.querySelectorAll('.cb-composer__pane:not([hidden])').length }));
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-inspector');
+  await page.click('[aria-label="Inspector schließen"]');
+  await page.waitForTimeout(400);
+  await page.click('#cb-capture-input');
+  await page.click('[aria-label="Neues Dokument"]', { force: true });
+  const doc = await page.waitForSelector('.cb-doc__prose', { timeout: 3000 }).then(() => page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > innerWidth, toolbar: document.querySelector('.cb-canvas-bar').scrollWidth <= innerWidth + 1 || getComputedStyle(document.querySelector('.cb-canvas-bar__specific')).overflowX === 'auto' })), () => null);
+  const problems = await clean();
+  const ok = !md.overflow && md.split === 'Quelltext' && md.close === 1 && md.panes === 1 && (!doc || (!doc.overflow && doc.toolbar)) && !problems.length;
+  return { ok, observed: `markdown=${JSON.stringify(md)}, document=${JSON.stringify(doc)}, problems=${problems.join(' | ') || '-'}` };
+});
+
 browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+const ONLY = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY) : null; // e.g. E2E_ONLY='^(P6|P23)$' for a focused run
 for (const t of tests) {
+  if (ONLY && !ONLY.test(t.id)) continue;
   const t0 = Date.now();
   let r;
   let app;

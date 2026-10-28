@@ -44,6 +44,13 @@ const Glyph = ({ item }: { item: Item }) => (
 
 export function ItemPreview({ item }: { item: Item }) {
   switch (item.kind) {
+    case 'document':
+      return (
+        <div className="cb-preview cb-preview--document">
+          <p className="cb-preview__text">{excerpt(item) || 'Leeres Dokument'}</p>
+          <Glyph item={item} />
+        </div>
+      );
     case 'text':
       return (
         <div className="cb-preview cb-preview--text">

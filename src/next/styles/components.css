@@ -545,9 +545,12 @@
   color: var(--cb-code-text);
   background: var(--cb-code-bg);
 }
-.cb-kind:is([data-kind='text'], [data-kind='markdown'], [data-kind='link'], [data-kind='file'], [data-kind='audio'], [data-kind='image']) {
+.cb-kind:is([data-kind='document'], [data-kind='text'], [data-kind='markdown'], [data-kind='link'], [data-kind='file'], [data-kind='audio'], [data-kind='image']) {
   color: color-mix(in oklab, var(--cb-kind-tint) 78%, var(--cb-text-primary));
   background: color-mix(in srgb, var(--cb-kind-tint) 13%, transparent);
+}
+.cb-kind[data-kind='document'] {
+  --cb-kind-tint: var(--cb-kind-document);
 }
 .cb-kind[data-kind='text'] {
   --cb-kind-tint: var(--cb-kind-text);

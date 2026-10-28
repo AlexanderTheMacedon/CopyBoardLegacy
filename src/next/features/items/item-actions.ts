@@ -1,6 +1,6 @@
 import type { IconName } from '../../components/Icon';
 import { canCopy } from '../../data/clipboard';
-import { isLocal, isTextual, type Item, type Location } from '../../domain/types';
+import { isEditable, isLocal, type Item, type Location } from '../../domain/types';
 
 // One action registry for card quick actions, context menu and Inspector (D-006: same logical palette everywhere).
 // Only actions that really work for the given item are listed.
@@ -38,7 +38,7 @@ export function itemActions(item: Item, location: Location, { withOpen = false, 
   // Copy stays a one-click core action for copyable content; binaries get a download (D-006).
   if (canCopy(item)) actions.push({ id: 'copy', label: 'Kopieren', icon: 'copy' });
   if (hasAsset(item)) actions.push({ id: 'download', label: 'Herunterladen', icon: 'download' });
-  if (isTextual(item)) actions.push({ id: 'open-composer', label: 'Bearbeiten', icon: 'pen' });
+  if (isEditable(item)) actions.push({ id: 'open-composer', label: 'Bearbeiten', icon: 'pen' });
   actions.push(item.favorite ? { id: 'favorite', label: 'Aus Favoriten entfernen', icon: 'star', group: true } : { id: 'favorite', label: 'Zu Favoriten', icon: 'star', group: true });
   if (organize) {
     actions.push({ id: 'move', label: 'Verschieben …', icon: 'folderInput', group: true });

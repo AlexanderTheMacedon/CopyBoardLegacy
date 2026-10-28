@@ -30,7 +30,10 @@ describe('React app is isolated from the legacy data path and the network', () =
     // Photo credits of the bundled nature backgrounds: attribution links only (user-clicked, never fetched by the app).
     { pattern: /https:\/\/unsplash\.com\/photos\//, files: ['src/next/features/shell/scenes.ts'] },
     // Link cards of the synthetic test space "Full": inert item data (shown and user-clicked like any link card, never fetched).
-    { pattern: /https?:\/\/(?!unsplash\.com\/photos\/)/, files: ['src/next/data/showcase.ts'] },
+    { pattern: /https?:\/\/(?!unsplash\.com\/photos\/)/, files: ['src/next/data/showcase.ts', 'src/next/domain/document.ts', 'src/next/features/composer/markdown-commands.ts', 'src/next/features/composer/DocumentEditor.tsx'] },
+    // Pasted clipboard HTML is parsed into an inert detached document and serialised back after stripping active content
+    // (never assigned to the live DOM); this is the only place that reads `innerHTML`.
+    { pattern: /innerHTML/, files: ['src/next/features/composer/clipboard-html.ts'] },
   ];
 
   const forbidden = [
@@ -53,7 +56,7 @@ describe('React app is isolated from the legacy data path and the network', () =
     /dataTransfer\.(files|items|getData)/,
     /showOpenFilePicker|showSaveFilePicker/,
     // HTML injection
-    /dangerouslySetInnerHTML|innerHTML|outerHTML|insertAdjacentHTML/,
+    /dangerouslySetInnerHTML|outerHTML|insertAdjacentHTML/,
     // legacy app modules
     /js\/app\.js/,
     /js\/config\/constants/,
@@ -88,7 +91,10 @@ describe('React app is isolated from the legacy data path and the network', () =
       for (const spec of specifiers) {
         const external = !spec.startsWith('.');
         // react-dom: createPortal for the floating layer of card menus (components/Popover.tsx)
-        if (external) expect(['react', 'react-dom', 'react-dom/client'], `${file}: ${spec}`).toContain(spec);
+        // The Canvas editors (Tiptap, CodeMirror, Lezer) are the only third-party libraries besides React, and only inside features/composer.
+        const editorLib = /^(@tiptap\/|@codemirror\/|@lezer\/)/.test(spec) && file.startsWith(join(nextDir, 'features/composer'));
+        if (external && !editorLib) expect(['react', 'react-dom', 'react-dom/client'], `${file}: ${spec}`).toContain(spec);
+        else if (editorLib) continue;
         else expect(resolve(file, '..', spec).startsWith(nextDir), `${file}: ${spec}`).toBe(true);
       }
     }

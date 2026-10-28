@@ -46,6 +46,7 @@
   --cb-hue: var(--cb-brand);
   --cb-ink: #0a0d12;
   /* Content kinds: quiet identities for file tiles and kind chips (never status colours) */
+  --cb-kind-document: #0f8f86;
   --cb-kind-text: #5b6b82;
   --cb-kind-markdown: #7b5cff;
   --cb-kind-link: #2f7bff;
@@ -244,6 +245,14 @@
   --cb-code-bg: #10151c;
   --cb-code-text: #e6edf3;
   --cb-code-muted: #7d8796;
+  --cb-syn-keyword: #a21caf;
+  --cb-syn-string: #15803d;
+  --cb-syn-number: #c2410c;
+  --cb-syn-comment: #7b8794;
+  --cb-syn-function: #1d4ed8;
+  --cb-syn-type: #0f766e;
+  --cb-syn-property: #9a3412;
+  --cb-syn-punct: #5b6672;
 }
 
 /* --- Semantic colours + glass materials: dark — night glass over a dusk-graded photo. Not dimmed light mode: deeper
@@ -316,6 +325,14 @@
   --cb-code-bg: #080a0e;
   --cb-code-text: #e6edf3;
   --cb-code-muted: #6f7a89;
+  --cb-syn-keyword: #d8a6ff;
+  --cb-syn-string: #86e0a3;
+  --cb-syn-number: #ffb784;
+  --cb-syn-comment: #7d8a9b;
+  --cb-syn-function: #8bb8ff;
+  --cb-syn-type: #6fdccd;
+  --cb-syn-property: #ffa98a;
+  --cb-syn-punct: #9aa7b6;
 }
 
 /* --- Density (D-032, Blueprint 04 §4.1): discrete steps, same grid system --- */

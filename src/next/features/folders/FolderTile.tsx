@@ -20,7 +20,7 @@ const PEEK_COUNT = 3;
 /** Tiny content peek inside the folder preview: real pixels for images, a glyph with a text hint for the rest. */
 function Peek({ item }: { item: Item }) {
   if (item.kind === 'image') return <ImageSwatch item={item} className="cb-folder-peek cb-folder-peek--image" />;
-  const text = item.kind === 'text' || item.kind === 'markdown' ? excerpt(item, 60) : item.kind === 'code' ? item.body.split('\n')[0] : item.kind === 'link' ? linkParts(item.url).host : (item.kind === 'file' ? item.fileName : item.title);
+  const text = item.kind === 'text' || item.kind === 'markdown' || item.kind === 'document' ? excerpt(item, 60) : item.kind === 'code' ? item.body.split('\n')[0] : item.kind === 'link' ? linkParts(item.url).host : (item.kind === 'file' ? item.fileName : item.title);
   return (
     <span className="cb-folder-peek" data-kind={item.kind}>
       <Icon name={kindIcon[item.kind]} size={12} />

@@ -54,6 +54,9 @@ export interface Workspace {
   /** When the signature intro last played on this device (ms epoch, from the store's meta), if ever. */
   readonly introPlayedAt: number | undefined;
   markIntroPlayed(): void;
+  /** Stored editor preferences (font size, tab width, …) of this device, as written; validate before use. */
+  readonly savedEditorPrefs: unknown;
+  saveEditorPrefs(prefs: unknown): void;
   add(items: readonly Item[]): Promise<void>;
   update(item: Item): Promise<void>;
   remove(item: Item): Promise<void>;
@@ -86,6 +89,8 @@ export interface Workspace {
 
 /** Meta key of the intro's last play (a timestamp, nothing else). */
 const INTRO_KEY = 'intro.playedAt';
+/** Meta key of the Canvas editors' view preferences. */
+const EDITOR_PREFS_KEY = 'editor.prefs';
 
 const seedData = (snapshot: StoreSnapshot | undefined): WorkspaceData =>
   snapshot
@@ -98,6 +103,8 @@ export function useWorkspace(base: ReadOnlyLibrary, seed: WorkspaceSeed): Worksp
   const savedPrefs = snapshot?.meta.get(PREFS_KEY) as Partial<Preferences> | undefined;
   const introPlayedAt = snapshot?.meta.get(INTRO_KEY) as number | undefined;
   const markIntroPlayed = useCallback(() => void store?.putMeta(INTRO_KEY, Date.now()).catch(() => {}), [store]);
+  const savedEditorPrefs = snapshot?.meta.get(EDITOR_PREFS_KEY);
+  const saveEditorPrefs = useCallback((prefs: unknown) => void store?.putMeta(EDITOR_PREFS_KEY, prefs).catch(() => {}), [store]);
   const [showcaseSeeded, setShowcaseSeeded] = useState(() => snapshot?.meta.has(SHOWCASE_META_KEY) ?? false);
   const seeding = useRef<Promise<number> | null>(null);
 
@@ -229,6 +236,8 @@ export function useWorkspace(base: ReadOnlyLibrary, seed: WorkspaceSeed): Worksp
       savedPrefs,
       introPlayedAt,
       markIntroPlayed,
+      savedEditorPrefs,
+      saveEditorPrefs,
       add,
       update,
       remove,
@@ -248,6 +257,6 @@ export function useWorkspace(base: ReadOnlyLibrary, seed: WorkspaceSeed): Worksp
       showcase,
       seedShowcase,
     }),
-    [library, store, savedPrefs, introPlayedAt, markIntroPlayed, add, update, remove, setFavorite, savePrefs, moveEntries, duplicateEntries, deleteEntries, restore, setFavorites, createFolder, updateFolder, createSpace, updateSpace, reorderSpaces, deleteSpace, showcase, seedShowcase],
+    [library, store, savedPrefs, introPlayedAt, markIntroPlayed, savedEditorPrefs, saveEditorPrefs, add, update, remove, setFavorite, savePrefs, moveEntries, duplicateEntries, deleteEntries, restore, setFavorites, createFolder, updateFolder, createSpace, updateSpace, reorderSpaces, deleteSpace, showcase, seedShowcase],
   );
 }

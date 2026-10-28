@@ -25,6 +25,8 @@ function itemInfo(item: Item): string {
       return linkParts(item.url).host;
     case 'code':
       return `${item.language} · ${item.body.split('\n').length} Zeilen`;
+    case 'document':
+      return `${item.text.length} Zeichen`;
     default:
       return `${item.body.length} Zeichen`;
   }

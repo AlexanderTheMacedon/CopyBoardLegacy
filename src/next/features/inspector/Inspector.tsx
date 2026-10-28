@@ -27,6 +27,8 @@ function AudioContent({ item }: { item: AudioItem }) {
 
 function InspectorContent({ item }: { item: Item }) {
   switch (item.kind) {
+    case 'document':
+      return <p className="cb-inspector__text">{item.text || 'Leeres Dokument'}</p>;
     case 'text':
     case 'markdown':
       return <p className="cb-inspector__text">{item.body}</p>;
