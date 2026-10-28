@@ -12,6 +12,7 @@ import './styles/shell.css';
 import './styles/board.css';
 import './styles/panels.css';
 import './styles/workspace.css';
+import './styles/studio.css';
 
 const root = document.getElementById('preview-root');
 if (!root) throw new Error('#preview-root is missing');

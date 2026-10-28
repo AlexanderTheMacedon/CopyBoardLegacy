@@ -7,8 +7,12 @@ export interface EditorHandle {
   find?(): void;
   /** Whole content as plain text, for "copy everything". */
   getText(): string;
-  /** A file the user can save: name without path, MIME type, content. */
-  exportFile(): { readonly name: string; readonly mime: string; readonly data: string };
+  /** A text file the user can save: name without path, MIME type, content. Absent for binary editors. */
+  exportFile?(): { readonly name: string; readonly mime: string; readonly data: string };
+  /** A binary file the user can save (the image studio's rendition), in the requested type where supported. */
+  exportBinary?(type?: string): Promise<{ readonly name: string; readonly mime: string; readonly blob: Blob; readonly note?: string }>;
+  /** Puts the editor's result on the clipboard itself (binary editors); text editors are copied via `getText()`. */
+  copy?(): Promise<void>;
 }
 
 export interface HistoryState {
@@ -43,7 +47,12 @@ export function normalizeEditorPrefs(raw: unknown): EditorPrefs {
 
 /** Triggers a browser download of generated content; nothing leaves the device. */
 export function downloadText(name: string, mime: string, data: string): void {
-  const url = URL.createObjectURL(new Blob([data], { type: `${mime};charset=utf-8` }));
+  downloadBlob(name, new Blob([data], { type: `${mime};charset=utf-8` }));
+}
+
+/** Saves a blob through a temporary object URL. */
+export function downloadBlob(name: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = name;

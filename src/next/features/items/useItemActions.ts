@@ -1,19 +1,23 @@
 import { useCallback } from 'react';
 import { usePreview } from '../../app/context';
 import { ClipboardAccessError, writeItemToClipboard } from '../../data/clipboard';
-import { isLocal, type Item } from '../../domain/types';
+import { extensionOf, nativeExportType, renderImageFile } from '../../data/image-render';
+import { isLocal, type ImageItem, type Item } from '../../domain/types';
+import { downloadBlob, safeFileName } from '../composer/editor-types';
 import { useEntryActions } from '../workspace/useEntryActions';
-import type { ItemAction } from './item-actions';
+import { isEditedImage, type ItemAction } from './item-actions';
 
 /** Saves a captured binary through a temporary object URL; nothing leaves the device. */
 function download(item: Item) {
   if (!(item.kind === 'image' || item.kind === 'file' || item.kind === 'audio') || !item.asset) return;
-  const url = URL.createObjectURL(item.asset.blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = item.kind === 'image' ? item.title : (item.fileName ?? item.title);
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(item.kind === 'image' ? item.title : (item.fileName ?? item.title), item.asset.blob);
+}
+
+/** An edited image downloads as a fresh rendition in the original's format (where writable); the original stays as it is. */
+async function downloadEdited(item: ImageItem): Promise<void> {
+  const type = nativeExportType(item);
+  const file = await renderImageFile(item, type);
+  downloadBlob(safeFileName(item.title.replace(/\.(png|jpe?g|webp|gif|avif|heic)$/i, ''), extensionOf(type)), file.blob);
 }
 
 /** User links open in a new tab without opener or referrer; only http(s) ever reaches this point (classify.isWebUrl). */
@@ -68,6 +72,11 @@ export function useRunItemAction() {
           break;
         }
         case 'download':
+          if (item.kind === 'image' && isEditedImage(item))
+            downloadEdited(item).catch(() => notify('Das bearbeitete Bild konnte nicht erzeugt werden. Das Original ist unverändert.', { tone: 'error' }));
+          else download(item);
+          break;
+        case 'download-original':
           download(item);
           break;
         case 'open-composer':

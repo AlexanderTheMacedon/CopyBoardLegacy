@@ -1,5 +1,7 @@
 // Domain model of the app. Pure data, no behaviour: the same shapes are produced by the local store and the fixtures.
 
+import type { ImageEdits } from './image-edits';
+
 export type SpaceId = string;
 export type ItemId = string;
 export type FolderId = string;
@@ -121,6 +123,8 @@ export interface ImageItem extends ItemBase {
   readonly height: number;
   readonly palette?: readonly [string, string, string];
   readonly asset?: ItemAsset;
+  /** Non-destructive image studio edits (domain/image-edits.ts). `asset` stays the untouched original; absent = unedited. */
+  readonly edits?: ImageEdits;
 }
 
 export interface FileItem extends ItemBase {
@@ -164,8 +168,11 @@ export interface Placement {
 export const isTextual = (item: Item): item is TextItem | CodeItem =>
   item.kind === 'text' || item.kind === 'markdown' || item.kind === 'code';
 
-/** Items the Canvas can edit as text: body-bearing kinds and documents. Images and files come with the image studio. */
+/** Items the Canvas can edit as text: body-bearing kinds and documents. Images open in the image studio (`isStudioImage`). */
 export const isEditable = (item: Item): item is TextItem | CodeItem | DocumentItem => isTextual(item) || item.kind === 'document';
+
+/** Images the Canvas opens in the image studio. */
+export const isStudioImage = (item: Item): item is ImageItem => item.kind === 'image';
 
 export const isLocal = (item: Item): boolean => item.origin === 'local';
 

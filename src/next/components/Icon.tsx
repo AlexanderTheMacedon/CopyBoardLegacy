@@ -323,6 +323,35 @@ const paths = {
       <path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" />
     </>
   ),
+  crop: <path d="M6.5 2.5v13a2 2 0 0 0 2 2h13M2.5 6.5h13a2 2 0 0 1 2 2v13" />,
+  rotateLeft: (
+    <>
+      <path d="M4.5 4.5v5h5" />
+      <path d="M4.9 9.5A8 8 0 1 1 6 16.4" />
+    </>
+  ),
+  rotateRight: (
+    <>
+      <path d="M19.5 4.5v5h-5" />
+      <path d="M19.1 9.5A8 8 0 1 0 18 16.4" />
+    </>
+  ),
+  flipH: <path d="M12 3.5v17M9 7 3.5 17.5H9ZM15 7l5.5 10.5H15Z" />,
+  flipV: <path d="M3.5 12h17M7 9 17.5 3.5V9ZM7 15l10.5 5.5V15Z" />,
+  compare: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+      <path d="M12 2.5v19" />
+      <path d="M12 4.5h5.5a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H12Z" fill="currentColor" fillOpacity="0.18" stroke="none" />
+    </>
+  ),
+  contrast: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor" stroke="none" />
+    </>
+  ),
+  reset: <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9M4.5 4.5V9H9" />,
   scissors: <path d="M6 15.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm0-7a2.5 2.5 0 1 0 0 .01M8 12l12-7M8 12l12 7M8.5 10.5l3 1.5" />,
   stack: <path d="M4 7.5h16v3H4ZM4 13.5h16v3H4ZM7 4.5h10" />,
   sunrise: <path d="M12 3v3M4.5 11.5 6 13M19.5 11.5 18 13M3 17h18M7.5 17a4.5 4.5 0 0 1 9 0M9 6.5 12 3.5l3 3" />,

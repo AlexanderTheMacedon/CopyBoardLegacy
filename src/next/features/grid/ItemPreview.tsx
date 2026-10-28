@@ -1,17 +1,42 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Icon } from '../../components/Icon';
 import { useObjectUrl } from '../../components/useObjectUrl';
+import { editedPreview } from '../../data/image-render';
+import { editedSize, isIdentityEdits, normalizeImageEdits, type Size } from '../../domain/image-edits';
 import type { AudioItem, ImageItem, Item } from '../../domain/types';
 import { excerpt, fileExtension, firstHeading, formatDuration, formatSize, kindIcon, linkParts } from '../items/item-meta';
 
 // Type-specific semantic preview (D-005, DS-C11). Purely presentational; card vs. inspector scale is decided by CSS.
 // In list mode CSS hides the rich preview and shows the kind glyph instead (same markup, no second component).
 
-/** Captured images show their real pixels; synthetic fixtures render their palette as a gradient. */
+/**
+ * What an image looks like now: the original, or (with studio edits) a downsized rendition of original + edits. The
+ * rendition is shared through a cache, so many cards of one image render it once. A failed render falls back to the original.
+ */
+export function useImageView(item: ImageItem): { url: string | undefined; size: Size; edited: boolean } {
+  const edits = useMemo(() => normalizeImageEdits(item.edits), [item.edits]);
+  const edited = !isIdentityEdits(edits);
+  const [rendition, setRendition] = useState<{ blob?: Blob; failed?: boolean }>({});
+  useEffect(() => {
+    if (!edited) return;
+    let live = true;
+    editedPreview(item, edits).then(
+      (blob) => live && setRendition({ blob }),
+      () => live && setRendition({ failed: true }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [edited, edits, item]);
+  const url = useObjectUrl(edited && !rendition.failed ? rendition.blob : item.asset?.blob);
+  return { url, size: edited ? editedSize(item.width, item.height, edits) : { width: item.width, height: item.height }, edited };
+}
+
+/** Captured images show their real pixels; synthetic fixtures render their palette as a gradient. Studio edits are shown applied. */
 export function ImageSwatch({ item, className = 'cb-preview cb-preview--image' }: { item: ImageItem; className?: string }) {
-  const url = useObjectUrl(item.asset?.blob);
-  const ratio = { '--cb-img-ratio': `${item.width} / ${item.height}` } as CSSProperties;
-  if (item.asset) {
+  const { url, size, edited } = useImageView(item);
+  const ratio = { '--cb-img-ratio': `${size.width} / ${size.height}` } as CSSProperties;
+  if (item.asset || edited) {
     return (
       <div className={`${className} cb-image--real`} style={ratio} role="img" aria-label={item.alt}>
         {url && <img src={url} alt="" draggable={false} decoding="async" />}
@@ -33,6 +58,20 @@ export function Waveform({ item, className = 'cb-waveform' }: { item: AudioItem;
         <rect key={i} x={i * 4 + 0.75} y={20 - h * 18} width="2.5" height={h * 36} rx="1.25" />
       ))}
     </svg>
+  );
+}
+
+function ImagePreview({ item }: { item: ImageItem }) {
+  const edited = !!item.edits && !isIdentityEdits(normalizeImageEdits(item.edits));
+  const size = edited ? editedSize(item.width, item.height, normalizeImageEdits(item.edits)) : item;
+  return (
+    <div className="cb-preview cb-preview--image-frame">
+      <ImageSwatch item={item} />
+      <span className="cb-preview__chip" aria-hidden="true">
+        {edited && <Icon name="sliders" size={11} />}
+        {size.width} × {size.height}
+      </span>
+    </div>
   );
 }
 
@@ -105,14 +144,7 @@ export function ItemPreview({ item }: { item: Item }) {
       );
     }
     case 'image':
-      return (
-        <div className="cb-preview cb-preview--image-frame">
-          <ImageSwatch item={item} />
-          <span className="cb-preview__chip" aria-hidden="true">
-            {item.width} × {item.height}
-          </span>
-        </div>
-      );
+      return <ImagePreview item={item} />;
     case 'file':
       return (
         <div className="cb-preview cb-preview--file">

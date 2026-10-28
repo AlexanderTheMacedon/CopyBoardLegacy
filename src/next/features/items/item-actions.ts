@@ -1,6 +1,7 @@
 import type { IconName } from '../../components/Icon';
 import { canCopy } from '../../data/clipboard';
-import { isEditable, isLocal, type Item, type Location } from '../../domain/types';
+import { isIdentityEdits, normalizeImageEdits } from '../../domain/image-edits';
+import { isEditable, isLocal, isStudioImage, type Item, type Location } from '../../domain/types';
 
 // One action registry for card quick actions, context menu and Inspector (D-006: same logical palette everywhere).
 // Only actions that really work for the given item are listed.
@@ -9,6 +10,7 @@ export type ItemActionId =
   | 'open'
   | 'copy'
   | 'download'
+  | 'download-original'
   | 'open-link'
   | 'open-composer'
   | 'favorite'
@@ -31,6 +33,9 @@ export interface ItemAction {
 
 const hasAsset = (item: Item): boolean => (item.kind === 'image' || item.kind === 'file' || item.kind === 'audio') && !!item.asset;
 
+/** An image whose studio edits change what it looks like (download/copy then deliver the edited version). */
+export const isEditedImage = (item: Item): boolean => item.kind === 'image' && !!item.edits && !isIdentityEdits(normalizeImageEdits(item.edits));
+
 export function itemActions(item: Item, location: Location, { withOpen = false, organize = true } = {}): ItemAction[] {
   const actions: ItemAction[] = [];
   if (withOpen) actions.push({ id: 'open', label: 'Öffnen', icon: 'panelRight' });
@@ -38,7 +43,9 @@ export function itemActions(item: Item, location: Location, { withOpen = false, 
   // Copy stays a one-click core action for copyable content; binaries get a download (D-006).
   if (canCopy(item)) actions.push({ id: 'copy', label: 'Kopieren', icon: 'copy' });
   if (hasAsset(item)) actions.push({ id: 'download', label: 'Herunterladen', icon: 'download' });
+  if (hasAsset(item) && isEditedImage(item)) actions.push({ id: 'download-original', label: 'Original herunterladen', icon: 'download' });
   if (isEditable(item)) actions.push({ id: 'open-composer', label: 'Bearbeiten', icon: 'pen' });
+  if (isStudioImage(item)) actions.push({ id: 'open-composer', label: 'Im Bildstudio bearbeiten', icon: 'sliders' });
   actions.push(item.favorite ? { id: 'favorite', label: 'Aus Favoriten entfernen', icon: 'star', group: true } : { id: 'favorite', label: 'Zu Favoriten', icon: 'star', group: true });
   if (organize) {
     actions.push({ id: 'move', label: 'Verschieben …', icon: 'folderInput', group: true });

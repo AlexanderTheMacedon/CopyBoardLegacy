@@ -135,9 +135,11 @@ describe('item action registry', () => {
     expect(itemActions(item('it-voice-arch'), dev).map((a) => a.id)).not.toContain('download');
   });
 
-  it('only offers the editor for textual items, reveal outside the own space and delete for own items', () => {
+  it('offers the editor for textual items and the image studio for images, reveal outside the own space and delete for own items', () => {
     expect(itemActions(item('it-prompt-review'), dev).map((a) => a.id)).toContain('open-composer');
-    expect(itemActions(item('it-moodboard'), design).map((a) => a.id)).not.toContain('open-composer');
+    // Run B: images open in the image studio (same Canvas action, own label)
+    expect(itemActions(item('it-moodboard'), design).find((a) => a.id === 'open-composer')).toMatchObject({ label: 'Im Bildstudio bearbeiten' });
+    expect(itemActions(item('it-moodboard'), design).map((a) => a.id)).not.toContain('download-original');
     expect(itemActions(item('it-moodboard'), dev).map((a) => a.id)).toContain('reveal-in-space');
     expect(itemActions(item('it-moodboard'), design).map((a) => a.id)).not.toContain('reveal-in-space');
     expect(itemActions(item('it-prompt-review'), dev).map((a) => a.id)).not.toContain('delete');

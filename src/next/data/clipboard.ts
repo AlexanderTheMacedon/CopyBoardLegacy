@@ -1,5 +1,7 @@
 import { isTextual, type Item } from '../domain/types';
 import type { RawClipboard } from './classify';
+import { renderImageFile } from './image-render';
+import { isIdentityEdits, normalizeImageEdits } from '../domain/image-edits';
 
 // The only module that touches clipboard and drag data. Reads happen only inside a user's paste/drop gesture or an explicit
 // "Einfügen" command; writes only on an explicit "Kopieren". No permission is bypassed: a refusal surfaces as an error.
@@ -80,7 +82,18 @@ async function asPng(blob: Blob): Promise<Blob> {
 
 export const canCopy = (item: Item): boolean => copyText(item) !== undefined || (item.kind === 'image' && !!item.asset);
 
-/** Explicit "Kopieren": text via writeText, captured images as PNG. Rejects if the browser refuses. */
+/** An image (as a pending PNG) to the clipboard. The promise goes straight into ClipboardItem so Safari keeps the gesture. */
+export async function writeImageToClipboard(png: Promise<Blob>): Promise<void> {
+  const clipboard = globalThis.navigator?.clipboard;
+  if (!clipboard || typeof ClipboardItem === 'undefined' || typeof clipboard.write !== 'function') throw new ClipboardAccessError('unsupported');
+  try {
+    await clipboard.write([new ClipboardItem({ 'image/png': png })]);
+  } catch (error) {
+    throw new ClipboardAccessError(error instanceof DOMException && error.name === 'NotAllowedError' ? 'denied' : 'unsupported');
+  }
+}
+
+/** Explicit "Kopieren": text via writeText, captured images as PNG (with their studio edits). Rejects if the browser refuses. */
 export async function writeItemToClipboard(item: Item): Promise<void> {
   const clipboard = globalThis.navigator?.clipboard;
   if (!clipboard) throw new ClipboardAccessError('unsupported');
@@ -88,7 +101,8 @@ export async function writeItemToClipboard(item: Item): Promise<void> {
   try {
     if (text !== undefined) return await clipboard.writeText(text);
     if (item.kind === 'image' && item.asset && typeof ClipboardItem !== 'undefined') {
-      const png = asPng(item.asset.blob);
+      const edited = !!item.edits && !isIdentityEdits(normalizeImageEdits(item.edits));
+      const png = edited ? renderImageFile(item, 'image/png').then((r) => r.blob) : asPng(item.asset.blob);
       return await clipboard.write([new ClipboardItem({ 'image/png': png })]);
     }
   } catch (error) {

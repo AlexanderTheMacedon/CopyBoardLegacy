@@ -4,8 +4,8 @@ import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { useScrollFade } from '../../components/motion';
 import { useObjectUrl } from '../../components/useObjectUrl';
-import type { AudioItem, Item } from '../../domain/types';
-import { ImageSwatch, Waveform } from '../grid/ItemPreview';
+import type { AudioItem, ImageItem, Item } from '../../domain/types';
+import { ImageSwatch, useImageView, Waveform } from '../grid/ItemPreview';
 import { tileOpenButtonId } from '../grid/ItemTile';
 import { itemActions } from '../items/item-actions';
 import { formatDateTime, formatDuration, formatSize, kindIcon, kindLabel, linkParts, spaceColorVar } from '../items/item-meta';
@@ -22,6 +22,19 @@ function AudioContent({ item }: { item: AudioItem }) {
         <p>Dauer {formatDuration(item.durationSec)} · Beispielinhalt ohne Audiodaten</p>
       )}
     </div>
+  );
+}
+
+function ImageContent({ item }: { item: ImageItem }) {
+  const { size, edited } = useImageView(item);
+  return (
+    <figure className="cb-inspector__figure">
+      <ImageSwatch item={item} className="cb-inspector__image" />
+      <figcaption>
+        {size.width} × {size.height} px{item.asset ? ` · ${formatSize(item.asset.blob.size)}` : ' · synthetische Vorschau'}
+        {edited && ' · bearbeitet (Original erhalten)'}
+      </figcaption>
+    </figure>
   );
 }
 
@@ -49,14 +62,7 @@ function InspectorContent({ item }: { item: Item }) {
       );
     }
     case 'image':
-      return (
-        <figure className="cb-inspector__figure">
-          <ImageSwatch item={item} className="cb-inspector__image" />
-          <figcaption>
-            {item.width} × {item.height} px{item.asset ? ` · ${formatSize(item.asset.blob.size)}` : ' · synthetische Vorschau'}
-          </figcaption>
-        </figure>
-      );
+      return <ImageContent item={item} />;
     case 'file':
       return (
         <dl className="cb-inspector__facts">

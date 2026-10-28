@@ -1072,6 +1072,211 @@ test('P28', 'editors on a phone in dark mode: no horizontal overflow, one close 
   return { ok, observed: `markdown=${JSON.stringify(md)}, document=${JSON.stringify(doc)}, problems=${problems.join(' | ') || '-'}` };
 });
 
+// --- Image studio (Run B): non-destructive edits, persistence, original kept byte for byte, export, failure, phone ---------
+// A 200×100 test picture: left half orange, right half blue (so crops and turns are visible in the pixels).
+const pasteTestImage = async (page) => {
+  await page.evaluate(async () => {
+    const canvas = new OffscreenCanvas(200, 100);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#e8590c';
+    ctx.fillRect(0, 0, 100, 100);
+    ctx.fillStyle = '#1d4ed8';
+    ctx.fillRect(100, 0, 100, 100);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': await canvas.convertToBlob({ type: 'image/png' }) })]);
+  });
+  await page.mouse.click(720, 135);
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.waitForSelector('.cb-notice[data-tone="success"]');
+  await page.click('[aria-label="Hinweis schließen"]');
+};
+// the stored record of an image (read straight from the app's own IndexedDB) with a SHA-256 of its original asset
+const storedImage = (page, match) =>
+  page.evaluate(async (m) => {
+    const db = await new Promise((res, rej) => {
+      const r = indexedDB.open('copyboard-next');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+    const items = await new Promise((res) => {
+      const req = db.transaction('items').objectStore('items').getAll();
+      req.onsuccess = () => res(req.result);
+    });
+    db.close();
+    const img = items.find((i) => i.kind === 'image' && (m.id ? i.id === m.id : i.width === m.width && i.height === m.height));
+    if (!img) return null;
+    const hash = img.asset ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', await img.asset.blob.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('') : null;
+    return { id: img.id, hash, mime: img.asset?.mimeType ?? null, edits: img.edits ?? null, title: img.title, origin: img.origin ?? null };
+  }, match);
+const studioReady = (page) => page.waitForFunction(() => (document.querySelector('.cb-studio__canvas')?.width ?? 0) > 1 && !document.querySelector('.cb-studio__frame[hidden]'));
+const pngSize = (buf) => ({ width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) });
+
+test('P29', 'Bildstudio: opens from the context menu; crop 1:1, rotate, B&W, grouped slider undo/redo; persists across reload; original bytes unchanged; export + original download', { clipboard: true }, async ({ page, clean }) => {
+  await pasteTestImage(page);
+  const original = await storedImage(page, { width: 200, height: 100 });
+  // context menu on the card → studio
+  await page.click('.cb-tile[data-kind="image"] .cb-tile__open', { button: 'right' });
+  await page.click('[role="menuitem"]:has-text("Im Bildstudio bearbeiten")');
+  await studioReady(page);
+  const opened = await page.evaluate(() => ({ kind: document.querySelector('.cb-composer')?.dataset.kind, close: document.querySelectorAll('[aria-label="Editor schließen"]').length, rail: !!document.querySelector('.cb-rail') }));
+  // one keyboard gesture on the contrast slider = one undo step
+  await page.focus('#cb-studio-contrast');
+  for (let i = 0; i < 10; i++) await page.keyboard.press('ArrowRight');
+  const contrast = await page.$eval('#cb-studio-contrast', (e) => e.value);
+  await page.click('[aria-label="Rückgängig"]');
+  const undone = await page.$eval('#cb-studio-contrast', (e) => e.value);
+  const canUndoAfter = await page.waitForFunction(() => document.querySelector('[aria-label="Rückgängig"]').disabled, null, { timeout: 1500 }).then(() => false, () => true);
+  await page.click('[aria-label="Wiederholen"]');
+  const redone = await page.$eval('#cb-studio-contrast', (e) => e.value);
+  await page.click('.cb-studio-switch input');
+  // crop to a square, then a quarter turn to the right
+  await page.click('.cb-studio-bar [role="radio"]:has-text("Zuschneiden")');
+  await page.waitForSelector('.cb-crop__rect');
+  await page.click('.cb-studio-chip:has-text("1:1")');
+  await page.click('[aria-label="90° nach rechts drehen"]');
+  await savedStatus(page);
+  const saved = await storedImage(page, { id: original.id });
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-inspector');
+  const inspector = await page.$eval('.cb-inspector__figure figcaption', (e) => e.textContent);
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  await page.waitForFunction(() => document.querySelector('.cb-tile[data-kind="image"] img')?.naturalWidth > 0);
+  const card = await page.evaluate(() => {
+    const tile = document.querySelector('.cb-tile[data-kind="image"]');
+    const img = tile.querySelector('img');
+    return { chip: tile.querySelector('.cb-preview__chip').textContent, px: `${img.naturalWidth}x${img.naturalHeight}` };
+  });
+  const after = await storedImage(page, { id: original.id });
+  // reopen from the inspector: state restored, fresh history
+  await page.click('.cb-tile[data-kind="image"] .cb-tile__open');
+  await page.click('.cb-inspector button:has-text("Im Bildstudio bearbeiten")');
+  await studioReady(page);
+  const reopened = await page.evaluate(() => ({ contrast: document.querySelector('#cb-studio-contrast').value, mono: document.querySelector('.cb-studio-switch input').checked, undo: !document.querySelector('[aria-label="Rückgängig"]').disabled }));
+  // export (PNG) and the untouched original
+  const [exported] = await Promise.all([page.waitForEvent('download'), page.click('.cb-studio-panel button:has-text("Bild exportieren")')]);
+  const exportedBuf = fs.readFileSync(await exported.path());
+  const [orig] = await Promise.all([page.waitForEvent('download'), page.click('.cb-studio-panel button:has-text("Original")')]);
+  const origHash = (await import('node:crypto')).createHash('sha256').update(fs.readFileSync(await orig.path())).digest('hex');
+  const out = pngSize(exportedBuf);
+  const problems = await clean(['DataTransfer.', 'clipboard.']);
+  const e = saved?.edits;
+  const ok =
+    opened.kind === 'image' && opened.close === 1 && !opened.rail &&
+    contrast === '10' && undone === '0' && !canUndoAfter && redone === '10' &&
+    e && e.schema === 1 && e.turns === 1 && e.aspect === '1:1' && e.mono === true && e.adjust.contrast === 10 && Math.abs(e.crop.w * 100 - e.crop.h * 200) < 1 &&
+    saved.hash === original.hash && after.hash === original.hash && after.mime === 'image/png' && JSON.stringify(after.edits) === JSON.stringify(e) &&
+    /100 × 100 px/.test(inspector) && /bearbeitet/.test(inspector) && /100 × 100/.test(card.chip) && card.px === '100x100' &&
+    reopened.contrast === '10' && reopened.mono && !reopened.undo &&
+    out.width === 100 && out.height === 100 && /\.png$/.test(exported.suggestedFilename()) && origHash === original.hash && !problems.length;
+  return { ok, observed: `opened=${JSON.stringify(opened)}, slider ${contrast}→undo ${undone} (more=${canUndoAfter})→redo ${redone}, edits=${JSON.stringify(e)}, hash kept=${saved?.hash === original.hash && after?.hash === original.hash}, inspector="${inspector}", card=${JSON.stringify(card)}, reopened=${JSON.stringify(reopened)}, export=${exported.suggestedFilename()} ${out.width}x${out.height}, original download identical=${origHash === original.hash}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P30', 'Bildstudio: read-only example with explicit local copy; free crop by handle, straighten, compare, zoom; a failing save keeps the edits and recovers', async ({ page, clean }) => {
+  await gotoSpace(page, 'Design');
+  await page.click('.cb-tile[data-item-id="it-moodboard"] .cb-tile__open');
+  await page.click('.cb-inspector button:has-text("Im Bildstudio bearbeiten")');
+  await studioReady(page);
+  const example = await page.evaluate(() => ({ status: document.querySelector('.cb-composer__status').dataset.state, slider: document.querySelector('#cb-studio-contrast').disabled, rotate: document.querySelector('[aria-label="90° nach rechts drehen"]').disabled, notice: !!document.querySelector('.cb-composer__notice') }));
+  globalThis.__step = 'local copy';
+  await page.click('.cb-composer__notice button:has-text("Lokale Kopie bearbeiten")');
+  await page.waitForFunction(() => document.querySelector('input#cb-composer-title')?.value.includes('(Kopie)'));
+  await studioReady(page);
+  // crop: drag the bottom-right handle inwards
+  globalThis.__step = 'crop';
+  await page.click('.cb-studio-bar [role="radio"]:has-text("Zuschneiden")');
+  const handle = await (await page.waitForSelector('.cb-crop__handle[data-handle="se"]')).boundingBox();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x - 120, handle.y - 60, { steps: 8 });
+  await page.mouse.up();
+  const rect = await page.$eval('.cb-crop__rect', (e) => ({ w: parseFloat(e.style.width), h: parseFloat(e.style.height) }));
+  await page.focus('#cb-studio-straighten');
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
+  const angle = await page.$eval('#cb-studio-straighten', (e) => e.value);
+  // compare before/after, then zoom in the adjust tool
+  globalThis.__step = 'compare/zoom';
+  await page.click('[aria-label="Vorher/Nachher vergleichen"]');
+  const badge = await page.$eval('.cb-studio__badge', (e) => e.textContent).catch(() => null);
+  await page.click('[aria-label="Vorher/Nachher vergleichen"]');
+  await page.click('.cb-studio-bar [role="radio"]:has-text("Anpassen")');
+  const fitPct = await page.$eval('[aria-label="Einpassen"]', (e) => parseInt(e.textContent, 10));
+  await page.click('[aria-label="Vergrößern"]');
+  await page.click('[aria-label="Vergrößern"]');
+  await settle(page);
+  const zoomed = await page.evaluate(() => ({ pct: parseInt(document.querySelector('[aria-label="Einpassen"]').textContent, 10), scroll: document.querySelector('.cb-studio__stage').scrollWidth > document.querySelector('.cb-studio__stage').clientWidth }));
+  await page.click('[aria-label="Einpassen"]');
+  await savedStatus(page);
+  // failing commits: the edit stays, the status says so, retry recovers
+  globalThis.__step = 'failing save';
+  await page.evaluate(() => {
+    window.__fail = true;
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args) {
+      if (window.__fail) throw new DOMException('quota', 'QuotaExceededError');
+      return put.apply(this, args);
+    };
+  });
+  await page.click('.cb-studio-bar [role="radio"]:has-text("Filter")');
+  await page.click('.cb-studio-filter:has-text("Cinematic")');
+  await page.waitForFunction(() => document.querySelector('.cb-composer__status')?.dataset.state === 'error', null, { timeout: 4000 });
+  const failed = await page.$eval('.cb-composer__status', (e) => e.textContent);
+  const kept = await page.$eval('.cb-studio-filter[aria-checked="true"]', (e) => e.textContent);
+  await page.evaluate(() => (window.__fail = false));
+  await page.click('.cb-composer__retry');
+  await savedStatus(page);
+  const title = await page.$eval('#cb-composer-title', (e) => e.value);
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-inspector');
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  const copy = await page.evaluate(async () => {
+    const db = await new Promise((res) => {
+      const r = indexedDB.open('copyboard-next');
+      r.onsuccess = () => res(r.result);
+    });
+    const items = await new Promise((res) => {
+      const req = db.transaction('items').objectStore('items').getAll();
+      req.onsuccess = () => res(req.result);
+    });
+    db.close();
+    const c = items.find((i) => i.derivedFrom === 'it-moodboard');
+    return c ? { origin: c.origin, filter: c.edits?.filter, straighten: c.edits?.straighten, cropW: c.edits?.crop.w, hasExampleRecord: items.some((i) => i.id === 'it-moodboard' && i.edits) } : null;
+  });
+  const problems = (await clean()).filter((p) => !/QuotaExceeded|quota/i.test(p));
+  const ok =
+    example.status === 'example' && example.slider && example.rotate && example.notice &&
+    rect.w < 100 && rect.h < 100 && angle === '0.5' && badge === 'Original' &&
+    zoomed.pct > fitPct && zoomed.scroll &&
+    /fehlgeschlagen/.test(failed) && kept === 'Cinematic' && /\(Kopie\)/.test(title) &&
+    copy && copy.origin === 'local' && copy.filter === 'cinematic' && copy.straighten === 0.5 && copy.cropW < 1 && !copy.hasExampleRecord && !problems.length;
+  return { ok, observed: `example=${JSON.stringify(example)}, crop=${JSON.stringify(rect)}, angle=${angle}, compare badge=${badge}, zoom ${fitPct}%→${zoomed.pct}% scroll=${zoomed.scroll}, failed="${failed}", kept=${kept}, copy=${JSON.stringify(copy)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P31', 'Bildstudio on a phone in dark mode: no horizontal overflow, one close control, stage and tool sheet visible, filters render', { viewport: PHONE, touch: true, colorScheme: 'dark' }, async ({ page, clean }) => {
+  await gotoSpace(page, 'Design').catch(() => {});
+  await page.waitForSelector('.cb-tile[data-kind="image"]');
+  await page.click('.cb-tile[data-kind="image"] .cb-tile__open');
+  await page.click('.cb-inspector button:has-text("Im Bildstudio bearbeiten")');
+  await studioReady(page);
+  await page.click('.cb-studio-bar [role="radio"]:has-text("Filter")');
+  await page.waitForSelector('.cb-studio-filter canvas');
+  await settle(page);
+  const info = await page.evaluate(() => {
+    const stage = document.querySelector('.cb-studio__stage').getBoundingClientRect();
+    const panel = document.querySelector('.cb-studio-panel').getBoundingClientRect();
+    return {
+      overflow: document.documentElement.scrollWidth > innerWidth,
+      close: document.querySelectorAll('[aria-label="Editor schließen"]').length,
+      stage: Math.round(stage.height),
+      panelBelow: panel.top >= stage.bottom - 1 && panel.height > 60,
+      thumbs: [...document.querySelectorAll('.cb-studio-filter canvas')].filter((c) => c.width > 1).length,
+    };
+  });
+  const problems = await clean();
+  const ok = !info.overflow && info.close === 1 && info.stage >= 200 && info.panelBelow && info.thumbs === 8 && !problems.length;
+  return { ok, observed: `${JSON.stringify(info)}, problems=${problems.join(' | ') || '-'}` };
+});
+
 browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ONLY = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY) : null; // e.g. E2E_ONLY='^(P6|P23)$' for a focused run
 for (const t of tests) {
@@ -1081,9 +1286,10 @@ for (const t of tests) {
   let app;
   try {
     app = await openPreview(t.opts);
+    globalThis.__step = '';
     r = await t.fn(app);
   } catch (e) {
-    r = { ok: false, observed: 'Testfehler: ' + String(e.message || e).split('\n')[0] };
+    r = { ok: false, observed: 'Testfehler: ' + String(e.message || e).split('\n')[0] + (globalThis.__step ? ` @ ${globalThis.__step}` : '') };
   }
   await app?.context.close().catch(() => {});
   results.push({ id: t.id, title: t.title, status: r.ok ? 'PASS' : 'FAIL', observed: r.observed, ms: Date.now() - t0 });

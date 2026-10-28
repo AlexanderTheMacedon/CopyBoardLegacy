@@ -6,8 +6,10 @@ import { IconButton } from '../../components/IconButton';
 import { SegmentedControl, type SegmentOption } from '../../components/SegmentedControl';
 import { newItemId } from '../../data/capture';
 import { ClipboardAccessError, writeTextToClipboard } from '../../data/clipboard';
+import { nativeExportType, type ExportType } from '../../data/image-render';
 import { DEFAULT_DOCUMENT_TITLE, documentOutline, documentText, sanitizeDocument, titleFromText, wordCount } from '../../domain/document';
-import { isEditable, isLocal, type Item } from '../../domain/types';
+import { storedEdits } from '../../domain/image-edits';
+import { isEditable, isLocal, isStudioImage, type Item } from '../../domain/types';
 import { tileOpenButtonId } from '../grid/ItemTile';
 import { formatDateTime, kindIcon, kindLabel } from '../items/item-meta';
 import type { CodeHandle } from './CodeEditor';
@@ -15,7 +17,8 @@ import { CodeEditor } from './CodeEditor';
 import { CodeToolbar } from './CodeToolbar';
 import { DocumentEditor, type DocumentHandle } from './DocumentEditor';
 import { DocumentToolbar } from './DocumentToolbar';
-import { downloadText, normalizeEditorPrefs, type EditorHandle, type EditorPrefs, type HistoryState } from './editor-types';
+import { downloadBlob, downloadText, normalizeEditorPrefs, type EditorHandle, type EditorPrefs, type HistoryState } from './editor-types';
+import { ImageStudio, ImageToolbar, type ImageHandle, type StudioTool } from './ImageStudio';
 import { MarkdownEditor, MarkdownToolbar, type MarkdownMode } from './MarkdownEditor';
 import { markdownOutline } from './markdown-outline';
 import { ToolButton, ToolGroup, ToolSeparator } from './Toolbar';
@@ -155,11 +158,11 @@ function ContextRail({ item, place, stats, outline, prefs, onPrefs, onClose }: R
 export function Composer() {
   const { state, library } = usePreview();
   const item = state.composerItemId ? library.getItem(state.composerItemId) : undefined;
-  if (!item || !isEditable(item)) return null;
+  if (!item || !(isEditable(item) || isStudioImage(item))) return null;
   return <Canvas key={item.id} item={item} />;
 }
 
-function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'markdown' | 'code' }> }) {
+function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'markdown' | 'code' | 'image' }> }) {
   const { dispatch, library, workspace, notify, markFresh } = usePreview();
   const phone = useMediaQuery(PHONE_QUERY);
   const writable = isLocal(item);
@@ -170,13 +173,20 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
   const [language, setLanguage] = useState(item.kind === 'code' ? item.language : '');
   const [mode, setMode] = useState<MarkdownMode>('split');
   const [prefs, setPrefs] = useState<EditorPrefs>(() => normalizeEditorPrefs(workspace.savedEditorPrefs));
-  const [railOpen, setRailOpen] = useState(!phone);
+  // the image studio brings its own tool panel instead of the Context Rail
+  const studio = item.kind === 'image';
+  const [railOpen, setRailOpen] = useState(!phone && !studio);
+  const [tool, setTool] = useState<StudioTool>('adjust');
+  const [compare, setCompare] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [zoomPercent, setZoomPercent] = useState(100);
+  const [exportType, setExportType] = useState<ExportType>(() => (item.kind === 'image' ? nativeExportType(item) : 'image/png'));
   const [handle, setHandle] = useState<EditorHandle | null>(null);
   const [history, setHistory] = useState<HistoryState>({ canUndo: false, canRedo: false });
   const [rev, setRev] = useState(0);
   const deferredRev = useDeferredValue(rev);
 
-  const body = useRef(item.kind === 'document' ? '' : item.body);
+  const body = useRef(item.kind === 'document' || item.kind === 'image' ? '' : item.body);
   const live = useRef({ title, language, handle });
   live.current = { title, language, handle };
   const sectionRef = useRef<HTMLElement>(null);
@@ -194,6 +204,10 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
         patch.content = content;
         patch.text = documentText(content.doc);
       }
+    } else if (item.kind === 'image') {
+      // only validated parameters are stored; the original asset is never part of the patch
+      const studioHandle = h as ImageHandle | null;
+      if (studioHandle) patch.edits = storedEdits(studioHandle.getEdits());
     } else {
       patch.body = body.current;
       if (item.kind === 'code') patch.language = l || 'text';
@@ -285,7 +299,8 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
   // --- shared commands ---
   const copyAll = async () => {
     try {
-      await writeTextToClipboard(handle?.getText() ?? '');
+      if (handle?.copy) await handle.copy();
+      else await writeTextToClipboard(handle?.getText() ?? '');
       notify('In die Zwischenablage kopiert', { tone: 'success' });
     } catch (error) {
       notify(
@@ -296,8 +311,18 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
       );
     }
   };
-  const exportFile = () => {
-    const file = handle?.exportFile();
+  const exportFile = async () => {
+    if (handle?.exportBinary) {
+      try {
+        const file = await handle.exportBinary();
+        downloadBlob(file.name, file.blob);
+        notify(file.note ? `Exportiert als ${file.name} · ${file.note}` : `Exportiert als ${file.name}`, { tone: 'success' });
+      } catch {
+        notify('Export fehlgeschlagen: Das Bild ist für diesen Browser zu groß oder nicht lesbar. Das Original ist unverändert.', { tone: 'error' });
+      }
+      return;
+    }
+    const file = handle?.exportFile?.();
     if (file) downloadText(file.name, file.mime, file.data);
   };
 
@@ -394,7 +419,7 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
           )}
         </p>
         {hasModes && <SegmentedControl label="Editor-Modus" size="sm" options={modeOptions(phone)} value={effectiveMode} onChange={setMode} />}
-        {!railOpen && <IconButton icon="panelRight" label="Kontextleiste einblenden" className="cb-composer__rail-toggle" onClick={() => setRailOpen(true)} />}
+        {!railOpen && !studio && <IconButton icon="panelRight" label="Kontextleiste einblenden" className="cb-composer__rail-toggle" onClick={() => setRailOpen(true)} />}
         {prefs.focus && <IconButton icon="focus" label="Fokusmodus beenden" className="cb-composer__focus-exit" onClick={() => changePrefs({ focus: false })} />}
         <IconButton icon="x" label="Editor schließen" className="cb-composer__close" onClick={() => void requestClose()} />
       </header>
@@ -403,6 +428,19 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
         <div className="cb-canvas-bar__specific">
           {item.kind === 'document' && handle && <DocumentToolbar handle={handle as DocumentHandle} disabled={!writable} />}
           {item.kind === 'markdown' && <MarkdownToolbar handle={handle as CodeHandle | null} disabled={toolbarDisabled} />}
+          {item.kind === 'image' && (
+            <ImageToolbar
+              handle={handle as ImageHandle | null}
+              tool={tool}
+              onTool={setTool}
+              compare={compare}
+              onCompare={setCompare}
+              zoom={zoom}
+              zoomPercent={zoomPercent}
+              onZoom={setZoom}
+              disabled={!writable}
+            />
+          )}
           {item.kind === 'code' && (
             <CodeToolbar
               language={language}
@@ -424,8 +462,8 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
           <ToolSeparator />
           <ToolGroup label="Aktionen">
             {handle?.find && <ToolButton icon="search" label="Suchen und Ersetzen" shortcut="⌘F" disabled={hasModes && effectiveMode === 'preview'} onClick={() => handle.find?.()} />}
-            <ToolButton icon="copy" label="Alles kopieren" onClick={() => void copyAll()} />
-            <ToolButton icon="download" label="Exportieren" onClick={exportFile} />
+            <ToolButton icon="copy" label={studio ? 'Bild kopieren' : 'Alles kopieren'} onClick={() => void copyAll()} />
+            <ToolButton icon="download" label="Exportieren" onClick={() => void exportFile()} />
             {item.kind === 'document' && <ToolButton icon="printer" label="Drucken / als PDF sichern" onClick={() => (handle as DocumentHandle | null)?.print()} />}
             <ToolButton icon="focus" label="Fokusmodus" pressed={prefs.focus} onClick={() => changePrefs({ focus: !prefs.focus })} />
           </ToolGroup>
@@ -443,48 +481,69 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
       )}
 
       <div className="cb-composer__body">
-        <div className="cb-composer__panes" data-width={prefs.width}>
-          {item.kind === 'document' && <DocumentEditor initial={item.content} title={title} editable={writable} onChange={onDocChange} onHistory={setHistory} onReady={onHandle} />}
-          {item.kind === 'markdown' && (
-            <MarkdownEditor initial={item.body} mode={effectiveMode} readOnly={!writable} prefs={prefs} title={title} onChange={onText} onHistory={setHistory} onReady={onHandle} />
-          )}
-          {item.kind === 'code' && (
-            <div className="cb-composer__pane">
-              <CodeEditor
-                initial={item.body}
-                language={language}
-                readOnly={!writable}
-                wrap={prefs.wrap}
-                tabSize={prefs.tabSize}
-                lineNumbers={prefs.lineNumbers}
-                ariaLabel={`${kindLabel.code}-Quelltext`}
-                title={title}
-                onChange={onText}
-                onHistory={setHistory}
-                onReady={onHandle}
-              />
-            </div>
-          )}
-          {item.kind === 'text' && (
-            <div className="cb-composer__pane" data-width={prefs.width}>
-              <CodeEditor
-                initial={item.body}
-                language="text"
-                prose
-                readOnly={!writable}
-                wrap
-                tabSize={2}
-                lineNumbers={false}
-                ariaLabel="Text"
-                title={title}
-                onChange={onText}
-                onHistory={setHistory}
-                onReady={onHandle}
-              />
-            </div>
-          )}
-        </div>
-        {railOpen && (
+        {item.kind === 'image' && (
+          <ImageStudio
+            item={item}
+            title={title}
+            readOnly={!writable}
+            tool={tool}
+            compare={compare}
+            zoom={zoom}
+            onZoom={setZoom}
+            onZoomPercent={setZoomPercent}
+            onCompare={setCompare}
+            onChange={touch}
+            onHistory={setHistory}
+            onReady={onHandle}
+            onExport={() => void exportFile()}
+            exportType={exportType}
+            onExportType={setExportType}
+          />
+        )}
+        {item.kind !== 'image' && (
+          <div className="cb-composer__panes" data-width={prefs.width}>
+            {item.kind === 'document' && <DocumentEditor initial={item.content} title={title} editable={writable} onChange={onDocChange} onHistory={setHistory} onReady={onHandle} />}
+            {item.kind === 'markdown' && (
+              <MarkdownEditor initial={item.body} mode={effectiveMode} readOnly={!writable} prefs={prefs} title={title} onChange={onText} onHistory={setHistory} onReady={onHandle} />
+            )}
+            {item.kind === 'code' && (
+              <div className="cb-composer__pane">
+                <CodeEditor
+                  initial={item.body}
+                  language={language}
+                  readOnly={!writable}
+                  wrap={prefs.wrap}
+                  tabSize={prefs.tabSize}
+                  lineNumbers={prefs.lineNumbers}
+                  ariaLabel={`${kindLabel.code}-Quelltext`}
+                  title={title}
+                  onChange={onText}
+                  onHistory={setHistory}
+                  onReady={onHandle}
+                />
+              </div>
+            )}
+            {item.kind === 'text' && (
+              <div className="cb-composer__pane" data-width={prefs.width}>
+                <CodeEditor
+                  initial={item.body}
+                  language="text"
+                  prose
+                  readOnly={!writable}
+                  wrap
+                  tabSize={2}
+                  lineNumbers={false}
+                  ariaLabel="Text"
+                  title={title}
+                  onChange={onText}
+                  onHistory={setHistory}
+                  onReady={onHandle}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        {railOpen && !studio && (
           <ContextRail
             item={item}
             place={place || '—'}
