@@ -163,7 +163,8 @@ export function Composer() {
   const { state, library } = usePreview();
   const item = state.composerItemId ? library.getItem(state.composerItemId) : undefined;
   if (!item || !(isEditable(item) || isStudioImage(item))) return null;
-  return <Canvas key={item.id} item={item} />;
+  // a text card converted to a document mounts a fresh canvas with the writing studio
+  return <Canvas key={`${item.id}:${item.kind}`} item={item} />;
 }
 
 function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'markdown' | 'code' | 'image' }> }) {
@@ -300,6 +301,15 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
     else void requestClose();
   };
 
+  // text card → writing studio: the plain edits are stored first, then the conversion dialog asks
+  const toStudio = async () => {
+    if (!(await autosave.flush())) {
+      notify('Die Änderungen sind noch nicht gespeichert. Bitte erneut versuchen.', { tone: 'error' });
+      return;
+    }
+    dispatch({ type: 'openModal', modal: { kind: 'convert-to-document', itemId: item.id } });
+  };
+
   // --- shared commands ---
   const copyAll = async () => {
     try {
@@ -431,6 +441,11 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
       <div className="cb-canvas-bar" aria-label="Werkzeuge">
         <div className="cb-canvas-bar__specific">
           {item.kind === 'document' && handle && <DocumentToolbar handle={handle as DocumentHandle} disabled={!writable} />}
+          {item.kind === 'text' && writable && (
+            <div className="cb-canvas-bar__set" role="toolbar" aria-label="Format">
+              <ToolButton icon="fileText" label="Im Schreibstudio bearbeiten" text="Schreibstudio" onClick={() => void toStudio()} />
+            </div>
+          )}
           {item.kind === 'markdown' && <MarkdownToolbar handle={handle as CodeHandle | null} disabled={toolbarDisabled} />}
           {item.kind === 'image' && (
             <ImageToolbar

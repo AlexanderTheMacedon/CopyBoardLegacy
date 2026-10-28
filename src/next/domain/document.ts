@@ -1,4 +1,4 @@
-import type { DocNode, DocumentContent } from './types';
+import type { DocNode, DocumentContent, DocumentItem, TextItem } from './types';
 
 // Document model helpers (pure, no editor library). The stored tree is a whitelisted subset of ProseMirror JSON; everything
 // that enters it, whether typed, pasted or loaded from disk, passes `sanitizeDocument`, so unknown nodes, unsafe link targets
@@ -270,3 +270,17 @@ export function titleFromText(text: string): string {
 }
 
 export const wordCount = (text: string): number => text.trim().split(/\s+/).filter(Boolean).length;
+
+/**
+ * A plain text card as a Dokument (explicit user choice, never on open): same id, place, title, tags, favourite, origin
+ * and creation date; every line becomes a paragraph, so the text itself is kept character for character (line endings
+ * normalised, trailing empty lines dropped like everywhere else documents derive their text). `updatedAt` is the moment
+ * of the conversion, because the stored format changed then.
+ */
+export function textItemToDocument(item: TextItem, now = new Date()): DocumentItem {
+  // Markdown has its own source semantics; only plain text cards convert
+  if (item.kind !== 'text') throw new TypeError('only text cards convert to documents');
+  const { body, kind: _kind, ...base } = item;
+  const content = documentFromText(body);
+  return { ...base, kind: 'document', content, text: documentText(content.doc), updatedAt: now.toISOString() };
+}

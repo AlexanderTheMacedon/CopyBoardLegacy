@@ -19,7 +19,8 @@ export type WorkspaceModal =
   | { readonly kind: 'folder-new'; readonly placement: Placement; readonly entryIds?: readonly string[] }
   | { readonly kind: 'folder-edit'; readonly folderId: FolderId }
   | { readonly kind: 'move'; readonly entryIds: readonly string[] }
-  | { readonly kind: 'confirm-delete'; readonly entryIds: readonly string[] };
+  | { readonly kind: 'confirm-delete'; readonly entryIds: readonly string[] }
+  | { readonly kind: 'convert-to-document'; readonly itemId: ItemId };
 
 export interface UiState {
   readonly location: Location;

@@ -13,6 +13,7 @@ export type ItemActionId =
   | 'download-original'
   | 'open-link'
   | 'open-composer'
+  | 'open-studio'
   | 'favorite'
   | 'move'
   | 'new-folder'
@@ -44,7 +45,11 @@ export function itemActions(item: Item, location: Location, { withOpen = false, 
   if (canCopy(item)) actions.push({ id: 'copy', label: 'Kopieren', icon: 'copy' });
   if (hasAsset(item)) actions.push({ id: 'download', label: 'Herunterladen', icon: 'download' });
   if (hasAsset(item) && isEditedImage(item)) actions.push({ id: 'download-original', label: 'Original herunterladen', icon: 'download' });
-  if (isEditable(item)) actions.push({ id: 'open-composer', label: 'Bearbeiten', icon: 'pen' });
+  // A user's own text card offers the writing studio (after an explicit conversion) and keeps the quick plain-text editor.
+  if (item.kind === 'text' && isLocal(item)) {
+    actions.push({ id: 'open-studio', label: 'Im Schreibstudio bearbeiten', icon: 'pen' });
+    actions.push({ id: 'open-composer', label: 'Als Klartext bearbeiten', icon: 'text' });
+  } else if (isEditable(item)) actions.push({ id: 'open-composer', label: 'Bearbeiten', icon: 'pen' });
   if (isStudioImage(item)) actions.push({ id: 'open-composer', label: 'Im Bildstudio bearbeiten', icon: 'sliders' });
   actions.push(item.favorite ? { id: 'favorite', label: 'Aus Favoriten entfernen', icon: 'star', group: true } : { id: 'favorite', label: 'Zu Favoriten', icon: 'star', group: true });
   if (organize) {

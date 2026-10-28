@@ -7,9 +7,10 @@ import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { SpaceGlyph } from '../../components/SpaceIcon';
+import { textItemToDocument } from '../../domain/document';
 import { suggestIcon } from '../../domain/icons';
 import { wouldCycle } from '../../app/operations';
-import { isFolderId, isLocalSpace, type Folder, type Placement, type Space, type SpaceColor, type SpaceIcon, type SpaceId, type SpacePrefs } from '../../domain/types';
+import { isFolderId, isLocal, isLocalSpace, type Folder, type ItemId, type Placement, type Space, type SpaceColor, type SpaceIcon, type SpaceId, type SpacePrefs } from '../../domain/types';
 import { useEntryActions } from '../workspace/useEntryActions';
 import { ColorPicker, IconPicker } from './pickers';
 
@@ -483,6 +484,69 @@ function ConfirmDeleteForm({ entryIds, onClose }: { entryIds: readonly string[];
   );
 }
 
+/**
+ * Text card → Dokument, only after this explicit confirmation. Cancelling writes nothing. The conversion is one commit of
+ * the same record (same id, place and metadata); the editor opens only once it is stored, a failure leaves the text card.
+ */
+function ConvertToDocumentForm({ itemId, onClose }: { itemId: ItemId; onClose: () => void }) {
+  const { library, workspace, dispatch, notify } = usePreview();
+  const [busy, setBusy] = useState(false);
+  const item = library.getItem(itemId);
+  if (!item || item.kind !== 'text' || !isLocal(item)) return null;
+  const convert = async () => {
+    // the latest committed record, not the one this dialog was opened with
+    const fresh = library.getItem(itemId);
+    if (!fresh || fresh.kind !== 'text' || !isLocal(fresh)) return onClose();
+    setBusy(true);
+    try {
+      await workspace.update(textItemToDocument(fresh));
+    } catch {
+      setBusy(false);
+      notify('Umwandeln ist fehlgeschlagen. Die Textkarte ist unverändert.', { tone: 'error' });
+      return;
+    }
+    onClose();
+    notify('In ein Dokument umgewandelt', { tone: 'success' });
+    dispatch({ type: 'openComposer', itemId });
+  };
+  return (
+    <DialogFrame
+      title={`„${item.title}“ im Schreibstudio bearbeiten?`}
+      eyebrow="Schreibstudio"
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            className="cb-button cb-button--ghost"
+            disabled={busy}
+            onClick={() => {
+              onClose();
+              dispatch({ type: 'openComposer', itemId });
+            }}
+          >
+            Als Klartext bearbeiten
+          </button>
+          <span className="cb-card-dialog__spacer" />
+          <button type="button" className="cb-button cb-button--ghost" disabled={busy} onClick={onClose} autoFocus>
+            Abbrechen
+          </button>
+          <button type="button" className="cb-button cb-button--primary" disabled={busy} onClick={() => void convert()}>
+            <Icon name="fileText" size={16} />
+            Umwandeln
+          </button>
+        </>
+      }
+    >
+      <p className="cb-form__text">
+        Die Textkarte wird dafür einmalig zu einem Dokument mit Formatierung. Text, Titel, Ort, Tags, Favorit und Erstelldatum
+        bleiben erhalten; jede Zeile wird ein Absatz. Kopieren liefert danach den reinen Text des Dokuments.
+      </p>
+      <p className="cb-form__text">Soll die Karte reiner Text bleiben, bearbeite sie als Klartext.</p>
+    </DialogFrame>
+  );
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 
 function ModalContent({ modal, onClose }: { modal: WorkspaceModal; onClose: () => void }) {
@@ -506,6 +570,8 @@ function ModalContent({ modal, onClose }: { modal: WorkspaceModal; onClose: () =
       return <MoveForm entryIds={modal.entryIds} onClose={onClose} />;
     case 'confirm-delete':
       return <ConfirmDeleteForm entryIds={modal.entryIds} onClose={onClose} />;
+    case 'convert-to-document':
+      return <ConvertToDocumentForm itemId={modal.itemId} onClose={onClose} />;
   }
 }
 

@@ -1593,6 +1593,150 @@ test('P36', 'Schreibstudio auf Tablet und Desktop (dunkel): Werkzeugzeilen brech
   return { ok, observed: `tablet=${JSON.stringify(tablet)}, desktop=${JSON.stringify(desktop)}, markdown=${md}, problems=${problems.join(' | ') || '-'}` };
 });
 
+// --- Text cards and the writing studio (Run C.1): explicit conversion, plain editing kept, nothing changes on cancel ----
+const dbItems = (page) =>
+  page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open('copyboard-next');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const req = db.transaction('items').objectStore('items').getAll();
+          req.onsuccess = () => (db.close(), resolve(req.result));
+        };
+      }),
+  );
+const dbPut = (page, item) =>
+  page.evaluate(
+    (record) =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open('copyboard-next');
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction('items', 'readwrite');
+          tx.objectStore('items').put(record);
+          tx.oncomplete = () => (db.close(), resolve(true));
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    item,
+  );
+/** Universal Paste of plain text on the board; returns the stored text card. */
+const pasteTextCard = async (page, text) => {
+  await page.evaluate((t) => navigator.clipboard.writeText(t), text);
+  await page.mouse.click(720, 135);
+  await page.keyboard.press('ControlOrMeta+V');
+  await page.waitForSelector('.cb-notice[data-tone="success"]');
+  const items = await dbItems(page);
+  const card = items.find((i) => i.kind === 'text' && i.origin === 'local' && i.body === text);
+  if (!card) throw new Error('pasted text card not stored');
+  return card;
+};
+const inspectorAction = async (page, id, label) => {
+  if (!(await page.$('.cb-inspector'))) await page.click(`.cb-tile[data-item-id="${id}"] .cb-tile__open`);
+  await page.click(`.cb-inspector .cb-inspector__actions button:has-text("${label}")`);
+};
+
+test('P37', 'Textkarte → Schreibstudio: Abbrechen ändert nichts; Umwandeln behält ID, Ort, Titel, Tags, Favorit, Erstelldatum; formatieren, Export, Schließen, Reload, erneut öffnen', { clipboard: true }, async ({ page, clean }) => {
+  const pasted = await pasteTextCard(page, 'Einkaufsliste\nBrot und  Butter\nMilch');
+  // metadata worth keeping: tags (no UI yet) and favourite, then a reload so the app reads them from the store
+  const original = { ...pasted, tags: ['einkauf'], favorite: true };
+  await dbPut(page, original);
+  await page.reload();
+  await page.waitForSelector(`.cb-tile[data-item-id="${original.id}"]`);
+  await inspectorAction(page, original.id, 'Im Schreibstudio bearbeiten');
+  await page.waitForSelector('.cb-card-dialog:has-text("Schreibstudio")');
+  const dialogText = await page.$eval('.cb-card-dialog', (e) => e.textContent);
+  await shot(page, 'text-card-convert-dialog');
+  await page.click('.cb-card-dialog button:has-text("Abbrechen")');
+  await page.waitForTimeout(300);
+  const afterCancel = (await dbItems(page)).find((i) => i.id === original.id);
+  const composerAfterCancel = !!(await page.$('.cb-composer'));
+  // convert
+  await inspectorAction(page, original.id, 'Im Schreibstudio bearbeiten');
+  await page.click('.cb-card-dialog .cb-button--primary:has-text("Umwandeln")');
+  await page.waitForSelector('.cb-doc__prose');
+  const converted = (await dbItems(page)).find((i) => i.id === original.id);
+  const paragraphs = await page.$$eval('.cb-doc__prose p', (els) => els.map((e) => e.textContent));
+  // the writing studio works on it: toolbar, bubble, autosave, export
+  await selectText(page, 'Brot');
+  await page.waitForSelector('.cb-bubble', { state: 'visible' });
+  await page.click('.cb-bubble [aria-label="Fett"]');
+  await caretInto(page, 'Einkaufsliste');
+  await pick(page, 'Absatzformat', 'Titel');
+  await savedStatus(page);
+  await shot(page, 'text-card-converted-studio');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('[aria-label="Exportieren"]')]);
+  const exported = fs.readFileSync(await download.path(), 'utf8');
+  await page.click('[aria-label="Editor schließen"]');
+  await page.reload();
+  await page.waitForSelector(`.cb-tile[data-item-id="${original.id}"][data-kind="document"]`);
+  await inspectorAction(page, original.id, 'Bearbeiten');
+  await page.waitForSelector('.cb-doc__prose h1');
+  const reopened = await page.evaluate(() => ({ h1: document.querySelector('.cb-doc__prose h1')?.textContent, strong: document.querySelector('.cb-doc__prose strong')?.textContent, tools: !!document.querySelector('.cb-doc-tools') }));
+  const stored = (await dbItems(page)).find((i) => i.id === original.id);
+  const problems = await clean(['DataTransfer.', 'clipboard']);
+  const keep = (x) => ({ id: x.id, spaceId: x.spaceId, folderId: x.folderId ?? null, title: x.title, tags: x.tags, favorite: x.favorite, createdAt: x.createdAt, origin: x.origin });
+  const ok =
+    /einmalig/.test(dialogText) && JSON.stringify(afterCancel) === JSON.stringify(original) && !composerAfterCancel &&
+    converted.kind === 'document' && !('body' in converted) && JSON.stringify(keep(converted)) === JSON.stringify(keep(original)) && converted.text === original.body && converted.updatedAt > original.updatedAt &&
+    paragraphs.join('|') === 'Einkaufsliste|Brot und  Butter|Milch' &&
+    /<strong>Brot<\/strong>/.test(exported) && reopened.h1 === 'Einkaufsliste' && reopened.strong === 'Brot' && reopened.tools &&
+    stored.kind === 'document' && JSON.stringify(keep(stored)) === JSON.stringify(keep(original)) && !problems.length;
+  return { ok, observed: `cancel unchanged=${JSON.stringify(afterCancel) === JSON.stringify(original)} composer=${composerAfterCancel}, converted kind=${converted.kind} keep=${JSON.stringify(keep(converted)) === JSON.stringify(keep(original))} text=${JSON.stringify(converted.text)}, paragraphs=${paragraphs.join('|')}, export bold=${/<strong>Brot<\/strong>/.test(exported)}, reopened=${JSON.stringify(reopened)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P38', 'Textkarte als Klartext: bleibt Text und kopiert unverändert; Schreibstudio aus dem Klartext-Editor speichert erst; ein fehlschlagendes Umwandeln lässt die Karte unverändert', { clipboard: true }, async ({ page, clean }) => {
+  const card = await pasteTextCard(page, 'Klartext bleibt\nZeile  2');
+  await inspectorAction(page, card.id, 'Als Klartext bearbeiten');
+  await page.waitForSelector('.cb-composer .cm-content');
+  const plainSurface = await page.evaluate(() => ({ cm: !!document.querySelector('.cb-composer .cm-content'), doc: !!document.querySelector('.cb-doc__prose'), studioButton: !!document.querySelector('.cb-canvas-bar [aria-label="Im Schreibstudio bearbeiten"]') }));
+  await page.click('.cb-composer .cm-content');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' ok');
+  await savedStatus(page);
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-inspector');
+  const edited = (await dbItems(page)).find((i) => i.id === card.id);
+  await page.click('.cb-inspector .cb-inspector__actions button:has-text("Kopieren")');
+  await page.waitForSelector('.cb-notice[data-tone="success"]:has-text("kopiert")');
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  // from inside the plain editor: unsaved typing is stored first, then the dialog asks
+  await inspectorAction(page, card.id, 'Als Klartext bearbeiten');
+  await page.waitForSelector('.cb-composer .cm-content');
+  await page.click('.cb-composer .cm-content');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('!');
+  await page.click('.cb-canvas-bar [aria-label="Im Schreibstudio bearbeiten"]');
+  await page.waitForSelector('.cb-card-dialog:has-text("Schreibstudio")');
+  const beforeConvert = (await dbItems(page)).find((i) => i.id === card.id);
+  // a failing commit: error, the text card stays exactly as it was, the plain editor stays open
+  await page.evaluate(() => {
+    window.__fail = true;
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args) {
+      if (window.__fail) throw new DOMException('quota', 'QuotaExceededError');
+      return put.apply(this, args);
+    };
+  });
+  await page.click('.cb-card-dialog .cb-button--primary:has-text("Umwandeln")');
+  await page.waitForSelector('.cb-notice[data-tone="error"]:has-text("unverändert")');
+  await page.evaluate(() => (window.__fail = false));
+  const afterFailure = (await dbItems(page)).find((i) => i.id === card.id);
+  const stillPlain = !!(await page.$('.cb-composer .cm-content'));
+  await page.click('.cb-card-dialog .cb-button--primary:has-text("Umwandeln")');
+  await page.waitForSelector('.cb-composer .cb-doc__prose');
+  const converted = (await dbItems(page)).find((i) => i.id === card.id);
+  const surface = await page.evaluate(() => ({ prose: document.querySelector('.cb-doc__prose').innerText.trim(), cm: !!document.querySelector('.cb-composer .cm-content'), closes: document.querySelectorAll('[aria-label="Editor schließen"]').length }));
+  const problems = await clean(['DataTransfer.', 'clipboard']);
+  const ok =
+    plainSurface.cm && !plainSurface.doc && plainSurface.studioButton && edited.kind === 'text' && edited.body === 'Klartext bleibt\nZeile  2 ok' && copied === edited.body &&
+    beforeConvert.kind === 'text' && beforeConvert.body === 'Klartext bleibt\nZeile  2 ok!' && JSON.stringify(afterFailure) === JSON.stringify(beforeConvert) && stillPlain &&
+    converted.kind === 'document' && converted.text === beforeConvert.body && !surface.cm && surface.closes === 1 && !problems.length;
+  return { ok, observed: `plain=${JSON.stringify(plainSurface)}, edited=${JSON.stringify(edited.body)} kind=${edited.kind}, copied=${JSON.stringify(copied)}, flushed=${JSON.stringify(beforeConvert.body)}, failure unchanged=${JSON.stringify(afterFailure) === JSON.stringify(beforeConvert)} plain still open=${stillPlain}, converted=${converted.kind} ${JSON.stringify(converted.text)}, surface=${JSON.stringify(surface)}, problems=${problems.join(' | ') || '-'}` };
+});
+
 const ONLY = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY) : null; // e.g. E2E_ONLY='^(P6|P23)$' for a focused run
 for (const t of tests) {
   if (ONLY && !ONLY.test(t.id)) continue;

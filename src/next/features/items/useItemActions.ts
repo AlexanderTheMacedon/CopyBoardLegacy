@@ -82,6 +82,10 @@ export function useRunItemAction() {
         case 'open-composer':
           dispatch({ type: 'openComposer', itemId: item.id });
           break;
+        case 'open-studio':
+          // never converted silently: the dialog explains the change and asks first
+          dispatch({ type: 'openModal', modal: { kind: 'convert-to-document', itemId: item.id } });
+          break;
         case 'favorite':
           void entries.favorite(ids, !item.favorite);
           break;
