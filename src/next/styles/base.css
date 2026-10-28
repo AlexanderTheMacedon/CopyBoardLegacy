@@ -64,6 +64,11 @@ body {
   pointer-events: none;
   background: var(--cb-scene-fallback);
   --cb-scene-blur: 7px;
+  /* 0 → 1: how sharp the photograph is drawn. The proximity reveal writes --cb-reveal inline (AmbientScene.tsx), image
+     mode sets --cb-cinema; the larger one wins. The blur token itself never changes, so the overscan stays put. */
+  --cb-reveal: 0;
+  --cb-cinema: 0;
+  --cb-scene-sharp: max(var(--cb-reveal), var(--cb-cinema));
 }
 .cb-scene[data-blur='clear'] {
   --cb-scene-blur: 0px;
@@ -77,12 +82,12 @@ body {
   inset: calc(var(--cb-scene-blur) * -3 - 8px);
   background: var(--cb-scene-photo) 62% 42% / cover no-repeat;
   background-size: cover;
-  filter: blur(var(--cb-scene-blur)) var(--cb-scene-filter);
+  filter: blur(calc(var(--cb-scene-blur) * (1 - var(--cb-scene-sharp)))) var(--cb-scene-filter);
   opacity: 0;
   /* a slow settle from a slight zoom while the photo fades in: cinematic, but only during the change */
   transform: scale(1.045);
   transition: opacity var(--cb-dur-scene) var(--cb-ease-in-out), transform calc(var(--cb-dur-scene) * 2.6) var(--cb-ease-glide),
-    filter var(--cb-dur-expressive) var(--cb-ease-out);
+    filter var(--cb-scene-focus-dur, var(--cb-dur-expressive)) var(--cb-ease-out);
 }
 .cb-scene__photo[data-front] {
   opacity: 1;
@@ -102,33 +107,47 @@ body {
   position: absolute;
   inset: 0;
   background: var(--cb-scene-bleed), var(--cb-scene-vignette), var(--cb-scene-veil);
-  transition: opacity var(--cb-dur-scene) var(--cb-ease-in-out);
+  /* per-photo strength (--cb-veil), thinned by the reveal and almost lifted in image mode */
+  opacity: calc(var(--cb-veil, 1) * (1 - var(--cb-reveal) * 0.4) * (1 - var(--cb-cinema) * 0.8));
+  transition: opacity var(--cb-scene-focus-dur, var(--cb-dur-expressive)) var(--cb-ease-out);
 }
 .cb-scene[data-mode='gradient'] .cb-scene__veil {
   opacity: 0.4;
 }
 
-/* Photo credit: a quiet label in the lower corner, fully legible on hover/focus. */
+/* Photo credit: a quiet label in the lower corner, fully legible on hover/focus. Near it the photograph sharpens (proximity
+   reveal) and a small image-mode button appears beside it; on touch screens the button simply stays visible. */
 .cb-scene-credit {
   position: fixed;
   z-index: 1;
   right: calc(var(--cb-float) + 4px);
   bottom: calc(var(--cb-float) + var(--cb-safe-bottom));
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: var(--cb-radius-control-sm);
+  animation: cb-credit-in 1.6s var(--cb-ease-out) backwards;
+  transition: opacity var(--cb-dur-standard) var(--cb-ease-out), background-color var(--cb-dur-hover) var(--cb-ease-out),
+    visibility 0s;
+}
+.cb-scene-credit__link {
   display: grid;
   justify-items: end;
   gap: 1px;
+  margin: -6px -10px;
   padding: 6px 10px;
-  border-radius: var(--cb-radius-control-sm);
+  border-radius: inherit;
   color: rgb(255 255 255 / 0.86);
   font: var(--cb-text-caption);
   text-decoration: none;
   text-shadow: 0 1px 6px rgb(0 0 0 / 0.45);
   opacity: 0.62;
-  animation: cb-credit-in 1.6s var(--cb-ease-out) backwards;
   transition: opacity var(--cb-dur-hover) var(--cb-ease-out), background-color var(--cb-dur-hover) var(--cb-ease-out);
 }
-.cb-scene-credit:is(:hover, :focus-visible) {
+.cb-scene-credit:is(:hover, :focus-within, [data-near]) .cb-scene-credit__link {
   opacity: 1;
+}
+.cb-scene-credit__link:is(:hover, :focus-visible) {
   background: rgb(0 0 0 / 0.22);
   backdrop-filter: blur(10px);
 }
@@ -142,13 +161,203 @@ body {
   font-size: 11px;
   opacity: 0.8;
 }
-/* the credit yields to every panel that claims the corner */
-.cb-app:is([data-detail='inspector'], [data-detail='composer'], [data-folder], [data-dragging]) .cb-scene-credit {
+/* image-mode entry: outside the credit's box (the reveal measures the box), a small dark-glass squircle */
+.cb-scene-credit__cinema {
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  border-radius: var(--cb-radius-control-sm);
+  background: rgb(10 14 20 / 0.36);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 6px 18px -8px rgb(0 0 0 / 0.5);
+  color: rgb(255 255 255 / 0.94);
   opacity: 0;
+  translate: 6px 0;
+  scale: 0.9;
   pointer-events: none;
+  transition: opacity var(--cb-dur-swift) var(--cb-ease-out), translate var(--cb-dur-standard) var(--cb-spring),
+    scale var(--cb-dur-standard) var(--cb-spring), background-color var(--cb-dur-hover) var(--cb-ease-out);
+}
+.cb-scene-credit:is(:hover, :focus-within, [data-near]) .cb-scene-credit__cinema {
+  opacity: 1;
+  translate: 0 0;
+  scale: 1;
+  pointer-events: auto;
+}
+.cb-scene-credit__cinema:hover {
+  background: rgb(10 14 20 / 0.42);
+}
+.cb-scene-credit__cinema:active {
+  scale: 0.94;
+}
+@media (hover: none) {
+  .cb-scene-credit__cinema {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+    pointer-events: auto;
+  }
+}
+/* the credit yields to every panel that claims the corner (hidden for the reveal as well, via visibility) */
+.cb-app:is([data-detail='inspector'], [data-detail='composer'], [data-folder], [data-dragging], [data-composing], [data-cinema]) .cb-scene-credit {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--cb-dur-exit) var(--cb-ease-out), visibility 0s linear var(--cb-dur-exit);
 }
 @media (max-width: 599.98px) {
   .cb-scene-credit {
+    display: none;
+  }
+}
+
+/* --- Image mode (cinema): the workspace steps aside, the photograph stays. Every UI layer fades and settles back a
+   touch; visibility follows after the fade, so nothing hidden can take focus. Returning reverses it with a short delay
+   behind the scene's re-blur. Pure presentation: no layer unmounts, so space, folder, selection and scroll stay. --- */
+.cb-navdock-rail,
+.cb-stage {
+  transition: opacity var(--cb-dur-expressive) var(--cb-ease-out) 120ms, scale var(--cb-dur-expressive) var(--cb-ease-glide) 120ms,
+    translate var(--cb-dur-expressive) var(--cb-ease-glide) 120ms, visibility 0s;
+}
+.cb-app[data-cinema] :is(.cb-navdock-rail, .cb-stage, .cb-dock, .cb-recorder, .cb-selbar, .cb-notice-region, .cb-drop-veil) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--cb-dur-expressive) var(--cb-ease-out), scale var(--cb-dur-expressive) var(--cb-ease-glide),
+    translate var(--cb-dur-expressive) var(--cb-ease-glide), visibility 0s linear var(--cb-dur-expressive);
+}
+.cb-app[data-cinema] .cb-stage {
+  scale: 0.985;
+}
+.cb-app[data-cinema] .cb-navdock-rail {
+  translate: -18px 0;
+}
+.cb-app[data-cinema] .cb-scene {
+  --cb-cinema: 1;
+  /* the photograph comes into focus slower than the UI leaves: a cinematic rack focus */
+  --cb-scene-focus-dur: calc(var(--cb-dur-expressive) * 2.6);
+}
+.cb-cinema {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  outline: none;
+  color: #fff;
+  animation: cb-cinema-in calc(var(--cb-dur-expressive) * 2) var(--cb-ease-out) backwards;
+  transition: opacity var(--cb-dur-standard) var(--cb-ease-out);
+}
+.cb-cinema[data-idle] {
+  cursor: none;
+}
+.cb-cinema[data-leaving] {
+  opacity: 0;
+  pointer-events: none;
+}
+/* a low shade under the caption, only while the caption is shown */
+.cb-cinema::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 42%;
+  background: linear-gradient(180deg, transparent, rgb(0 0 0 / 0.32));
+  pointer-events: none;
+  transition: opacity calc(var(--cb-dur-standard) * 4) var(--cb-ease-out);
+}
+.cb-cinema__exit {
+  position: absolute;
+  top: calc(var(--cb-space-5) + var(--cb-safe-top));
+  right: var(--cb-space-5);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px 0 14px;
+  border-radius: var(--cb-radius-control);
+  background: rgb(10 14 20 / 0.46);
+  backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid rgb(255 255 255 / 0.2);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 10px 30px -14px rgb(0 0 0 / 0.6);
+  color: rgb(255 255 255 / 0.95);
+  font: var(--cb-text-ui);
+  transition: opacity var(--cb-dur-standard) var(--cb-ease-out), translate var(--cb-dur-standard) var(--cb-ease-glide),
+    background-color var(--cb-dur-hover) var(--cb-ease-out);
+}
+.cb-cinema__exit:hover {
+  background: rgb(10 14 20 / 0.6);
+}
+.cb-cinema__kbd {
+  padding: 1px 6px;
+  border-radius: var(--cb-radius-xs);
+  background: rgb(255 255 255 / 0.14);
+  color: rgb(255 255 255 / 0.78);
+  font: var(--cb-text-caption);
+}
+.cb-cinema__caption {
+  position: absolute;
+  left: calc(var(--cb-space-8) + var(--cb-safe-left, 0px));
+  bottom: calc(var(--cb-space-8) + var(--cb-safe-bottom));
+  max-width: min(720px, calc(100% - var(--cb-space-8) * 2));
+  text-shadow: 0 2px 22px rgb(0 0 0 / 0.35);
+  animation: cb-cinema-caption calc(var(--cb-dur-expressive) * 3) var(--cb-ease-glide) 240ms backwards;
+  transition: opacity calc(var(--cb-dur-standard) * 4) var(--cb-ease-out), translate calc(var(--cb-dur-standard) * 4) var(--cb-ease-glide);
+}
+.cb-cinema__place {
+  font-family: var(--cb-font-display);
+  font-size: clamp(44px, 6.4vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.012em;
+}
+.cb-cinema__meta {
+  margin-top: 12px;
+  font: var(--cb-text-meta);
+  color: rgb(255 255 255 / 0.82);
+}
+.cb-cinema__meta a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgb(255 255 255 / 0.4);
+  text-underline-offset: 3px;
+}
+.cb-cinema__meta a:hover {
+  text-decoration-color: currentColor;
+}
+/* at rest only the photograph remains; any movement or key brings caption and exit back */
+.cb-cinema[data-idle] :is(.cb-cinema__caption, .cb-cinema__exit:not(:focus-visible)) {
+  opacity: 0;
+  pointer-events: none;
+}
+.cb-cinema[data-idle] .cb-cinema__caption {
+  translate: 0 8px;
+}
+.cb-cinema[data-idle] .cb-cinema__exit:not(:focus-visible) {
+  translate: 0 -6px;
+}
+.cb-cinema[data-idle]::before {
+  opacity: 0;
+}
+@keyframes cb-cinema-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes cb-cinema-caption {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+}
+@media (max-width: 599.98px) {
+  .cb-cinema__caption {
+    left: var(--cb-space-5);
+    bottom: calc(var(--cb-space-6) + var(--cb-safe-bottom));
+  }
+  .cb-cinema__exit span {
     display: none;
   }
 }

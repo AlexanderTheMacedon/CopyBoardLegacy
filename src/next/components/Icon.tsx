@@ -134,6 +134,9 @@ const paths = {
   arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
   cornerDownLeft: <path d="M20 5v6a3 3 0 0 1-3 3H5M9 10l-4 4 4 4" />,
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  minus: <path d="M6.5 12h11" />,
+  expand: <path d="M14.5 4.5h5v5M9.5 19.5h-5v-5M19.5 4.5l-6 6M4.5 19.5l6-6" />,
+  shrink: <path d="M13.5 5.5v5h5M10.5 18.5v-5h-5M13.5 10.5l6-6M10.5 13.5l-6 6" />,
   lock: (
     <>
       <rect x="5" y="11" width="14" height="10" rx="2.5" />

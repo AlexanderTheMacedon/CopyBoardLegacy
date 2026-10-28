@@ -503,6 +503,7 @@
   flex: 1;
   min-width: 0;
   height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   /* no mask, filter or opacity here: the workspace must not become a backdrop root, so every glass surface inside it
@@ -541,6 +542,51 @@
 }
 .cb-toolbar > * {
   pointer-events: auto;
+}
+/* Compact: the island leaves the content column and docks at the right edge of the workspace (inspector-aware: the
+   workspace already makes room for it), one float gap from the top and right edges. Same row height, so nothing shifts. */
+.cb-toolbar[data-collapsed] {
+  max-width: none;
+  padding-right: var(--cb-float);
+}
+/* Hand-over (WorkspaceHeader.tsx): leg one glides the current island out to the right … */
+.cb-toolbar[data-phase='out'] .cb-toolbar__island {
+  opacity: 0;
+  transform: translateX(24px);
+  transition: opacity var(--cb-dur-exit) var(--cb-ease-exit), transform var(--cb-dur-exit) var(--cb-ease-exit);
+}
+.cb-toolbar[data-collapsed][data-phase='out'] .cb-toolbar__island {
+  transform: translateX(calc(100% + var(--cb-float)));
+}
+/* … leg two brings the new layout in: the compact island from beyond the right edge (the workspace clips it there), the
+   resting cluster with a short settle in place. Material and identity are already in their end state. */
+.cb-toolbar[data-phase='in'] .cb-toolbar__island {
+  transition: none;
+  animation: cb-island-settle var(--cb-dur-standard) var(--cb-ease-out) both;
+}
+.cb-toolbar[data-collapsed][data-phase='in'] .cb-toolbar__island {
+  animation: cb-island-arrive var(--cb-dur-panel) var(--cb-ease-glide) both;
+}
+.cb-toolbar[data-phase='in'] :is(.cb-toolbar__context, .cb-toolbar__context-inner, .cb-search-trigger) {
+  transition: none;
+}
+.cb-toolbar[data-phase='in'] .cb-toolbar__island::before {
+  transition: none;
+}
+@keyframes cb-island-arrive {
+  from {
+    opacity: 0;
+    transform: translateX(calc(100% + var(--cb-float)));
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@keyframes cb-island-settle {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
 }
 .cb-toolbar__island {
   --cb-island-pad: 5px;
@@ -736,6 +782,31 @@
   max-width: var(--cb-content-max);
   margin: 0 auto;
   padding: var(--cb-space-5) var(--cb-gutter) var(--cb-space-5);
+}
+/* The hero recedes softly as it scrolls under the island (scroll-linked, no script, no running loop). */
+@supports (animation-timeline: view()) {
+  .cb-hero {
+    /* the filling animation makes the hero a stacking context: lift it above the cards so its menus stay on top */
+    position: relative;
+    z-index: 2;
+    animation: cb-hero-recede linear both;
+    animation-timeline: view();
+    animation-range: exit 0% exit 90%;
+  }
+  .cb-app[data-motion='reduced'] .cb-hero {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cb-hero {
+      animation: none;
+    }
+  }
+}
+@keyframes cb-hero-recede {
+  to {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.985);
+  }
 }
 .cb-hero__row {
   display: flex;
@@ -1018,6 +1089,7 @@
     border: 1px solid var(--cb-glass-rim);
     box-shadow: var(--cb-glass-lit), var(--cb-shadow-3);
     animation: cb-notice-in var(--cb-dur-expressive) var(--cb-spring);
+    transition: opacity var(--cb-dur-swift) var(--cb-ease-out), translate var(--cb-dur-standard) var(--cb-ease-glide), visibility 0s;
   }
   .cb-notice-region {
     bottom: calc(var(--cb-dock-h) + var(--cb-safe-bottom) + var(--cb-space-5));

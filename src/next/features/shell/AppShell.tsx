@@ -6,6 +6,7 @@ import { spaceColorVar } from '../../components/SpaceIcon';
 import { readTransfer, transferHasFiles } from '../../data/clipboard';
 import { isInternalDrag } from '../../data/dnd';
 import { useCapture } from '../capture/useCapture';
+import { ComposerDock } from '../capture/ComposerDock';
 import { ContextMenu } from '../context-menu/ContextMenu';
 import { Composer } from '../composer/Composer';
 import { WorkspaceDialogs } from '../dialogs/WorkspaceDialogs';
@@ -24,8 +25,8 @@ import { SpacesDrawer } from './SpacesDrawer';
 /** Exit window of the inspector: matches `--cb-dur-exit` + a frame of slack. */
 const INSPECTOR_EXIT_MS = 240;
 
-/** A modal layer (search, settings, drawer) owns keyboard and clipboard while it is open. */
-const modalOpen = () => !!document.querySelector('dialog[open]');
+/** A modal layer (search, settings, drawer, image mode) owns keyboard and clipboard while it is open. */
+const modalOpen = () => !!document.querySelector('dialog[open], .cb-app[data-cinema]');
 
 const isPasteShortcut = (event: KeyboardEvent) =>
   event.key.toLowerCase() === 'v' && (event.metaKey || event.ctrlKey) && !event.altKey;
@@ -101,6 +102,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const [inspectorWidth, setInspectorWidth] = useState(INSPECTOR_DEFAULT_WIDTH);
   const dragActive = useDragActive();
   const folderOpen = !!state.openFolderId && !state.composerItemId;
+  // The bottom composer steps aside for the editor (its own writing surface), the selection bar (same spot) and image mode.
+  const composerHidden = detail === 'composer' || state.selectedIds.length > 0 || state.cinema;
   useScrollFade(workspaceRef);
   // Identity hue: the active space's colour re-lights every accent; global collections keep the brand ember.
   const activeSpace = state.location.type === 'space' ? library.getSpace(state.location.spaceId) : undefined;
@@ -110,13 +113,13 @@ export function AppShell({ children }: { children?: ReactNode }) {
     // Global search shortcut (H-02: Cmd/Ctrl+K is only *proposed*). Editable fields keep their native shortcuts.
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
-      if (isEditableTarget(event.target) || state.overlay) return;
+      if (isEditableTarget(event.target) || state.overlay || state.cinema) return;
       event.preventDefault();
       dispatch({ type: 'openOverlay', overlay: 'search' });
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [dispatch, state.overlay]);
+  }, [dispatch, state.overlay, state.cinema]);
 
   // Dropping files (or dragged text) anywhere outside an editable field captures them, like a paste. Editable fields keep
   // their native drop; the tab never navigates to a dropped file. Internal drags (cards, folders) are handled by their
@@ -149,6 +152,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
       data-dragging={dragActive || undefined}
       data-folder={folderOpen || undefined}
       data-selecting={state.selectedIds.length > 0 || undefined}
+      data-composer-hidden={composerHidden || undefined}
+      data-cinema={state.cinema || undefined}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -159,11 +164,12 @@ export function AppShell({ children }: { children?: ReactNode }) {
       </a>
       <textarea ref={catcherRef} className="cb-paste-catcher" tabIndex={-1} aria-hidden="true" />
       <Dock />
-      <div className="cb-stage" style={{ '--cb-inspector-w': `${inspectorWidth}px` } as CSSProperties}>
+      <div className="cb-stage" style={{ '--cb-inspector-w': `${inspectorWidth}px` } as CSSProperties} inert={state.cinema}>
         <main id="cb-main" ref={workspaceRef} className="cb-workspace cb-scroll" tabIndex={-1} aria-labelledby="cb-workspace-title" data-cb-context="board" inert={folderOpen}>
           {state.composerItemId ? <Composer key={state.composerItemId} /> : <Board scrollRoot={workspaceRef} />}
         </main>
         <FolderLayer />
+        <ComposerDock hidden={composerHidden} />
         {inspector.value && detail !== 'composer' && (
           <Inspector item={inspector.value} leaving={inspector.leaving} width={inspectorWidth} onWidthChange={setInspectorWidth} />
         )}

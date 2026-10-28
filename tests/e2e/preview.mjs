@@ -278,7 +278,7 @@ test('P8', 'Universal Paste: ⌘V on the board stores text, URL and a screenshot
   const paste = async (write) => {
     await page.evaluate(write);
     await page.evaluate(() => (window.__cbHits.length = 0)); // the test itself used the clipboard API to prepare data
-    await page.mouse.click(1100, 860); // empty board area: nothing editable has focus
+    await page.mouse.click(720, 135); // free header area of the board (the bottom centre belongs to the composer): nothing editable has focus
     await page.keyboard.press('ControlOrMeta+V');
     await page.waitForSelector('.cb-notice[data-tone="success"]');
     const message = await page.$eval('.cb-notice p', (e) => e.textContent);
@@ -332,7 +332,7 @@ test('P9', 'paste keeps native behaviour in editable fields; capture bar, drop a
   await page.waitForSelector('.cb-tile[data-kind="file"] >> text=notiz.csv');
   // context menu → Einfügen (async Clipboard API with granted permission)
   await page.evaluate(() => navigator.clipboard.writeText('# Aus dem Kontextmenü\n\n- eins\n- zwei'));
-  await page.mouse.click(1100, 860, { button: 'right' });
+  await page.mouse.click(720, 135, { button: 'right' });
   await page.waitForSelector('.cb-context-menu');
   const firstEntry = await page.$eval('.cb-context-menu [role="menuitem"]', (e) => e.textContent);
   await page.click('.cb-context-menu [role="menuitem"]:has-text("Einfügen")');
@@ -344,7 +344,7 @@ test('P9', 'paste keeps native behaviour in editable fields; capture bar, drop a
 });
 
 test('P14', 'context menus: board and card menus, keyboard, Escape; favourite and delete with undo work and persist', { clipboard: true }, async ({ page, clean }) => {
-  await page.mouse.click(1100, 860, { button: 'right' });
+  await page.mouse.click(720, 135, { button: 'right' });
   await page.waitForSelector('.cb-context-menu');
   const inViewport = await page.$eval('.cb-context-menu', (e) => { const r = e.getBoundingClientRect(); return r.right <= innerWidth && r.bottom <= innerHeight; });
   await page.keyboard.press('ArrowDown');
@@ -358,7 +358,7 @@ test('P14', 'context menus: board and card menus, keyboard, Escape; favourite an
   await page.waitForSelector('.cb-tile[data-item-id="it-note-standup"] .cb-tile__favorite');
   // own item: paste, delete, undo
   await page.evaluate(() => navigator.clipboard.writeText('Wird gelöscht und wiederhergestellt'));
-  await page.mouse.click(1100, 860);
+  await page.mouse.click(720, 135);
   await page.keyboard.press('ControlOrMeta+V');
   await page.waitForSelector('.cb-tile[data-kind="text"] >> text=Wird gelöscht');
   const own = await page.$eval('.cb-grid .cb-tile', (e) => e.dataset.itemId);
@@ -594,6 +594,33 @@ test('P17', 'spaces: create with icon and colour, rename, per-space view default
     after.emoji === '🧑‍💻' &&
     !problems.length;
   return { ok, observed: `new space=${title}/${empty}/${viewPref} then ${viewBack}, renamed=${renamed}/${dockTitle}, paste="${pasted}", reload=${JSON.stringify(after)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+// Experience & Motion Closure: select-all only acts on the visible rows, the composer floats at the bottom, image mode
+// hides the workspace and Escape returns to it unchanged.
+test('P18', 'file view select-all (mixed/all/none), bottom composer, image mode in and out with Escape', async ({ page, clean }) => {
+  await page.click('.cb-view-controls [role="radio"] >> nth=-1');
+  await page.waitForSelector('.cb-files');
+  await page.click('.cb-files__row .cb-tile__check >> nth=0');
+  const mixed = await page.$eval('.cb-files__check-all', (e) => e.getAttribute('aria-checked'));
+  await page.click('.cb-files__check-all');
+  const all = await page.evaluate(() => [document.querySelector('.cb-files__check-all').getAttribute('aria-checked'), document.querySelectorAll('.cb-files__row[data-checked]').length, document.querySelectorAll('.cb-files__row').length]);
+  await page.click('.cb-files__check-all');
+  const none = await page.evaluate(() => [document.querySelector('.cb-files__check-all').getAttribute('aria-checked'), document.querySelectorAll('.cb-files__row[data-checked]').length]);
+  await settle(page);
+  const composer = await page.$eval('.cb-composer-dock .cb-capture', (e) => Math.round(innerHeight - e.getBoundingClientRect().bottom));
+  await page.hover('.cb-scene-credit');
+  await page.click('.cb-scene-credit__cinema');
+  await page.waitForSelector('.cb-cinema');
+  const inCinema = await page.evaluate(() => ({ stage: document.querySelector('.cb-stage').inert, cinema: document.querySelector('.cb-app').hasAttribute('data-cinema') }));
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.cb-cinema', { state: 'detached' });
+  const back = await page.evaluate(() => ({ stage: document.querySelector('.cb-stage').inert, files: !!document.querySelector('.cb-files') }));
+  const problems = await clean();
+  const ok =
+    mixed === 'mixed' && all[0] === 'true' && all[1] === all[2] && all[2] > 1 && none[0] === 'false' && none[1] === 0 &&
+    composer > 0 && composer < 48 && inCinema.stage && inCinema.cinema && !back.stage && back.files && !problems.length;
+  return { ok, observed: `select-all ${mixed}→${all.join('/')}→${none.join('/')}, composer bottom gap=${composer}, cinema=${JSON.stringify(inCinema)}, back=${JSON.stringify(back)}` };
 });
 
 browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });

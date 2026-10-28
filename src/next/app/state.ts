@@ -47,6 +47,8 @@ export interface UiState {
   readonly settingsSection: SettingsSection;
   /** Floating Recorder shell (D-008) visible. Independent of space, inspector and overlays. */
   readonly recorderOpen: boolean;
+  /** Cinematic image mode: every UI layer steps aside for the photograph. Pure presentation; nothing else changes. */
+  readonly cinema: boolean;
   /** Global preferences (persisted). View, density and sort act as defaults for spaces without their own. */
   readonly prefs: Preferences;
 }
@@ -71,6 +73,7 @@ export type UiAction =
   | { type: 'openModal'; modal: WorkspaceModal }
   | { type: 'closeModal' }
   | { type: 'setRecorderOpen'; open: boolean }
+  | { type: 'setCinema'; on: boolean }
   | { type: 'setPreference'; patch: Partial<Preferences> };
 
 /** View defaults of a space, applied when it is opened; global preferences fill what the space leaves open. */
@@ -95,6 +98,7 @@ export const createInitialState = (location: Location, prefs: Preferences = defa
   modal: null,
   settingsSection: 'general',
   recorderOpen: false,
+  cinema: false,
   prefs,
 });
 
@@ -164,6 +168,8 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       return { ...state, modal: null };
     case 'setRecorderOpen':
       return { ...state, recorderOpen: action.open };
+    case 'setCinema':
+      return state.cinema === action.on ? state : { ...state, cinema: action.on };
     case 'setPreference': {
       // An explicit choice applies to the current board at once and becomes the default for spaces without their own.
       const { view, density, sort } = action.patch;

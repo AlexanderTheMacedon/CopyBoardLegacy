@@ -205,7 +205,24 @@
   margin-top: calc(var(--cb-space-2) * -1);
 }
 .cb-board-root {
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
+  transition: opacity var(--cb-dur-standard) var(--cb-ease-out), scale var(--cb-dur-panel) var(--cb-ease-glide);
+}
+/* auto side margins would shrink flex items to their content: the columns keep their full (max-)width */
+.cb-board-root > :is(.cb-toolbar, .cb-hero, .cb-board) {
+  width: 100%;
+}
+.cb-board-root > .cb-board {
+  flex: 1;
+}
+/* The open folder window owns the stage: the board behind it steps back completely (no veil, no band beside the dock)
+   and returns while the window shrinks back into its tile. */
+.cb-app[data-folder] .cb-board-root {
+  opacity: 0;
+  scale: 0.985;
+  transition-duration: var(--cb-dur-swift), var(--cb-dur-panel);
 }
 
 /* --- Selection on tiles: a check in the preview corner; checked cards get one accent contour (no stacked rings) ------ */
@@ -709,28 +726,18 @@
 }
 
 /* --- Folder window: a large glass surface that grows out of its tile ---------------------------------------------- */
+/* The veil is only the click-outside target. It paints nothing: a tinted, blurred veil scoped to the stage drew a hard
+   vertical band beside the floating dock (the stage starts at the dock's right edge). Separation comes from the board
+   stepping back instead (.cb-board-root below), so the photo shows untouched around the dock and the window. */
 .cb-folder-veil {
   position: absolute;
   z-index: 13;
   inset: 0;
-  background: color-mix(in srgb, var(--cb-backdrop) 55%, transparent);
-  backdrop-filter: blur(3px);
+  background: none;
   cursor: default;
-  animation: cb-veil-in var(--cb-dur-standard) var(--cb-ease-out) backwards;
 }
 .cb-folder-veil[data-leaving] {
-  animation: cb-veil-out var(--cb-dur-exit) var(--cb-ease-exit) forwards;
   pointer-events: none;
-}
-@keyframes cb-veil-in {
-  from {
-    opacity: 0;
-  }
-}
-@keyframes cb-veil-out {
-  to {
-    opacity: 0;
-  }
 }
 .cb-folder-window {
   position: absolute;
@@ -1204,7 +1211,7 @@
 .cb-files__row[data-fresh] {
   animation: cb-arrive 560ms var(--cb-spring-bouncy) backwards;
 }
-.cb-files__row .cb-tile__check {
+.cb-files :is(.cb-files__row, thead) .cb-tile__check {
   position: relative;
   top: auto;
   left: auto;
@@ -1212,17 +1219,33 @@
   transform: none;
   color: transparent;
 }
-.cb-files__row .cb-tile__check:not([aria-checked='true']) {
+.cb-files :is(.cb-files__row, thead) .cb-tile__check:not([aria-checked='true'], [aria-checked='mixed']) {
   background: color-mix(in srgb, var(--cb-glass-solid) 70%, transparent);
   border-color: var(--cb-border-strong);
   box-shadow: none;
   backdrop-filter: none;
 }
-.cb-files__row .cb-tile__check:hover {
+.cb-files :is(.cb-files__row, thead) .cb-tile__check:hover {
   color: var(--cb-text-tertiary);
 }
-.cb-files__row .cb-tile__check[aria-checked='true'] {
+.cb-files :is(.cb-files__row, thead) .cb-tile__check:is([aria-checked='true'], [aria-checked='mixed']) {
+  background: var(--cb-accent-fill);
+  border-color: transparent;
   color: var(--cb-on-accent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 4px 10px -4px var(--cb-accent-glow);
+}
+/* mixed draws its dash like the check draws itself */
+.cb-tile__check[aria-checked='mixed'] .cb-icon {
+  stroke-dashoffset: 0;
+}
+.cb-files__check-all:disabled {
+  opacity: 0.4 !important;
+  cursor: default;
+}
+/* one ring only: the focus ring hugs the squircle instead of floating as a second contour around the checked fill */
+.cb-files .cb-tile__check:focus-visible {
+  outline-offset: 1px;
+  box-shadow: none;
 }
 .cb-files__name {
   display: flex;

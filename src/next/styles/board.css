@@ -6,7 +6,121 @@
   gap: var(--cb-space-5);
   max-width: var(--cb-content-max);
   margin: 0 auto;
-  padding: 0 var(--cb-gutter) var(--cb-space-12);
+  /* the board fills the free height (empty state centring); rows keep their natural height */
+  align-content: start;
+  /* the last row always ends above the floating composer */
+  padding: 0 var(--cb-gutter) calc(var(--cb-composer-clear) + var(--cb-space-6));
+}
+/* Empty space: the empty state centres in the free board, lifted by the composer's room so both read as one composition */
+.cb-board[data-empty] {
+  align-content: center;
+}
+
+/* --- Bottom Floating Composer (ComposerDock.tsx): the capture surface floats centred at the bottom of the content
+   viewport, over the board and the folder window. Inspector-aware (it keeps to the board's side), clear of the mobile dock
+   and the on-screen keyboard. Hidden (editor, selection, image mode) it sinks away but stays mounted. ------------------ */
+.cb-app {
+  --cb-composer-base: calc(var(--cb-float) + var(--cb-space-3) + var(--cb-safe-bottom));
+  /* room the content keeps below its last row */
+  --cb-composer-clear: 104px;
+  /* bottom edge for layers that stack above the composer (notices, recorder, credit on narrow screens) */
+  --cb-above-composer: calc(var(--cb-composer-base) + var(--cb-composer-h, 58px) + var(--cb-space-3));
+}
+.cb-composer-dock {
+  position: absolute;
+  z-index: 16;
+  left: 0;
+  right: 0;
+  bottom: var(--cb-composer-base);
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--cb-gutter);
+  pointer-events: none;
+  transition: opacity var(--cb-dur-swift) var(--cb-ease-out), translate var(--cb-dur-panel) var(--cb-ease-glide),
+    right var(--cb-dur-panel) var(--cb-ease-glide), bottom var(--cb-dur-standard) var(--cb-ease-glide), visibility 0s;
+}
+.cb-composer-dock > .cb-capture {
+  width: min(720px, 100%);
+  pointer-events: auto;
+  transition: width var(--cb-dur-panel) var(--cb-ease-glide), box-shadow var(--cb-dur-panel) var(--cb-ease-out),
+    border-color var(--cb-dur-panel) var(--cb-ease-out), background-color var(--cb-dur-panel) var(--cb-ease-out);
+}
+.cb-composer-dock > .cb-capture[data-state='focus'] {
+  /* focus widens the surface a little and grows it upwards (bottom-anchored): room for longer notes, no jump */
+  width: min(860px, 100%);
+}
+/* floating material: thicker glass and a real lift over the content scrolling beneath */
+.cb-composer-dock > .cb-capture:not([data-state='focus']) {
+  background: var(--cb-glass-sheen), var(--cb-glass-thick);
+  backdrop-filter: blur(var(--cb-blur-thick)) saturate(var(--cb-glass-saturate));
+  box-shadow: var(--cb-glass-lit), var(--cb-shadow-3);
+}
+.cb-composer-dock > .cb-capture:hover:not([data-state='focus']) {
+  box-shadow: var(--cb-glass-lit), var(--cb-shadow-4);
+}
+.cb-composer-dock > .cb-capture[data-state='focus'] {
+  box-shadow: var(--cb-glass-lit), var(--cb-shadow-4), 0 22px 54px -28px var(--cb-accent-glow);
+}
+.cb-app[data-detail='inspector'] .cb-composer-dock {
+  right: calc(var(--cb-inspector-w) + var(--cb-float));
+}
+.cb-app[data-resizing] .cb-composer-dock {
+  transition: none;
+}
+.cb-composer-dock[data-hidden] {
+  opacity: 0;
+  translate: 0 calc(100% + var(--cb-space-6));
+  visibility: hidden;
+  transition: opacity var(--cb-dur-exit) var(--cb-ease-exit), translate var(--cb-dur-standard) var(--cb-ease-exit),
+    right var(--cb-dur-panel) var(--cb-ease-glide), visibility 0s linear var(--cb-dur-standard);
+}
+/* the folder window's last row ends above the composer, like the board's */
+.cb-folder-window .cb-folder-window__content {
+  padding-bottom: calc(var(--cb-composer-clear) + var(--cb-space-4));
+}
+/* layers that share the bottom edge stack above the composer while it is shown */
+.cb-app:not([data-composer-hidden]) :is(.cb-notice-region, .cb-recorder) {
+  bottom: var(--cb-above-composer);
+}
+/* below ~1440 px the (expanded) composer would reach the credit and its image-mode button: the credit rides above it */
+@media (max-width: 1439.98px) {
+  .cb-app:not([data-composer-hidden]) .cb-scene-credit {
+    bottom: var(--cb-above-composer);
+  }
+}
+/* Tablet and phone: the inspector covers the board, the composer waits below it */
+@media (max-width: 1023.98px) {
+  .cb-app[data-detail='inspector'] .cb-composer-dock {
+    right: 0;
+    opacity: 0;
+    translate: 0 calc(100% + var(--cb-space-6));
+    visibility: hidden;
+  }
+}
+@media (max-width: 599.98px) {
+  .cb-app {
+    --cb-composer-base: calc(var(--cb-dock-h) + var(--cb-safe-bottom) + var(--cb-space-2) * 2);
+    --cb-composer-clear: 92px;
+  }
+  /* typing with the on-screen keyboard: the mobile dock steps aside and the composer rides on the keyboard */
+  .cb-app[data-keyboard] {
+    --cb-composer-base: calc(max(var(--cb-keyboard, 0px), var(--cb-safe-bottom)) + var(--cb-space-2));
+  }
+  .cb-app[data-keyboard] .cb-dock {
+    opacity: 0;
+    translate: 0 calc(100% + var(--cb-space-4));
+    visibility: hidden;
+  }
+  .cb-composer-dock {
+    padding: 0 var(--cb-space-3);
+  }
+  .cb-composer-dock .cb-capture__input {
+    max-height: 30vh;
+    max-height: 30dvh;
+  }
+  .cb-composer-dock .cb-capture__hint > span {
+    display: none;
+  }
 }
 
 /* --- Smart Capture (M-03): optional — Universal Paste works without it. One glass squircle is the only contour; focus
@@ -871,39 +985,6 @@
   max-width: 46ch;
   color: var(--cb-text-secondary);
 }
-.cb-empty__starts {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--cb-space-2);
-  margin-top: var(--cb-space-2);
-}
-.cb-empty__start {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--cb-space-2);
-  min-height: 40px;
-  padding: 0 var(--cb-space-4) 0 var(--cb-space-3);
-  border-radius: var(--cb-radius-control);
-  background: var(--cb-glass-sheen), var(--cb-glass-regular);
-  border: 1px solid var(--cb-glass-rim);
-  box-shadow: var(--cb-glass-lit);
-  font: var(--cb-text-ui);
-  color: var(--cb-text-primary);
-  transition: transform var(--cb-dur-swift) var(--cb-ease-spring), box-shadow var(--cb-dur-micro) var(--cb-ease-out),
-    border-color var(--cb-dur-micro) var(--cb-ease-out);
-}
-.cb-empty__start .cb-icon {
-  color: var(--cb-accent);
-}
-.cb-empty__start:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--cb-glass-lit), var(--cb-shadow-2);
-}
-.cb-empty__start:active {
-  transform: scale(0.97);
-}
-
 @media (max-width: 599.98px) {
   .cb-capture {
     padding: 6px;

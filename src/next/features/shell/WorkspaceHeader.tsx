@@ -1,5 +1,6 @@
-import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useState, type AnimationEvent, type CSSProperties, type RefObject } from 'react';
 import { usePreview } from '../../app/context';
+import { useMediaQuery } from '../../app/hooks';
 import { densityPreference, viewPreference } from '../../app/preferences';
 import type { BoardFilter } from '../../app/state';
 import { Icon, type IconName } from '../../components/Icon';
@@ -31,6 +32,8 @@ interface WorkspaceHeaderProps {
 // Collapse thresholds with hysteresis (D-020: no flicker on short direction changes). Candidates, calibrated in Run C.
 const COLLAPSE_AT = 128;
 const EXPAND_AT = 44;
+/** Exit leg of the island hand-over: matches `--cb-dur-exit` (190 ms) + a frame. */
+const ISLAND_OUT_MS = 200;
 
 const collectionIcon: Record<CollectionId, IconName> = { all: 'layers', favorites: 'star', recent: 'clock', sessions: 'waveform' };
 
@@ -121,6 +124,13 @@ export function ViewTools({ compact = false }: { compact?: boolean }) {
 export function WorkspaceHeader({ title, space, collectionId, filters, filter, onFilterChange, countLabel, placement, scrollRoot }: WorkspaceHeaderProps) {
   const { state, dispatch } = usePreview();
   const [collapsed, setCollapsed] = useState(false);
+  // Floating Header 2.0: the scroll threshold (`collapsed`) and the applied layout (`compact`) are separate, so the island
+  // can hand over in two legs: the resting cluster glides out to the right, then the compact island glides in from the
+  // right viewport edge (and the reverse on the way back). The island stays mounted throughout (SM-10).
+  const [compact, setCompact] = useState(false);
+  const [phase, setPhase] = useState<'out' | 'in' | undefined>();
+  const osReduced = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const instant = osReduced || state.prefs.motion === 'reduced';
   const locationKey = state.location.type === 'space' ? state.location.spaceId : state.location.collectionId;
 
   useEffect(() => {
@@ -148,6 +158,28 @@ export function WorkspaceHeader({ title, space, collectionId, filters, filter, o
     };
   }, [scrollRoot]);
 
+  useEffect(() => {
+    if (collapsed === compact) {
+      // direction changed again during the exit leg: the island simply glides back
+      setPhase((current) => (current === 'out' ? undefined : current));
+      return;
+    }
+    if (instant) {
+      setCompact(collapsed);
+      return;
+    }
+    setPhase('out');
+    const timer = setTimeout(() => {
+      setCompact(collapsed);
+      setPhase('in');
+    }, ISLAND_OUT_MS);
+    return () => clearTimeout(timer);
+  }, [collapsed, compact, instant]);
+
+  const onIslandAnimationEnd = (event: AnimationEvent) => {
+    if (event.target === event.currentTarget) setPhase((current) => (current === 'in' ? undefined : current));
+  };
+
   // A new collection starts at the top of its board; the toolbar expands with it.
   useEffect(() => {
     scrollRoot.current?.scrollTo({ top: 0 });
@@ -161,15 +193,15 @@ export function WorkspaceHeader({ title, space, collectionId, filters, filter, o
       {/* Direct child of the scroll container so `position: sticky` holds for the whole board. The row itself is click-through;
           only the island is a surface: at rest it is the quiet search cluster, collapsed it becomes a compact floating glass
           island that gains the board identity — never a full-width bar. */}
-      <div className="cb-toolbar" data-collapsed={collapsed || undefined}>
+      <div className="cb-toolbar" data-collapsed={compact || undefined} data-phase={phase}>
         <IconButton
           icon="menu"
           label="Spaces öffnen"
           className="cb-toolbar__menu"
           onClick={() => dispatch({ type: 'openOverlay', overlay: 'spaces-drawer' })}
         />
-        <div className="cb-toolbar__island">
-          <div className="cb-toolbar__context" aria-hidden={!collapsed} inert={!collapsed}>
+        <div className="cb-toolbar__island" onAnimationEnd={onIslandAnimationEnd}>
+          <div className="cb-toolbar__context" aria-hidden={!compact} inert={!compact}>
             <div className="cb-toolbar__context-inner">
               <button
                 type="button"

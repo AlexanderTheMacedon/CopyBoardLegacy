@@ -163,6 +163,36 @@ function ItemRow({ item, placement, selection, showSpace }: { item: Item; placem
   );
 }
 
+/**
+ * Select-all for the rows shown right now (after filter and search): unchecked or mixed → all visible rows join the
+ * selection; all checked → only they leave it. Selections outside the current view are kept either way.
+ */
+function SelectAllCheck({ ids, selection }: { ids: readonly string[]; selection: Selection }) {
+  const { state, dispatch } = usePreview();
+  const count = ids.filter((id) => selection.selected.has(id)).length;
+  const all = ids.length > 0 && count === ids.length;
+  const mixed = count > 0 && !all;
+  const onClick = () => {
+    const visible = new Set(ids);
+    const next = all ? state.selectedIds.filter((id) => !visible.has(id)) : [...state.selectedIds, ...ids.filter((id) => !selection.selected.has(id))];
+    dispatch({ type: 'setSelection', ids: next, anchor: null });
+  };
+  return (
+    <button
+      type="button"
+      className="cb-tile__check cb-files__check-all"
+      role="checkbox"
+      aria-checked={mixed ? 'mixed' : all}
+      aria-label="Alle sichtbaren Einträge auswählen"
+      title={all ? 'Auswahl aufheben' : 'Alle auswählen'}
+      disabled={!ids.length}
+      onClick={onClick}
+    >
+      <Icon name={mixed ? 'minus' : 'check'} size={14} />
+    </button>
+  );
+}
+
 interface FileListProps {
   folders: readonly Folder[];
   items: readonly Item[];
@@ -196,7 +226,11 @@ export function FileList({ folders, items, label, placement, selection, showSpac
         <thead>
           <tr>
             <th scope="col" className="cb-files__check-cell">
-              <span className="cb-visually-hidden">Auswahl</span>
+              {selection ? (
+                <SelectAllCheck ids={[...(placement ? folders.map((f) => f.id) : []), ...items.map((i) => i.id)]} selection={selection} />
+              ) : (
+                <span className="cb-visually-hidden">Auswahl</span>
+              )}
             </th>
             {columns.map((col) => {
               const active = col.sorts.includes(state.sort);

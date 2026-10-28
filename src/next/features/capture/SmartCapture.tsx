@@ -1,5 +1,5 @@
 import { useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
-import { useCaptureSpace, usePreview } from '../../app/context';
+import { useCaptureSpace, useOpenFolder, usePreview } from '../../app/context';
 import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { readTransfer } from '../../data/clipboard';
@@ -8,27 +8,25 @@ import { useCapture } from './useCapture';
 export const CAPTURE_INPUT_ID = 'cb-capture-input';
 const FILE_INPUT_ID = 'cb-capture-file';
 
-/** Single capture entry for header toolbar, context menu and mobile dock (D-020/D-030: no second capture logic). */
+/** Single capture entry for header toolbar, context menu and mobile dock (D-020/D-030: no second capture logic). The
+ *  composer floats at the bottom of the viewport, so focusing it never scrolls the board. */
 export function focusCapture() {
-  const input = document.getElementById(CAPTURE_INPUT_ID);
-  if (!input) return;
-  input.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  input.focus({ preventScroll: true });
+  document.getElementById(CAPTURE_INPUT_ID)?.focus({ preventScroll: true });
 }
-
-/** Opens the system file picker of the capture bar. */
-export const pickFiles = () => document.getElementById(FILE_INPUT_ID)?.click();
 
 const isMac = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
 
 /**
- * Smart Capture Bar (D-003, DS-C07, M-03): optional. Universal Paste works without ever focusing it. Text typed here is
+ * Smart Capture Bar (D-003, DS-C07, M-03), shown as the Bottom Floating Composer (ComposerDock): optional, Universal
+ * Paste works without ever focusing it. While a folder window is open it names that folder as the target. Text typed here is
  * saved with "Hinzufügen" (or ⌘/Strg+Enter); pasted images and files go straight to the board, pasted text lands in the
  * field as usual. The action row stays mounted and only expands, so the input never remounts (SM-10).
  */
 export function SmartCapture() {
   const { dispatch } = usePreview();
   const space = useCaptureSpace();
+  const folder = useOpenFolder();
+  const target = folder && space && folder.spaceId === space.id ? folder.name : space?.name;
   const capture = useCapture();
   const [text, setText] = useState('');
   const [focused, setFocused] = useState(false);
@@ -62,23 +60,23 @@ export function SmartCapture() {
   };
 
   return (
-    <section className="cb-capture" data-state={open ? 'focus' : 'rest'} aria-labelledby="cb-capture-title">
+    <section className="cb-capture" data-state={open ? 'focus' : 'rest'} data-target={folder ? 'folder' : undefined} aria-labelledby="cb-capture-title">
       <h2 id="cb-capture-title" className="cb-visually-hidden">
         Smart Capture
       </h2>
       <div className="cb-capture__field">
         <span className="cb-capture__lead" aria-hidden="true">
-          <Icon name="plus" size={18} />
+          <Icon name={folder ? 'folderInput' : 'plus'} size={18} />
         </span>
         <label htmlFor={CAPTURE_INPUT_ID} className="cb-visually-hidden">
-          {space ? `Inhalt für ${space.name} erfassen` : 'Inhalt erfassen'}
+          {target ? `Inhalt für ${target} erfassen` : 'Inhalt erfassen'}
         </label>
         <textarea
           id={CAPTURE_INPUT_ID}
           className="cb-capture__input"
           // One row; height is driven by CSS (min-height transition + field-sizing), so expanding never jumps.
           rows={1}
-          placeholder={space ? `Notiz für „${space.name}“ schreiben …` : 'Notiz schreiben …'}
+          placeholder={target ? `Notiz für „${target}“ schreiben …` : 'Notiz schreiben …'}
           value={text}
           onChange={(event) => setText(event.target.value)}
           onFocus={() => setFocused(true)}
@@ -113,7 +111,7 @@ export function SmartCapture() {
         <div>
           <div className="cb-capture__actions">
             <p id="cb-capture-hint" className="cb-capture__hint">
-              {space ? `Wird lokal in „${space.name}“ gespeichert` : 'Wird lokal gespeichert'}
+              {space ? `Wird lokal in „${folder && folder.spaceId === space.id ? `${space.name} › ${folder.name}` : space.name}“ gespeichert` : 'Wird lokal gespeichert'}
               <span aria-hidden="true"> · {isMac() ? '⌘' : 'Strg'}↵</span>
             </p>
             <button type="button" className="cb-button cb-button--primary" disabled={!text.trim() || saving} onClick={() => void submit()}>

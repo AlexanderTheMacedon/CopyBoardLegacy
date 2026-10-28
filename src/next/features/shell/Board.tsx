@@ -6,7 +6,6 @@ import { kindOrder } from '../../domain/kinds';
 import { searchItems } from '../../domain/search';
 import { sortFolders, sortItems } from '../../domain/sort';
 import type { Folder, Item, Placement } from '../../domain/types';
-import { SmartCapture } from '../capture/SmartCapture';
 import { useDragAutoScroll } from '../dnd/useDragDrop';
 import { BoardGrid, useOrderedIds } from '../grid/BoardGrid';
 import { EmptyState } from '../grid/EmptyState';
@@ -41,7 +40,8 @@ export function useLevelEntries(folders: readonly Folder[], items: readonly Item
   }, [folders, items, filter, query, state.sort]);
 }
 
-/** Space board / collection view (SC-02, SC-04..07): header → Smart Capture → folders and cards of the board level. */
+/** Space board / collection view (SC-02, SC-04..07): header → folders and cards of the board level. Capture is the Bottom
+ *  Floating Composer of the shell (ComposerDock), shared with the folder window. */
 export function Board({ scrollRoot }: { scrollRoot: RefObject<HTMLElement | null> }) {
   const { state, dispatch, library } = usePreview();
   const { location } = state;
@@ -79,8 +79,7 @@ export function Board({ scrollRoot }: { scrollRoot: RefObject<HTMLElement | null
         placement={placement}
         scrollRoot={scrollRoot}
       />
-      <div className="cb-board">
-        <SmartCapture />
+      <div className="cb-board" data-empty={!hasContent || undefined}>
         {hasContent ? (
           <>
             {filter !== 'all' && (
