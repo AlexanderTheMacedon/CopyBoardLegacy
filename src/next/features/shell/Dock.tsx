@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { usePreview } from '../../app/context';
 import { useMediaQuery } from '../../app/hooks';
 import { BrandMark } from '../../components/BrandMark';
@@ -56,8 +56,38 @@ function DockButton({
   );
 }
 
-/** One space in the flyout: navigation target, drop target for cards and folders (moves them to that space's board). */
-function FlyoutSpace({ space, index, current, count, onChoose }: { space: Space; index: number; current: boolean; count: number; onChoose: () => void }) {
+/** Pointer and keyboard handlers of a space's reorder grip (SpaceSwitcher owns the drag). */
+interface ReorderGrip {
+  onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerUp: () => void;
+  onPointerCancel: () => void;
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
+}
+
+/**
+ * One space in the flyout: navigation target, drop target for cards and folders (moves them to that space's board), and a
+ * grip to reorder the spaces. The grip is pointer-driven, never an HTML drag source, so it cannot meet the cards' drag.
+ */
+function FlyoutSpace({
+  space,
+  index,
+  current,
+  count,
+  onChoose,
+  grip,
+  offset,
+  lifted,
+}: {
+  space: Space;
+  index: number;
+  current: boolean;
+  count: number;
+  onChoose: () => void;
+  grip: ReorderGrip;
+  offset: number;
+  lifted: boolean;
+}) {
   const entries = useEntryActions();
   const drop = useDropTarget({
     accepts: (payload) => !(payload.from.spaceId === space.id && payload.from.folderId === null),
@@ -65,7 +95,12 @@ function FlyoutSpace({ space, index, current, count, onChoose }: { space: Space;
     armDelay: 60,
   });
   return (
-    <li style={{ '--i': index } as CSSProperties} data-drop={drop.over || undefined} {...drop.props}>
+    <li
+      style={{ '--i': index, translate: offset ? `0 ${offset}px` : undefined } as CSSProperties}
+      data-drop={drop.over || undefined}
+      data-lifted={lifted || undefined}
+      {...drop.props}
+    >
       <button
         type="button"
         className="cb-spaces-flyout__item"
@@ -74,6 +109,10 @@ function FlyoutSpace({ space, index, current, count, onChoose }: { space: Space;
         data-space-id={space.id}
         style={{ '--cb-swatch': spaceColorVar(space.color) } as CSSProperties}
         onClick={onChoose}
+        onKeyDown={(event) => {
+          // Alt + arrow on the space itself moves it as well (the grip's arrows without leaving the list)
+          if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) grip.onKeyDown(event as unknown as KeyboardEvent<HTMLButtonElement>);
+        }}
       >
         <SpaceGlyph icon={space.icon} name={space.name} color={space.color} size={30} className="cb-space-switch__swatch" />
         <span className="cb-spaces-flyout__name">{space.name}</span>
@@ -81,8 +120,129 @@ function FlyoutSpace({ space, index, current, count, onChoose }: { space: Space;
           {count}
         </span>
       </button>
+      <button
+        type="button"
+        className="cb-spaces-flyout__grip"
+        aria-label={`„${space.name}“ verschieben`}
+        aria-describedby="cb-spaces-reorder-hint"
+        title="Ziehen zum Sortieren"
+        data-reorder={space.id}
+        {...grip}
+      >
+        <Icon name="grip" size={16} />
+      </button>
     </li>
   );
+}
+
+interface SpaceDrag {
+  readonly id: SpaceId;
+  readonly from: number;
+  readonly to: number;
+  /** pointer travel, clamped to the list */
+  readonly dy: number;
+  /** row pitch (height + gap), first row's top and row height, measured at the start */
+  readonly pitch: number;
+  readonly top: number;
+  readonly height: number;
+}
+
+/**
+ * Space order in the flyout: drag a grip (pointer capture: the row follows the pointer, the others make room, a slot marks
+ * the drop place) or press its arrow keys. The new order is shown at once and written through `workspace.reorderSpaces`
+ * (the spaces' `order` field, IndexedDB); the pending order holds until the library reports it, a failed write rolls back.
+ */
+function useSpaceReorder() {
+  const { library, workspace, notify } = usePreview();
+  const [pending, setPending] = useState<readonly SpaceId[] | null>(null);
+  const [drag, setDrag] = useState<SpaceDrag | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const dragRef = useRef<(SpaceDrag & { startY: number }) | null>(null);
+  const busy = useRef(false);
+
+  const libraryKey = library.spaces.map((s) => s.id).join();
+  const spaces = pending
+    ? [...pending.map((id) => library.getSpace(id)).filter((s): s is Space => !!s), ...library.spaces.filter((s) => !pending.includes(s.id))]
+    : library.spaces;
+  useEffect(() => {
+    if (pending && pending.join() === libraryKey) setPending(null);
+  }, [pending, libraryKey]);
+
+  const commit = (space: Space, from: number, to: number) => {
+    if (to === from) return;
+    const ids = spaces.map((s) => s.id);
+    ids.splice(from, 1);
+    ids.splice(to, 0, space.id);
+    setPending(ids);
+    setAnnouncement(`„${space.name}“ an Position ${to + 1} von ${ids.length}`);
+    workspace.reorderSpaces(ids).catch(() => {
+      setPending(null);
+      notify('Die Reihenfolge konnte nicht gespeichert werden.', { tone: 'error' });
+    });
+  };
+
+  const end = (apply: boolean) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    busy.current = false;
+    setDrag(null);
+    const space = d && library.getSpace(d.id);
+    if (apply && d && space) commit(space, d.from, d.to);
+  };
+
+  const grip = (space: Space, index: number, listRef: { current: HTMLUListElement | null }): ReorderGrip => ({
+    onPointerDown: (event) => {
+      const rows = [...(listRef.current?.querySelectorAll<HTMLElement>(':scope > li') ?? [])];
+      const first = rows[0];
+      if (event.button !== 0 || !first) return;
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      const pitch = rows[1] ? rows[1].offsetTop - first.offsetTop : first.offsetHeight;
+      const next = { id: space.id, from: index, to: index, dy: 0, pitch, top: first.offsetTop, height: first.offsetHeight };
+      dragRef.current = { ...next, startY: event.clientY };
+      busy.current = true;
+      setDrag(next);
+    },
+    onPointerMove: (event) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const last = spaces.length - 1;
+      const dy = Math.max(-d.from * d.pitch, Math.min((last - d.from) * d.pitch, event.clientY - d.startY));
+      const to = Math.max(0, Math.min(last, d.from + Math.round(dy / d.pitch)));
+      dragRef.current = { ...d, dy, to };
+      setDrag({ ...d, dy, to });
+    },
+    onPointerUp: () => end(true),
+    onPointerCancel: () => end(false),
+    onKeyDown: (event) => {
+      if (event.key === 'Escape' && dragRef.current) end(false);
+      else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        const to = index + (event.key === 'ArrowUp' ? -1 : 1);
+        if (to >= 0 && to < spaces.length) {
+          // React moves the focused row's node; keep the list open and the focus on the moved space's grip
+          busy.current = true;
+          commit(space, index, to);
+          requestAnimationFrame(() => {
+            document.querySelector<HTMLElement>(`[data-reorder="${space.id}"]`)?.focus();
+            busy.current = false;
+          });
+        }
+      } else return;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+  });
+
+  /** Where row `i` is drawn while a row is dragged: the dragged row follows the pointer, the rows it passed make room. */
+  const offset = (i: number) => {
+    if (!drag) return 0;
+    if (i === drag.from) return drag.dy;
+    if (drag.from < drag.to && i > drag.from && i <= drag.to) return -drag.pitch;
+    if (drag.to < drag.from && i >= drag.to && i < drag.from) return drag.pitch;
+    return 0;
+  };
+
+  return { spaces, drag, grip, offset, busy, announcement };
 }
 
 /**
@@ -99,9 +259,13 @@ function SpaceSwitcher() {
   const activeId: SpaceId | null = state.location.type === 'space' ? state.location.spaceId : state.lastSpaceId;
   const active = (activeId ? library.getSpace(activeId) : undefined) ?? library.spaces[0];
   const inSpace = state.location.type === 'space';
-  const listRef = useGlider<HTMLUListElement>('[aria-current="true"]', [activeId, open]);
+  const reorder = useSpaceReorder();
+  const spaces = reorder.spaces;
+  const listRef = useGlider<HTMLUListElement>('[aria-current="true"]', [activeId, open, spaces.map((sp) => sp.id).join()]);
 
   const schedule = (next: boolean) => {
+    // a reorder in progress keeps the list open, wherever the pointer or focus wanders meanwhile
+    if (!next && reorder.busy.current) return;
     clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setOpen(next), next ? OPEN_DELAY : CLOSE_DELAY);
   };
@@ -164,7 +328,7 @@ function SpaceSwitcher() {
       }}
       onKeyDown={onKeyDown}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+        if (!reorder.busy.current && !event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
       }}
     >
       <button
@@ -194,9 +358,10 @@ function SpaceSwitcher() {
       </button>
       <div id="cb-spaces-flyout" className="cb-spaces-flyout" role="group" aria-label="Spaces" inert={!open} data-cb-context="spaces">
         <p className="cb-spaces-flyout__title">Spaces</p>
-        <ul ref={listRef} className="cb-spaces-flyout__list">
+        <ul ref={listRef} className="cb-spaces-flyout__list" data-reordering={reorder.drag ? '' : undefined}>
           <span className="cb-glider cb-spaces-flyout__glider" aria-hidden="true" />
-          {library.spaces.map((space, i) => (
+          {reorder.drag && <span className="cb-spaces-flyout__slot" aria-hidden="true" style={{ top: reorder.drag.top + reorder.drag.to * reorder.drag.pitch, height: reorder.drag.height }} />}
+          {spaces.map((space, i) => (
             <FlyoutSpace
               key={space.id}
               space={space}
@@ -204,9 +369,18 @@ function SpaceSwitcher() {
               current={space.id === active.id}
               count={library.listItems({ type: 'space', spaceId: space.id }).length}
               onChoose={() => choose(space.id)}
+              grip={reorder.grip(space, i, listRef)}
+              offset={reorder.offset(i)}
+              lifted={reorder.drag?.id === space.id}
             />
           ))}
         </ul>
+        <span id="cb-spaces-reorder-hint" hidden>
+          Ziehen oder mit Pfeil nach oben und unten verschieben.
+        </span>
+        <span className="cb-visually-hidden" role="status">
+          {reorder.announcement}
+        </span>
         <div className="cb-spaces-flyout__foot">
           <button
             type="button"

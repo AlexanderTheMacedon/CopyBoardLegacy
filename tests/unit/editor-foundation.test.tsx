@@ -143,14 +143,12 @@ describe('Markdown renderer', () => {
     expect(html('a\r\nb')).toBe(html('a\nb'));
   });
 
-  it('keeps extra blank lines between blocks as gaps, never at the edges or inside code', () => {
-    const gaps = (source: string) => [...html(source).matchAll(/class="cb-md-gap"[^>]*--cb-md-gap:(\d+)/g)].map((m) => Number(m[1]));
-    expect(gaps('a\n\nb')).toEqual([]);
-    expect(gaps('a\n\n\n\nb')).toEqual([2]);
-    expect(gaps('- x\n- y\n\n\n\n\nSiehe hier\n```\nc\n\n\n\nd\n```')).toEqual([3]);
-    expect(gaps('\n\n\n# A\n\n\n')).toEqual([]);
+  it('renders blank lines by the standard: any run separates blocks once, no artificial preview gaps', () => {
+    expect(html('a\n\n\n\nb')).toBe(html('a\n\nb'));
+    expect(html('- x\n- y\n\n\n\nSiehe hier')).toBe(html('- x\n- y\n\nSiehe hier'));
+    expect(html('a\n\n\nb')).not.toContain('cb-md-gap');
+    // inside fenced code every blank line is content and stays
     expect(html('```\nc\n\n\nd\n```')).toContain('c\n\n\nd');
-    expect(html('a\n\n\nb')).toContain('aria-hidden="true"');
   });
 
   it('outlines headings outside code blocks', () => {

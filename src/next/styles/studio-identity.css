@@ -123,9 +123,6 @@
 .cb-composer__studio {
   letter-spacing: 0.08em;
 }
-.cb-composer__place {
-  letter-spacing: 0.02em;
-}
 /* the active mode in the editor's segmented track wears the studio: tinted thumb, studio ink */
 .cb-composer[data-studio] .cb-segmented--segmented .cb-glider {
   box-shadow: var(--cb-glass-lit), var(--cb-shadow-1), 0 0 0 1px color-mix(in srgb, var(--st) 26%, transparent);

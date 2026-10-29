@@ -1538,12 +1538,6 @@
 
 /* --- Canvas editors (Run A): shared toolbar, document page, CodeMirror, Markdown split, rail details ------------------
    Same glass shell as above; the writing surfaces stay calm paper. All colours come from tokens, so light/dark follow. --- */
-.cb-composer__eyebrow .cb-composer__place {
-  color: var(--cb-text-tertiary);
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0;
-}
 .cb-composer__title {
   display: block;
   width: 100%;

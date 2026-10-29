@@ -135,13 +135,14 @@ export function ItemTile({ item, index, showSpace, placement, selection }: ItemT
         </button>
       )}
       <div className="cb-tile__actions">
+        {/* the primary quick action (copy, else download) leads: filled in the space colour, confirms in place */}
         {quick && (
           <IconButton
             icon={quick.icon}
             size="sm"
-            variant="subtle"
+            className="cb-tile__primary"
             label={`${item.title}: ${quick.label}`}
-            onClick={() => runAction(quick, item)}
+            onClick={(event) => runAction(quick, item, event.currentTarget)}
           />
         )}
         <Popover

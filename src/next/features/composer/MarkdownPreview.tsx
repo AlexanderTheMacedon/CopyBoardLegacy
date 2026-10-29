@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { safeHref } from '../../domain/document';
 
 /**
@@ -102,7 +102,6 @@ function parseList(lines: string[], start: number, key: string): { node: ReactNo
 export function renderBlocks(lines: string[], keyBase = 'b'): ReactNode[] {
   const blocks: ReactNode[] = [];
   let paragraph: string[] = [];
-  let blank = 0;
   const key = () => `${keyBase}-${blocks.length}`;
   const flushParagraph = () => {
     if (paragraph.length) blocks.push(<p key={key()}>{renderInline(paragraph.join(' '), key())}</p>);
@@ -111,17 +110,6 @@ export function renderBlocks(lines: string[], keyBase = 'b'): ReactNode[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
-    if (!line.trim()) {
-      flushParagraph();
-      blank++;
-      continue;
-    }
-    // Blank lines beyond the first between two blocks keep their height (one gap per extra line); leading and trailing
-    // runs stay invisible.
-    if (blank > 1 && blocks.length) {
-      blocks.push(<div key={key()} className="cb-md-gap" aria-hidden="true" style={{ '--cb-md-gap': blank - 1 } as CSSProperties} />);
-    }
-    blank = 0;
     const fence = FENCE.exec(line);
     if (fence) {
       flushParagraph();
@@ -193,6 +181,10 @@ export function renderBlocks(lines: string[], keyBase = 'b'): ReactNode[] {
         </div>,
       );
       i = j - 1;
+      continue;
+    }
+    if (!line.trim()) {
+      flushParagraph();
       continue;
     }
     paragraph.push(line.trim());

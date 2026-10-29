@@ -182,6 +182,22 @@ describe('spaces', () => {
     expect(mergeSpaces(fixtureLibrary.spaces, c.data.spaceRecords).map((s) => s.order)).toEqual([0, 1, 2, 3, 4]);
   });
 
+  it('reorders spaces like the flyout grip: one move rewrites only the spaces whose order changed (Run D.2.1)', () => {
+    const c = start();
+    const ids = c.library.spaces.map((s) => s.id);
+    // drag the first space two rows down
+    const next = [ids[1], ids[2], ids[0], ...ids.slice(3)] as typeof ids;
+    const batch = planReorderSpaces(c, next);
+    expect(batch.spaces?.put?.map((s) => [s.id, s.order])).toEqual([
+      [ids[1], 0],
+      [ids[2], 1],
+      [ids[0], 2],
+    ]);
+    expect(commit(c.data, batch).library.spaces.map((s) => s.id)).toEqual(next);
+    // the unchanged order writes nothing
+    expect(planReorderSpaces(c, ids)).toEqual({});
+  });
+
   it('deletes a fixture space with a tombstone and moves its content, including folders, to another space', () => {
     let c = start();
     const folder = planCreateFolder(c, { spaceId: 'sp-dev', parentId: null, name: 'A' }, ['it-local-a']);

@@ -14,6 +14,7 @@ import { useWorkspace, type WorkspaceSeed } from './workspace';
 const NOTICE_MS = 6000;
 const NOTICE_SUCCESS_MS = 4200;
 const FRESH_MS = 2400;
+const noticeDuration = (notice: Notice | null) => (notice?.tone === 'success' && !notice.action ? NOTICE_SUCCESS_MS : NOTICE_MS);
 
 interface AppProps {
   /** Synthetic base content (fixtures). */
@@ -56,7 +57,7 @@ export function App({ library: base, seed = { store: null }, initialLocation }: 
 
   useEffect(() => {
     if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), notice.tone === 'success' && !notice.action ? NOTICE_SUCCESS_MS : NOTICE_MS);
+    const timer = setTimeout(() => setNotice(null), noticeDuration(notice));
     return () => clearTimeout(timer);
   }, [notice]);
 
@@ -90,7 +91,7 @@ export function App({ library: base, seed = { store: null }, initialLocation }: 
   return (
     <PreviewProvider value={value}>
       <AppShell>
-        <NoticeRegion notice={notice} onDismiss={() => setNotice(null)} />
+        <NoticeRegion notice={notice} duration={noticeDuration(notice)} onDismiss={() => setNotice(null)} />
       </AppShell>
     </PreviewProvider>
   );

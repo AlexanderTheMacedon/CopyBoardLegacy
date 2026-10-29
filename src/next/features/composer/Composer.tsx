@@ -438,11 +438,11 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
       <header className="cb-composer__header">
         <div className="cb-composer__heading">
           <p className="cb-composer__eyebrow">
-            <span className="cb-studio-glyph cb-studio-glyph--xs" aria-hidden="true">
-              <Icon name={studios[item.kind].icon} size={12} />
+            <span className="cb-studio-glyph cb-composer__glyph" aria-hidden="true">
+              <Icon name={studios[item.kind].icon} size={15} />
             </span>
+            {/* the studio only: where the item lives stays in the context rail ("Ort"), not in the header */}
             <span className="cb-composer__studio">{studios[item.kind].name}</span>
-            {place && <span className="cb-composer__place"> · {place}</span>}
           </p>
           {writable ? (
             <>

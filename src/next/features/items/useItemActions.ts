@@ -44,7 +44,7 @@ export function useRunItemAction() {
   const { state, dispatch, notify } = usePreview();
   const entries = useEntryActions();
   return useCallback(
-    (action: ItemAction, item: Item) => {
+    (action: ItemAction, item: Item, source?: HTMLElement | null) => {
       const ids = state.selectedIds.includes(item.id) ? state.selectedIds : [item.id];
       switch (action.id) {
         case 'open':
@@ -55,7 +55,8 @@ export function useRunItemAction() {
           break;
         case 'copy': {
           // the control that asked for the copy confirms it with its own icon, once the clipboard took it
-          const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          // (passed in where known: Safari does not focus a clicked button)
+          const trigger = source ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
           writeItemToClipboard(item).then(
             () => {
               markDone(trigger);

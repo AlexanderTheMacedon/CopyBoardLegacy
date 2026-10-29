@@ -389,6 +389,14 @@ const paths = {
   ),
   tray: <path d="M12 3.5v10.5M7.75 9.75 12 14l4.25-4.25M4 14v3.5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V14" />,
   note: <path d="M5.5 4.5h13a1 1 0 0 1 1 1v8.75L14.25 19.5H5.5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1ZM14.25 19.5v-4.25a1 1 0 0 1 1-1h4.25M8 9h8M8 12.5h4.5" />,
+  // Run D.2.1: reorder grip (two columns of dots) and the error notice's alert
+  grip: <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />,
+  alert: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.75v5M12 16h.01" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof paths;

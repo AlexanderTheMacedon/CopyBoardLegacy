@@ -876,7 +876,8 @@ test('P23', 'Dokument: create in a nested folder, format (heading, bold, list, l
     ariaLabel: document.querySelector('.cb-doc__prose').getAttribute('aria-label'),
   }));
   const problems = await clean(['DataTransfer.']);
-  const ok = /Quartalsbericht|Neuer Ordner/.test(where) && info.h1 === 'Quartalsbericht' && info.strong === 'Fettdruck' && info.link === 'https://example.org/a' && info.items.join('|') === 'Punkt A|Punkt B' && info.cells === 9 && info.th === 'H1' && info.title === 'Quartalsbericht' && /<table/.test(live) && /<table/.test(html) && !problems.length;
+  // the header names the studio only; the folder stays the item's place (context rail, store)
+  const ok = /Schreibstudio/.test(where) && !/Ordner|›|Entwicklung/.test(where) && info.h1 === 'Quartalsbericht' && info.strong === 'Fettdruck' && info.link === 'https://example.org/a' && info.items.join('|') === 'Punkt A|Punkt B' && info.cells === 9 && info.th === 'H1' && info.title === 'Quartalsbericht' && /<table/.test(live) && /<table/.test(html) && !problems.length;
   return { ok, observed: `where="${where}", ${JSON.stringify(info)}, problems=${problems.join(' | ') || '-'}` };
 });
 
@@ -2227,64 +2228,164 @@ test('P48', 'Markdown: fließende Moduswechsel – dieselbe CodeMirror-Instanz, 
   return { ok, observed: `before=${JSON.stringify(before)}, glide ${Math.round(start)}→${mid.slice(0, 4).map(Math.round).join('/')}… (${mid.length} frames), done=${JSON.stringify({ ...done, cols: done.cols.map(Math.round) })}, back=${JSON.stringify(back)}, typed=${typed.includes('Zeile 11!')}, undone=${!undone.includes('Zeile 11!')}, reduced=${reduced.map(Math.round)}, problems=${problems.join(' | ') || '-'}` };
 });
 
-// --- Final UX Polish (Run D.2): title field, card actions, notice corner, solid space flyout, Markdown blank lines ------
-test('P49', 'Feinschliff: Kartenaktionen auf gefrosteter Kante (Text kollidiert nicht), Drei-Punkte so kräftig wie Kopieren; Hinweis in der freien Ecke unten links neben dem Composer; Space-Flyout deckend; Editor-Titel als ruhiges Feld; Markdown-Vorschau übernimmt zusätzliche Leerzeilen', { clipboard: true }, async ({ page, clean }) => {
-  // card actions: the preview top frosts on hover, both actions share ink, the dots are drawn heavier
+// --- Final UX Closure (Run D.2.1): editor header, notices bottom left, leading copy, space reorder, standard Markdown ----
+/** Rect of a selector, rounded. */
+const rectOf = (page, sel) => page.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top), b: Math.round(r.bottom) }; });
+const overlaps = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+
+test('P49', 'Closure: Editor-Header mit Studio-Glyph neben dem Namen und ohne Space-Pfad, Titel ohne Unterlinie; Kopieren als führende Kartenaktion mit Bestätigung, Vorschau frei; Hinweise unten links ohne Überdeckung, Undo mit Laufzeit; Markdown-Vorschau nach Standard', { clipboard: true }, async ({ page, clean }) => {
+  // cards: copy leads (filled on hover), "…" stays quiet, nothing sits on the preview
   const tile = page.locator(`${LIVE_TILES}[data-kind="text"]`).first();
   await tile.hover();
   await page.waitForTimeout(400);
   const card = await tile.evaluate((el) => {
-    const after = getComputedStyle(el.querySelector('.cb-tile__preview'), '::after');
-    const [quick, more] = el.querySelectorAll('.cb-tile__actions .cb-icon-button');
-    return { scrim: Number(after.opacity), blur: after.backdropFilter, ink: getComputedStyle(quick).color === getComputedStyle(more).color, dots: getComputedStyle(more.querySelector('.cb-icon')).strokeWidth };
+    const primary = el.querySelector('.cb-tile__primary');
+    const more = el.querySelector('.cb-tile__actions .cb-icon-button:not(.cb-tile__primary)');
+    const box = (e) => e.getBoundingClientRect();
+    const p = box(el.querySelector('.cb-tile__preview'));
+    const a = box(el.querySelector('.cb-tile__actions'));
+    return { primaryBg: getComputedStyle(primary).backgroundImage, moreBg: getComputedStyle(more).backgroundColor, label: primary.getAttribute('aria-label'), clearOfPreview: a.top >= p.bottom - 1 };
   });
-  // a notice keeps to the bottom-left corner, level with the composer, clear of it
-  await tile.locator('.cb-tile__actions .cb-icon-button').first().click();
-  await page.waitForSelector('.cb-notice');
-  await page.waitForTimeout(500);
-  const notice = await page.evaluate(() => {
-    const n = document.querySelector('.cb-notice').getBoundingClientRect();
-    const c = document.querySelector('.cb-composer-dock > .cb-capture').getBoundingClientRect();
-    return { left: Math.round(n.left), right: Math.round(n.right), bottom: Math.round(n.bottom), composerLeft: Math.round(c.left), composerBottom: Math.round(c.bottom) };
-  });
+  await tile.locator('.cb-tile__primary').click();
+  await page.waitForSelector(`${LIVE_TILES}[data-kind="text"] .cb-tile__primary[data-done]`);
+  const copied = await page.evaluate(async () => ({ tag: getComputedStyle(document.querySelector('.cb-tile__primary[data-done]'), '::after').content, clip: await navigator.clipboard.readText() }));
+  await page.waitForSelector('.cb-notice[data-tone="success"]');
+  await page.waitForTimeout(450);
+  const toast = await rectOf(page, '.cb-notice');
+  const composer = await rectOf(page, '.cb-composer-dock > .cb-capture');
+  const dock = await rectOf(page, '.cb-navdock-rail');
   await page.click('[aria-label="Hinweis schließen"]');
-  // the space flyout is one solid sheet
-  await page.hover('.cb-space-switch__trigger');
-  await page.waitForTimeout(400);
-  const sheet = await page.$eval('.cb-spaces-flyout', (el) => {
-    const layers = getComputedStyle(el).backgroundImage + ' ' + getComputedStyle(el).backgroundColor;
-    return Math.max(...[...layers.matchAll(/rgba?\([^)]*?([\d.]+)\)/g)].map((m) => (m[0].startsWith('rgba') || m[0].includes('/') ? Number(m[1]) : 1)));
-  });
-  await page.mouse.move(900, 600);
-  // editor title: a soft tinted field that hugs its text, no hard underline
+  // an undoable notice: its own glyph and a running time line
+  const own = await pasteTextCard(page, 'Closure Undo');
+  await page.click(`.cb-tile[data-item-id="${own.id}"] .cb-tile__open`, { button: 'right' });
+  await page.click('.cb-context-menu [role="menuitem"]:has-text("Löschen")');
+  await page.waitForSelector('.cb-notice[data-undo]');
+  const undo = await page.$eval('.cb-notice[data-undo]', (e) => ({ icon: e.querySelector('.cb-notice__icon .cb-icon').dataset.icon, line: getComputedStyle(e, '::after').animationName, action: e.querySelector('.cb-notice__action')?.textContent }));
+  await page.click('.cb-notice__action');
+  // editor header: glyph beside the studio name, no space path; the title field has no underline
   await createVia(page, 'Markdown');
   await page.waitForSelector('.cb-md__source .cm-content');
   await page.keyboard.insertText('# Abstand\n\nOben\n\n\n\nUnten');
   await page.click('#cb-composer-title');
   await page.waitForTimeout(400);
-  const title = await page.evaluate(() => {
-    const el = document.querySelector('#cb-composer-title');
-    const s = getComputedStyle(el);
-    return { shadow: s.boxShadow, bg: s.backgroundColor, width: Math.round(el.getBoundingClientRect().width), heading: Math.round(el.parentElement.getBoundingClientRect().width), textLeft: Math.round(el.getBoundingClientRect().left + parseFloat(s.paddingLeft)), eyebrowLeft: Math.round(document.querySelector('.cb-composer__eyebrow').getBoundingClientRect().left) };
+  const header = await page.evaluate(() => {
+    const glyph = document.querySelector('.cb-composer__eyebrow .cb-studio-glyph').getBoundingClientRect();
+    const name = document.querySelector('.cb-composer__studio').getBoundingClientRect();
+    const title = document.querySelector('#cb-composer-title');
+    const s = getComputedStyle(title);
+    return { eyebrow: document.querySelector('.cb-composer__eyebrow').textContent, glyph: Math.round(glyph.width), sideBySide: name.left > glyph.right && Math.abs((name.top + name.bottom) / 2 - (glyph.top + glyph.bottom) / 2) <= 2, underline: /0px 2px 0px -1px/.test(s.boxShadow) || s.textDecorationLine !== 'none' || parseFloat(s.borderBottomWidth) > 0, tinted: !/[ ,/] ?0\)$/.test(s.backgroundColor) };
   });
-  // Markdown preview: three blank lines between two paragraphs keep two extra lines of height
+  // Markdown preview: blank-line runs follow the standard (no artificial gaps)
   await page.click('.cb-composer [role="radio"]:has-text("Split")');
-  await page.waitForSelector('.cb-markdown .cb-md-gap');
-  const gap = await page.evaluate(() => {
+  await page.waitForSelector('.cb-markdown p');
+  const md = await page.evaluate(() => {
     const ps = [...document.querySelectorAll('.cb-markdown p')];
     const oben = ps.find((p) => p.textContent === 'Oben').getBoundingClientRect();
     const unten = ps.find((p) => p.textContent === 'Unten').getBoundingClientRect();
-    const line = parseFloat(getComputedStyle(document.querySelector('.cb-markdown')).lineHeight);
-    return { lines: Math.round(((unten.top - oben.bottom) / line) * 10) / 10, count: document.querySelectorAll('.cb-markdown .cb-md-gap').length };
+    return { gap: Math.round(unten.top - oben.bottom), rowGap: parseFloat(getComputedStyle(document.querySelector('.cb-markdown')).rowGap), gaps: document.querySelectorAll('.cb-md-gap').length };
   });
   const problems = await clean(['DataTransfer.', 'clipboard.']);
   const ok =
-    card.scrim === 1 && /blur/.test(card.blur) && card.ink && card.dots === '2.6px' &&
-    notice.left <= 40 && notice.right < notice.composerLeft && Math.abs(notice.bottom - notice.composerBottom) <= 2 &&
-    sheet >= 0.9 &&
-    !/0px 2px 0px -1px/.test(title.shadow) && /inset/.test(title.shadow) && !/[ ,/] ?0\)$/.test(title.bg) && title.width < title.heading && Math.abs(title.textLeft - title.eyebrowLeft) <= 2 &&
-    gap.count === 1 && gap.lines >= 2.4 && gap.lines <= 3.2 && !problems.length;
-  return { ok, observed: `card=${JSON.stringify(card)}, notice=${JSON.stringify(notice)}, flyout alpha=${sheet}, title=${JSON.stringify(title)}, gap=${JSON.stringify(gap)}, problems=${problems.join(' | ') || '-'}` };
+    /gradient/.test(card.primaryBg) && card.moreBg === 'rgba(0, 0, 0, 0)' && /Kopieren/.test(card.label) && card.clearOfPreview &&
+    copied.tag === '"Kopiert"' && copied.clip.length > 0 &&
+    toast.l <= 40 && !overlaps(toast, composer) && !overlaps(toast, dock) && toast.b <= 900 &&
+    undo.icon === 'undo' && undo.line === 'cb-toast-time' && undo.action === 'Rückgängig' &&
+    !/Entwicklung|·/.test(header.eyebrow) && header.glyph >= 26 && header.sideBySide && !header.underline && header.tinted &&
+    md.gaps === 0 && Math.abs(md.gap - md.rowGap) <= 1 && !problems.length;
+  return { ok, observed: `card=${JSON.stringify(card)}, copied=${JSON.stringify({ tag: copied.tag, clip: copied.clip.length })}, toast=${JSON.stringify(toast)} composer=${JSON.stringify(composer)}, undo=${JSON.stringify(undo)}, header=${JSON.stringify(header)}, md=${JSON.stringify(md)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P50', 'Notices stehen auf Desktop, Tablet und Phone unten links, frei von Composer, Dock, App-Grid und sicheren Rändern', { clipboard: true }, async ({ page, clean }) => {
+  const seen = {};
+  for (const [name, vp] of [['desktop', { width: 1440, height: 900 }], ['laptop', { width: 1280, height: 800 }], ['tablet', { width: 834, height: 1112 }], ['phone', { width: 390, height: 844 }]]) {
+    await page.setViewportSize(vp);
+    await page.waitForTimeout(350);
+    await page.evaluate(() => document.querySelector('.cb-tile[data-kind="text"]:not(.cb-departure *) .cb-tile__primary').click());
+    await page.waitForSelector('.cb-notice');
+    await page.waitForTimeout(450);
+    const toast = await rectOf(page, '.cb-notice');
+    const composer = await rectOf(page, '.cb-composer-dock > .cb-capture');
+    const mobileDock = (await page.$('.cb-dock')) ? await rectOf(page, '.cb-dock') : null;
+    seen[name] = { toast, ok: toast.l <= 40 && toast.r <= vp.width - 8 && toast.b <= vp.height - 8 && !overlaps(toast, composer) && !(mobileDock && mobileDock.b > 0 && overlaps(toast, mobileDock)) };
+    await page.click('[aria-label="Hinweis schließen"]');
+  }
+  // the launcher's own error ("could not save") stays visible and clear of the launcher's tiles
+  await failPuts(page);
+  for (const [name, vp] of [['launcher-laptop', { width: 1280, height: 800 }], ['launcher-desktop', { width: 1440, height: 900 }]]) {
+    await page.setViewportSize(vp);
+    await page.waitForTimeout(300);
+    await page.click('.cb-capture__lead');
+    await page.click('.cb-launcher .cb-app-tile__main:has-text("Dokument")');
+    await page.waitForSelector('.cb-notice[data-tone="error"]');
+    await page.waitForTimeout(450);
+    const toast = await rectOf(page, '.cb-notice');
+    const launcher = await rectOf(page, '.cb-launcher');
+    seen[name] = { toast, ok: toast.l <= 40 && toast.t >= 0 && !overlaps(toast, launcher) };
+    await page.click('[aria-label="Hinweis schließen"]');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.cb-launcher', { state: 'detached' });
+  }
+  const problems = (await clean(['clipboard.'])).filter((p) => !/QuotaExceeded|quota/i.test(p));
+  const ok = Object.values(seen).every((v) => v.ok) && !problems.length;
+  return { ok, observed: `${JSON.stringify(seen)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P51', 'Spaces sortieren: Griff pro Space, Ziehen mit Platzhalter, Tastatur (Pfeile am Griff), Reihenfolge bleibt nach Reload; Karten-Drop auf einen Space funktioniert weiter; Navigation unverändert', async ({ page, clean }) => {
+  const names = () => page.$$eval('.cb-spaces-flyout__list > li .cb-spaces-flyout__item', (els) => els.map((e) => e.title));
+  await page.hover('.cb-space-switch__trigger');
+  await page.waitForSelector('.cb-space-switch[data-open]');
+  await page.waitForTimeout(300);
+  const before = await names();
+  const grips = await page.$$eval('.cb-spaces-flyout__grip', (els) => els.map((e) => e.getAttribute('aria-label')));
+  // drag the first space two rows down: the slot shows where it lands
+  const g = await (await page.$('.cb-spaces-flyout__grip')).boundingBox();
+  const pitch = await page.$$eval('.cb-spaces-flyout__list > li', (els) => els[1].offsetTop - els[0].offsetTop);
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2 + pitch * 2, { steps: 10 });
+  const during = await page.evaluate(() => ({ slot: !!document.querySelector('.cb-spaces-flyout__slot'), lifted: document.querySelector('li[data-lifted] .cb-spaces-flyout__item')?.title, open: document.querySelector('.cb-space-switch').hasAttribute('data-open') }));
+  await page.mouse.up();
+  await page.waitForTimeout(400);
+  const dragged = await names();
+  // keyboard: arrow up on the moved space's grip, focus stays on it, the list stays open
+  await page.focus(`.cb-spaces-flyout__grip[data-reorder="${await page.$eval(`.cb-spaces-flyout__item[title="${before[0]}"]`, (e) => e.dataset.spaceId)}"]`);
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(300);
+  const keyed = await names();
+  const keyFocus = await page.evaluate(() => ({ grip: document.activeElement?.classList.contains('cb-spaces-flyout__grip'), open: document.querySelector('.cb-space-switch').hasAttribute('data-open'), said: document.querySelector('.cb-spaces-flyout [role="status"]').textContent }));
+  await page.keyboard.press('Escape');
+  // persisted: the spaces' order field in IndexedDB, and the flyout after a reload
+  await page.reload();
+  await page.waitForSelector('.cb-tile');
+  const reloaded = await names();
+  // cards still drop onto a space in the flyout (moves the card), the order stays
+  const card = await (await page.$(`${LIVE_TILES}[data-kind="text"] .cb-tile__open`)).boundingBox();
+  const cardId = await page.$eval(`${LIVE_TILES}[data-kind="text"]`, (e) => e.dataset.itemId);
+  await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(card.x + 40, card.y + 40, { steps: 4 });
+  const trigger = await (await page.$('.cb-space-switch__trigger')).boundingBox();
+  await page.mouse.move(trigger.x + trigger.width / 2, trigger.y + trigger.height / 2, { steps: 10 });
+  await page.waitForSelector('.cb-space-switch[data-open]');
+  await page.waitForTimeout(250);
+  const target = await (await page.$(`.cb-spaces-flyout__item[title="Ideen"]`)).boundingBox();
+  await page.mouse.move(target.x + 60, target.y + target.height / 2, { steps: 8 });
+  await page.waitForTimeout(200);
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  const afterDrop = await names();
+  // navigation is unchanged; the dropped card now lives in "Ideen"
+  await gotoSpace(page, 'Ideen');
+  const title = await h1(page);
+  const moved = { spaceId: (await page.$(`${LIVE_TILES}[data-item-id="${cardId}"]`)) ? 'sp-ideas' : null };
+  const problems = await clean(['DataTransfer.']);
+  const expectDrag = [before[1], before[2], before[0], ...before.slice(3)];
+  const expectKey = [before[1], before[0], before[2], ...before.slice(3)];
+  const ok =
+    grips.length === before.length && grips.every((l) => /verschieben/.test(l)) && during.slot && during.lifted === before[0] && during.open &&
+    JSON.stringify(dragged) === JSON.stringify(expectDrag) && JSON.stringify(keyed) === JSON.stringify(expectKey) && keyFocus.grip && keyFocus.open && /Position 2/.test(keyFocus.said) &&
+    JSON.stringify(reloaded) === JSON.stringify(expectKey) && JSON.stringify(afterDrop) === JSON.stringify(expectKey) && moved?.spaceId === 'sp-ideas' && title === 'Ideen' && !problems.length;
+  return { ok, observed: `before=${before}, during=${JSON.stringify(during)}, dragged=${dragged}, keyed=${keyed} ${JSON.stringify(keyFocus)}, reloaded=${reloaded}, moved=${moved?.spaceId}, afterDrop=${afterDrop}, title=${title}, problems=${problems.join(' | ') || '-'}` };
 });
 
 const ONLY = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY) : null; // e.g. E2E_ONLY='^(P6|P23)$' for a focused run

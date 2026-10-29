@@ -1,17 +1,40 @@
-/* --- Final UX Polish (Run D.2) ------------------------------------------------------------------------------------------
-   Five details from the review captures, each solved at its source: a calm title field in the editor header, card actions
-   that never sit on legible preview text, notices that keep to a free corner instead of covering the composer or the page,
-   a space flyout that reads as one solid sheet over the board, and the three-dot glyph at the weight of its neighbours.
-   Every colour is a token (light and dark follow); every duration a motion token (reduced motion collapses them). ------ */
+/* --- Final UX Polish & Closure (Runs D.2, D.2.1) ---------------------------------------------------------------------
+   Editor header (studio glyph beside its name, no space path, a calm title field), one notice system in the bottom-left
+   corner on every device, a leading copy action on cards, and reorderable spaces in the dock flyout. Every colour is a
+   token (light and dark follow); every duration a motion token (reduced motion collapses them). ------------------- */
 
-/* --- Editor title: an inline field, not a ruled input. It hugs its text, hover hints that it can be edited, focus wears
-   the studio's soft tint and a hairline instead of a hard full-width underline. Text stays where the eyebrow starts. --- */
+/* --- Editor header: glyph and studio name on one optical line, the glyph at full size with room around it -------------- */
+.cb-composer[data-studio] .cb-composer__eyebrow {
+  gap: 10px;
+  margin-bottom: 6px;
+  line-height: 1;
+}
+.cb-composer__glyph {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+}
+@media (max-width: 599.98px) {
+  .cb-composer[data-studio] .cb-composer__eyebrow {
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .cb-composer__glyph {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+  }
+}
+
+/* Title: an inline field, not a ruled input. It hugs its text, hover hints that it can be edited, focus wears the studio's
+   soft tint and a hairline, never an underline. The text stays aligned with the glyph above. */
 .cb-composer__title {
   width: calc(100% + 14px);
   max-width: calc(100% + 14px);
   margin: -2px -7px;
   padding: 2px 7px;
   border-radius: 9px;
+  text-decoration: none;
   transition: background-color var(--cb-dur-hover) var(--cb-ease-out), box-shadow var(--cb-dur-hover) var(--cb-ease-out);
 }
 @supports (field-sizing: content) {
@@ -24,80 +47,399 @@
 .cb-composer__title:hover:not(:focus) {
   background: color-mix(in srgb, var(--cb-text-primary) 5%, transparent);
 }
+.cb-composer__title:focus,
 .cb-composer__title:focus-visible {
   outline: none;
   background: var(--st-soft, color-mix(in srgb, var(--cb-accent) 10%, transparent));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st, var(--cb-accent)) 32%, transparent);
 }
 
-/* --- Markdown preview: blank lines beyond the first between two blocks keep their height (renderBlocks emits the gap);
-   one source line = one line of the preview, the grid gap included. -------------------------------------------------- */
-.cb-markdown .cb-md-gap {
-  height: max(0px, calc(var(--cb-md-gap, 1) * 1lh - var(--cb-space-3)));
+/* --- Notices: always bottom left. `--cb-toast-bottom` names the free edge per context: above the composer (its live
+   height), level with it where the corner beside it is free (wide desktop, no inspector), clear of the editor's status
+   bar, of the selection bar, of the image-mode caption and of the phone dock. Left edge and width respect the safe areas. */
+.cb-app {
+  --cb-toast-inset: calc(var(--cb-float) + var(--cb-space-2));
+  --cb-toast-bottom: var(--cb-above-composer);
+  --cb-toast-w: 380px;
 }
-.cb-markdown li > .cb-md-gap,
-.cb-markdown blockquote > .cb-md-gap {
-  height: calc(var(--cb-md-gap, 1) * 1lh);
+.cb-app[data-composer-hidden] {
+  --cb-toast-bottom: calc(var(--cb-float) + 52px + var(--cb-safe-bottom));
+}
+.cb-app[data-selecting] {
+  --cb-toast-bottom: calc(var(--cb-space-6) + var(--cb-safe-bottom) + 66px);
+}
+.cb-app[data-cinema] {
+  --cb-toast-bottom: calc(var(--cb-space-6) + var(--cb-safe-bottom) + 176px);
+}
+/* the app launcher opens above the composer, from its left end (AppGrid, 415 px tall, 12 px above): a notice there,
+   for example its own "could not save", rises above the launcher instead of covering its tiles */
+.cb-app:has(.cb-launcher:not([data-state='closing'])) {
+  --cb-toast-bottom: calc(var(--cb-above-composer) + 427px);
+}
+@media (min-width: 1400px) and (hover: hover) and (pointer: fine) {
+  .cb-app:not([data-composer-hidden], [data-detail='inspector'], [data-selecting], [data-cinema]),
+  .cb-app:not([data-composer-hidden], [data-detail='inspector'], [data-selecting], [data-cinema]):has(.cb-launcher:not([data-state='closing'])) {
+    --cb-toast-bottom: var(--cb-composer-base);
+    /* the room left of the resting composer (720 px, centred), less one gap */
+    --cb-toast-w: calc(50vw - 360px - var(--cb-toast-inset) - var(--cb-space-4));
+  }
+  /* the focused composer is wider: the notice rises above it instead of meeting it */
+  .cb-app:not([data-composer-hidden], [data-detail='inspector']):has(.cb-capture[data-state='focus']) {
+    --cb-toast-bottom: var(--cb-above-composer);
+  }
+}
+@media (max-width: 599.98px) {
+  .cb-app[data-composer-hidden] {
+    --cb-toast-bottom: calc(var(--cb-dock-h) + var(--cb-safe-bottom) + var(--cb-space-5));
+  }
+  .cb-app:has(.cb-launcher:not([data-state='closing'])) {
+    --cb-toast-bottom: calc(var(--cb-above-composer) + 369px);
+  }
+  .cb-app[data-selecting] {
+    --cb-toast-bottom: calc(var(--cb-dock-h) + var(--cb-safe-bottom) + 74px);
+  }
+}
+/* doubled class: outranks the older per-context `bottom` rules (board, workspace, shell) without !important */
+.cb-app .cb-notice-region.cb-notice-region {
+  left: calc(var(--cb-toast-inset) + env(safe-area-inset-left, 0px));
+  right: auto;
+  bottom: var(--cb-toast-bottom);
+  transform: none;
+  width: min(var(--cb-toast-w), calc(100vw - var(--cb-toast-inset) * 2 - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+  transition: bottom var(--cb-dur-standard) var(--cb-ease-glide);
 }
 
-/* --- Card actions: when copy and "…" appear, the top of the preview frosts so the text under them steps back instead of
-   colliding with the buttons. Tint follows the preview: paper for text, night for code, none over photographs. -------- */
-@media (hover: hover) {
-  .cb-grid[data-view='grid'] .cb-tile__preview::after {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto;
-    z-index: 1;
-    height: 58px;
-    pointer-events: none;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--cb-glass-solid) 78%, transparent), transparent);
-    backdrop-filter: blur(5px);
-    mask: linear-gradient(180deg, #000 42%, transparent);
-    opacity: 0;
-    transition: opacity var(--cb-dur-hover) var(--cb-ease-out);
-  }
-  .cb-grid[data-view='grid'] .cb-tile[data-kind='code'] .cb-tile__preview::after {
-    background: linear-gradient(180deg, rgb(13 17 23 / 0.62), transparent);
-  }
-  .cb-grid[data-view='grid'] .cb-tile[data-kind='image'] .cb-tile__preview::after {
-    background: linear-gradient(180deg, rgb(0 0 0 / 0.12), transparent);
-  }
-  .cb-grid[data-view='grid'] .cb-tile:is(:hover, :focus-within) .cb-tile__preview::after,
-  .cb-grid[data-view='grid'] .cb-tile:has(.cb-tile__actions [aria-expanded='true']) .cb-tile__preview::after {
-    opacity: 1;
-  }
-  .cb-app[data-dragging] .cb-tile__preview::after {
-    opacity: 0 !important;
+/* Compact squircle geometry, precise type; tone shown by the glyph tile; an undoable notice shows its remaining time. */
+.cb-notice {
+  position: relative;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 540;
+  letter-spacing: -0.003em;
+  overflow: hidden;
+  animation: cb-toast-in var(--cb-dur-overlay) var(--cb-spring);
+}
+@supports (corner-shape: squircle) {
+  .cb-notice {
+    border-radius: 20px;
+    corner-shape: squircle;
   }
 }
-/* the two actions are one pair: same glass, same ink */
-.cb-tile__actions .cb-icon-button {
+.cb-notice p {
+  min-width: 0;
+  text-wrap: pretty;
+}
+@keyframes cb-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-6px, 10px) scale(0.97);
+  }
+}
+.cb-notice__icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+.cb-notice[data-tone='success'] .cb-notice__icon {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--cb-status-success) 82%, white), var(--cb-status-success));
+  color: #fff;
+}
+.cb-app[data-theme='dark'] .cb-notice[data-tone='success'] .cb-notice__icon {
+  color: #0d1a14;
+}
+.cb-notice[data-tone='error'] {
+  border-color: color-mix(in srgb, var(--cb-status-error) 30%, var(--cb-glass-rim));
+}
+.cb-notice[data-tone='error'] .cb-notice__icon {
+  background: var(--cb-status-error-soft);
+  color: var(--cb-status-error);
+}
+.cb-notice[data-undo] .cb-notice__icon {
+  background: color-mix(in srgb, var(--cb-accent) 13%, transparent);
+  color: var(--cb-accent);
+  animation: none;
+}
+.cb-notice__action {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cb-accent) 12%, transparent);
+  font-size: 12.5px;
+}
+.cb-notice__action:hover {
+  background: color-mix(in srgb, var(--cb-accent) 20%, transparent);
+}
+.cb-notice .cb-icon-button {
+  color: var(--cb-text-tertiary);
+}
+/* the undo window, drawn as a hairline that runs out with the notice's own timeout */
+.cb-notice[data-undo]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: color-mix(in srgb, var(--cb-accent) 55%, transparent);
+  transform-origin: left center;
+  animation: cb-toast-time var(--cb-notice-ms, 6000ms) linear forwards;
+}
+@keyframes cb-toast-time {
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cb-notice {
+    animation: none;
+  }
+  .cb-notice[data-undo]::after {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+.cb-app[data-motion='reduced'] .cb-notice {
+  animation: none;
+}
+
+/* --- Card actions: they sit on the meta line, never on the preview. Copy (the registry's primary quick action) leads in
+   the space colour and is always there; "…" stays quiet and appears with the card's hover or focus (always on touch). -- */
+/* one line beside the actions (margin, not padding: overflow clips at the border box); the kind label gives way first,
+   the date, space chip and favourite stay */
+.cb-grid[data-view='grid'] .cb-tile__meta {
+  flex-wrap: nowrap;
+  min-height: 30px;
+  margin-right: 70px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.cb-grid[data-view='grid'] .cb-tile__meta > * {
+  flex: none;
+}
+.cb-grid[data-view='grid'] .cb-tile__meta > span:first-of-type,
+.cb-grid[data-view='grid'] .cb-tile__meta > .cb-space-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cb-grid[data-view='grid'] .cb-tile__actions {
+  top: auto;
+  bottom: calc(var(--cb-card-inset) + 2px);
+  right: calc(var(--cb-card-inset) + 2px);
+  align-items: center;
+  opacity: 1;
+  transform: none;
+}
+.cb-grid[data-view='grid'] .cb-tile:is(:hover, :focus-within) .cb-tile__actions,
+.cb-grid[data-view='grid'] .cb-tile__actions:has([aria-expanded='true']) {
+  transform: translateY(var(--cb-hover-lift));
+}
+.cb-grid[data-view='grid'] .cb-tile:focus-within:not(:hover) .cb-tile__actions {
+  transform: none;
+}
+@media (hover: none) {
+  .cb-grid[data-view='grid'] .cb-tile__body {
+    padding-right: 4px;
+  }
+}
+/* quiet "…": no glass of its own, tertiary ink */
+.cb-tile__actions .cb-icon-button:not(.cb-tile__primary) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  color: var(--cb-text-tertiary);
+}
+.cb-tile__actions .cb-icon-button:not(.cb-tile__primary):hover,
+.cb-tile__actions .cb-icon-button:not(.cb-tile__primary)[aria-expanded='true'] {
+  background: var(--cb-glass-hover);
   color: var(--cb-text-primary);
+}
+@media (hover: hover) {
+  .cb-grid[data-view='grid'] .cb-tile__actions .cb-icon-button:not(.cb-tile__primary) {
+    opacity: 0;
+    transition: opacity var(--cb-dur-hover) var(--cb-ease-out), background-color var(--cb-dur-hover) var(--cb-ease-out);
+  }
+  .cb-grid[data-view='grid'] .cb-tile:is(:hover, :focus-within) .cb-tile__actions .cb-icon-button:not(.cb-tile__primary),
+  .cb-grid[data-view='grid'] .cb-tile__actions .cb-icon-button[aria-expanded='true'] {
+    opacity: 1;
+  }
 }
 /* three 1.5 px dots vanish next to a full outline glyph; the dots carry the weight of the other icons */
 .cb-icon[data-icon='more'] {
   stroke-width: 2.6;
 }
 
-/* --- Notices: on a wide desktop they keep to the free bottom-left corner, level with the composer's base and sized to the
-   room beside the resting composer. While the composer is focused (wider) they rise above its live height. With the
-   inspector open (the composer moves left) and in image mode (the scene title owns that corner) they stay centred above
-   the composer. -------------------------------------------------------------------------------------------------- */
-@media (min-width: 1400px) and (hover: hover) and (pointer: fine) {
-  .cb-app:is([data-composer-hidden], :not([data-detail='inspector'])):not([data-cinema]) .cb-notice-region {
-    left: calc(var(--cb-float) + var(--cb-space-2));
-    bottom: var(--cb-composer-base);
-    transform: none;
-    width: clamp(280px, calc(50vw - 360px - var(--cb-float) - var(--cb-space-2) - var(--cb-space-4)), 420px);
-    transition: bottom var(--cb-dur-standard) var(--cb-ease-glide);
+/* the leading copy (data-done is set by the copy action only): soft space tint at rest, filled on the card's hover/focus,
+   lifts on its own hover, presses in, and confirms in place ("Kopiert", success fill) once the clipboard took it */
+.cb-tile__actions .cb-tile__primary {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cb-accent) 13%, transparent);
+  color: var(--cb-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cb-accent) 20%, transparent);
+  transition: background-color var(--cb-dur-hover) var(--cb-ease-out), color var(--cb-dur-hover) var(--cb-ease-out),
+    box-shadow var(--cb-dur-hover) var(--cb-ease-out), translate var(--cb-dur-select) var(--cb-spring), scale var(--cb-dur-select) var(--cb-spring);
+}
+.cb-tile__actions .cb-tile__primary .cb-icon {
+  stroke-width: 1.85;
+}
+.cb-tile:is(:hover, :focus-within) .cb-tile__actions .cb-tile__primary {
+  background: var(--cb-accent-fill);
+  color: var(--cb-on-accent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 6px 14px -8px var(--cb-accent-glow);
+}
+.cb-tile__actions .cb-tile__primary:hover {
+  background: var(--cb-accent-fill-hover);
+  translate: 0 -1px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 10px 20px -10px var(--cb-accent-glow);
+}
+.cb-tile__actions .cb-tile__primary:active {
+  scale: 0.92;
+  translate: 0;
+  transition-duration: var(--cb-dur-instant);
+}
+.cb-app .cb-tile__actions .cb-tile__primary[data-done] {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--cb-status-success) 82%, white), var(--cb-status-success));
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 8px 18px -10px color-mix(in srgb, var(--cb-status-success) 60%, transparent);
+}
+.cb-app .cb-tile__actions .cb-tile__primary[data-done] .cb-icon[data-icon] {
+  color: currentColor;
+}
+.cb-app[data-theme='dark'] .cb-tile__actions .cb-tile__primary[data-done] {
+  color: #0d1a14;
+}
+.cb-tile__primary[data-done]::after {
+  content: 'Kopiert';
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 50%;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: var(--cb-status-success-soft);
+  color: var(--cb-status-success);
+  font: var(--cb-text-meta);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  pointer-events: none;
+  translate: 0 -50%;
+  animation: cb-copied-tag 1400ms var(--cb-ease-out) both;
+}
+@keyframes cb-copied-tag {
+  0% {
+    opacity: 0;
+    transform: translateX(6px) scale(0.94);
   }
-  .cb-app:not([data-composer-hidden], [data-detail='inspector'], [data-cinema]):has(.cb-capture[data-state='focus']) .cb-notice-region {
-    bottom: var(--cb-above-composer);
+  14%,
+  78% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  .cb-tile__primary[data-done]::after {
+    animation: none;
+  }
+}
+/* list rows: the same pair on the row's end */
+.cb-grid[data-view='list'] .cb-tile__actions .cb-tile__primary {
+  background: color-mix(in srgb, var(--cb-accent) 13%, transparent);
+}
 
-/* --- Space flyout: a solid sheet with a real lift, so cards beneath never ghost through its rows ------------------- */
+/* --- Space flyout: a solid sheet with a real lift; every space has a grip to reorder it ---------------------------- */
 .cb-spaces-flyout {
   background: var(--cb-glass-sheen), var(--cb-glass-solid);
   box-shadow: var(--cb-glass-lit), var(--cb-shadow-4);
+}
+.cb-spaces-flyout__list > li {
+  position: relative;
+  transition: translate var(--cb-dur-select) var(--cb-spring);
+}
+.cb-spaces-flyout__list > li > .cb-spaces-flyout__item {
+  padding-right: 34px;
+}
+.cb-spaces-flyout__grip {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--cb-text-tertiary);
+  opacity: 0.55;
+  cursor: grab;
+  touch-action: none;
+  translate: 0 -50%;
+  transition: opacity var(--cb-dur-hover) var(--cb-ease-out), background-color var(--cb-dur-hover) var(--cb-ease-out),
+    color var(--cb-dur-hover) var(--cb-ease-out);
+}
+.cb-spaces-flyout__grip .cb-icon {
+  stroke-width: 2.6;
+}
+.cb-spaces-flyout__list > li:is(:hover, :focus-within) .cb-spaces-flyout__grip {
+  opacity: 1;
+}
+.cb-spaces-flyout__grip:hover,
+.cb-spaces-flyout__grip:focus-visible {
+  background: var(--cb-glass-hover);
+  color: var(--cb-text-primary);
+}
+/* while dragging: the lifted row floats with the pointer, the others glide, the slot marks where it lands */
+.cb-spaces-flyout__list[data-reordering] {
+  cursor: grabbing;
+  user-select: none;
+}
+.cb-spaces-flyout__list[data-reordering] .cb-spaces-flyout__glider {
+  opacity: 0;
+}
+.cb-spaces-flyout__list > li[data-lifted] {
+  z-index: 2;
+  transition: none;
+}
+.cb-spaces-flyout__list > li[data-lifted] > .cb-spaces-flyout__item {
+  background: var(--cb-glass-solid);
+  color: var(--cb-text-primary);
+  box-shadow: var(--cb-glass-lit), var(--cb-shadow-3);
+  scale: 1.02;
+}
+.cb-spaces-flyout__list > li[data-lifted] .cb-spaces-flyout__grip {
+  opacity: 1;
+  cursor: grabbing;
+  color: var(--cb-accent);
+}
+.cb-spaces-flyout__slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: calc(var(--cb-radius-card) - 6px);
+  background: color-mix(in srgb, var(--cb-accent) 9%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--cb-accent) 45%, transparent);
+  pointer-events: none;
+  transition: top var(--cb-dur-select) var(--cb-spring);
+}
+@media (hover: none) {
+  .cb-spaces-flyout__grip {
+    opacity: 0.8;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cb-spaces-flyout__list > li,
+  .cb-spaces-flyout__slot {
+    transition: none;
+  }
 }
