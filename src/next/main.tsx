@@ -14,6 +14,7 @@ import './styles/panels.css';
 import './styles/workspace.css';
 import './styles/studio.css';
 import './styles/editor-workspace.css';
+import './styles/studio-identity.css';
 
 const root = document.getElementById('preview-root');
 if (!root) throw new Error('#preview-root is missing');

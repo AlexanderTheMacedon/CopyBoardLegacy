@@ -12,6 +12,19 @@ export interface CodeHandle extends EditorHandle {
   readonly view: EditorView;
 }
 
+/** Caret position for a status bar: 1-based line and column, plus the number of selected characters. */
+export interface CursorInfo {
+  readonly line: number;
+  readonly col: number;
+  readonly selected: number;
+}
+
+const cursorInfo = (state: EditorState): CursorInfo => {
+  const { main } = state.selection;
+  const line = state.doc.lineAt(main.head);
+  return { line: line.number, col: main.head - line.from + 1, selected: state.selection.ranges.reduce((n, r) => n + r.to - r.from, 0) };
+};
+
 interface CodeEditorProps {
   /** Initial text. The editor owns the text afterwards (the item cannot change underneath it: the Canvas is keyed by item). */
   readonly initial: string;
@@ -31,6 +44,8 @@ interface CodeEditorProps {
   readonly onHistory: (state: HistoryState) => void;
   readonly onReady: (handle: CodeHandle | null) => void;
   readonly onScroll?: (ratio: number) => void;
+  /** Caret moves (status bar); only called when a listener is given. */
+  readonly onCursor?: (cursor: CursorInfo) => void;
   /** Extra extensions applied at creation (e.g. Markdown formatting shortcuts). */
   readonly extensions?: readonly Extension[];
 }
@@ -66,6 +81,7 @@ export function CodeEditor(props: CodeEditorProps) {
             // sliceDoc joins lines with the state's own separator (doc.toString() would turn CRLF into LF)
             if (update.docChanged) cb.current.onChange(update.state.sliceDoc());
             if (update.docChanged || update.transactions.length) reportHistory(update.state);
+            if ((update.selectionSet || update.docChanged) && cb.current.onCursor) cb.current.onCursor(cursorInfo(update.state));
           }),
         ],
       }),

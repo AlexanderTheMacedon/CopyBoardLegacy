@@ -7,20 +7,43 @@ import { Icon } from '../../components/Icon';
 import { IconButton } from '../../components/IconButton';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { SpaceGlyph } from '../../components/SpaceIcon';
-import { textItemToDocument } from '../../domain/document';
+import { conversionNotes, textItemToDocument } from '../../domain/document';
 import { suggestIcon } from '../../domain/icons';
 import { wouldCycle } from '../../app/operations';
 import { isFolderId, isLocal, isLocalSpace, type Folder, type ItemId, type Placement, type Space, type SpaceColor, type SpaceIcon, type SpaceId, type SpacePrefs } from '../../domain/types';
 import { CreateForm } from '../capture/CreateDialog';
+import { studios, type StudioId } from '../items/studio';
 import { useEntryActions } from '../workspace/useEntryActions';
 import { ColorPicker, IconPicker } from './pickers';
 
 const TITLE_ID = 'cb-modal-title';
 
-function DialogFrame({ title, eyebrow, onClose, children, footer, wide = false }: { title: string; eyebrow?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+function DialogFrame({
+  title,
+  eyebrow,
+  onClose,
+  children,
+  footer,
+  wide = false,
+  studio,
+}: {
+  title: string;
+  eyebrow?: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+  wide?: boolean;
+  /** A studio's dialog wears its identity: glyph beside the title, its colour on the primary action. */
+  studio?: StudioId;
+}) {
   return (
-    <div className="cb-card-dialog" data-wide={wide || undefined}>
+    <div className="cb-card-dialog" data-wide={wide || undefined} data-studio={studio}>
       <header className="cb-card-dialog__header">
+        {studio && (
+          <span className="cb-studio-glyph cb-studio-glyph--xl cb-card-dialog__glyph" aria-hidden="true">
+            <Icon name={studios[studio].icon} size={24} />
+          </span>
+        )}
         <div>
           {eyebrow && <p className="cb-card-dialog__eyebrow">{eyebrow}</p>}
           <h2 id={TITLE_ID}>{title}</h2>
@@ -510,16 +533,18 @@ function ConvertToDocumentForm({ itemId, onClose }: { itemId: ItemId; onClose: (
     notify('In ein Dokument umgewandelt', { tone: 'success' });
     dispatch({ type: 'openComposer', itemId });
   };
+  const notes = conversionNotes(item.body);
   return (
     <DialogFrame
       title={`„${item.title}“ im Schreibstudio bearbeiten?`}
       eyebrow="Schreibstudio"
+      studio="document"
       onClose={onClose}
       footer={
         <>
           <button
             type="button"
-            className="cb-button cb-button--ghost"
+            className="cb-button cb-button--quiet"
             disabled={busy}
             onClick={() => {
               onClose();
@@ -532,18 +557,51 @@ function ConvertToDocumentForm({ itemId, onClose }: { itemId: ItemId; onClose: (
           <button type="button" className="cb-button cb-button--ghost" disabled={busy} onClick={onClose} autoFocus>
             Abbrechen
           </button>
-          <button type="button" className="cb-button cb-button--primary" disabled={busy} onClick={() => void convert()}>
-            <Icon name="fileText" size={16} />
+          <button type="button" className="cb-button cb-button--primary cb-button--studio" disabled={busy} onClick={() => void convert()}>
+            <Icon name="nib" size={16} />
             Umwandeln
           </button>
         </>
       }
     >
-      <p className="cb-form__text">
-        Die Textkarte wird dafür einmalig zu einem Dokument mit Formatierung. Text, Titel, Ort, Tags, Favorit und Erstelldatum
-        bleiben erhalten; jede Zeile wird ein Absatz. Kopieren liefert danach den reinen Text des Dokuments.
-      </p>
-      <p className="cb-form__text">Soll die Karte reiner Text bleiben, bearbeite sie als Klartext.</p>
+      <p className="cb-convert__lead">Die Textkarte wird einmalig zu einem Dokument – mit Formatierung, Schriften und Seitenlayout.</p>
+      <ul className="cb-convert__facts">
+        <li data-tone="keep">
+          <Icon name="check" size={15} />
+          <span>
+            <strong>Bleibt erhalten:</strong> Text, Titel, Ort, Tags, Favorit und Erstelldatum.
+          </span>
+        </li>
+        <li data-tone="change">
+          <Icon name="arrowRight" size={15} />
+          <span>
+            <strong>Wird zum Dokument:</strong> jede Zeile ein Absatz ({notes.paragraphs === 1 ? '1 Absatz' : `${notes.paragraphs} Absätze`}). Kopieren liefert danach den reinen Text
+            des Dokuments.
+          </span>
+        </li>
+        {notes.crlf && (
+          <li data-tone="note">
+            <Icon name="info" size={15} />
+            <span>Windows-Zeilenenden (CRLF) werden zu einfachen Zeilenumbrüchen.</span>
+          </li>
+        )}
+        {notes.loneCr && (
+          <li data-tone="note">
+            <Icon name="info" size={15} />
+            <span>Einzelne CR-Steuerzeichen bleiben als Zeichen im Absatz stehen.</span>
+          </li>
+        )}
+        {notes.trailingBlank > 0 && (
+          <li data-tone="note">
+            <Icon name="info" size={15} />
+            <span>
+              {notes.trailingBlank === 1 ? 'Die leere Zeile' : `Die ${notes.trailingBlank} leeren Zeilen`} am Ende {notes.trailingBlank === 1 ? 'bleibt als leerer Absatz' : 'bleiben als leere Absätze'}{' '}
+              sichtbar, {notes.trailingBlank === 1 ? 'gehört' : 'gehören'} aber nicht zum kopierten Text.
+            </span>
+          </li>
+        )}
+      </ul>
+      <p className="cb-convert__alt">Soll die Karte reiner Text bleiben, bearbeite sie als Klartext – nichts wird umgewandelt.</p>
     </DialogFrame>
   );
 }

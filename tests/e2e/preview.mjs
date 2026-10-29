@@ -250,7 +250,8 @@ test('P6', 'editor opens from the inspector: read-only example with an explicit 
   await page.waitForFunction(() => /<img src=x/.test(document.querySelector('.cb-markdown').textContent));
   const injected = await page.evaluate(() => ({ img: !!document.querySelector('.cb-markdown img'), xss: !!window.__xss, text: document.querySelector('.cb-markdown').textContent }));
   await page.click('.cb-composer [role="radio"]:has-text("Vorschau")');
-  const previewOnly = await page.evaluate(() => ({ panes: document.querySelectorAll('.cb-composer__pane:not([hidden])').length, sourceHidden: document.querySelector('.cb-md__source').hidden }));
+  // both surfaces stay mounted (Run D.1); the hidden one is inert
+  const previewOnly = await page.evaluate(() => ({ panes: document.querySelectorAll('.cb-md > .cb-composer__pane[data-shown="true"]').length, sourceHidden: document.querySelector('.cb-md__source').inert }));
   const rail = !!(await page.$('.cb-rail'));
   // Header: no back arrow; while the rail is open only the rail's own ✕ controls it; close sits at the far right.
   const header = await page.$eval('.cb-composer__header', (h) => ({
@@ -1003,7 +1004,7 @@ test('P26', 'Markdown: source, preview and split correspond; an untouched card i
     scrollSync: typeof document.querySelector('.cb-md .cm-scroller').scrollTop === 'number',
   }));
   await page.click('.cb-composer [role="radio"]:has-text("Quelltext")');
-  const sourceOnly = await page.$$eval('.cb-composer__pane:not([hidden])', (e) => e.length);
+  const sourceOnly = await page.$$eval('.cb-md > .cb-composer__pane[data-shown="true"]', (e) => e.length);
   await savedStatus(page);
   const source = await page.evaluate(() => document.querySelector('.cb-md .cm-content').innerText);
   await page.click('[aria-label="Editor schließen"]');
@@ -1065,7 +1066,7 @@ test('P28', 'editors on a phone in dark mode: no horizontal overflow, one close 
   await page.click('.cb-tile[data-item-id="it-prompt-review"] .cb-tile__open');
   await page.click('.cb-inspector button:has-text("Bearbeiten")');
   await page.waitForSelector('.cb-md .cm-content');
-  const md = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > innerWidth, split: document.querySelector('.cb-segmented [aria-checked="true"]').textContent, close: document.querySelectorAll('[aria-label="Editor schließen"]').length, panes: document.querySelectorAll('.cb-composer__pane:not([hidden])').length }));
+  const md = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > innerWidth, split: document.querySelector('.cb-segmented [aria-checked="true"]').textContent, close: document.querySelectorAll('[aria-label="Editor schließen"]').length, panes: document.querySelectorAll('.cb-md > .cb-composer__pane[data-shown="true"]').length }));
   await page.click('[aria-label="Editor schließen"]');
   await page.waitForSelector('.cb-inspector');
   await page.click('[aria-label="Inspector schließen"]');
@@ -2074,13 +2075,156 @@ test('P45', 'Markdown: gesetzte Quelle (Überschrift, Codeblock, Code-Chip), Aus
   await page.click('.cb-segmented button:has-text("Vorschau")');
   const preview = await page.$eval('.cb-markdown', (e) => ({ strong: e.querySelector('strong')?.textContent, h1: e.querySelector('h1')?.textContent }));
   await page.click('.cb-segmented button:has-text("Split")');
-  const split = await page.$$eval('.cb-md > .cb-composer__pane:not([hidden])', (els) => els.length);
+  const split = await page.$$eval('.cb-md > .cb-composer__pane[data-shown="true"]', (els) => els.length);
   await page.setViewportSize({ width: 390, height: 844 });
   await settle(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
   const problems = await clean();
   const ok = typeset.heading && typeset.chip && typeset.fence === 3 && focus && body === '# Titel\n\nEin **Wort** mit `code` hier.\n\n```\nx = 1\n```' && preview.strong === 'Wort' && preview.h1 === 'Titel' && split === 2 && !overflow && !problems.length;
   return { ok, observed: `typeset=${JSON.stringify(typeset)}, focus=${focus}, body=${JSON.stringify(body)}, preview=${JSON.stringify(preview)}, split panes=${split}, phone overflow=${overflow}, problems=${problems.join(' | ') || '-'}` };
+});
+
+// --- Studio identity & interaction polish (Run D.1): app grid, tag pairs, fluid Markdown modes ---------------------------
+test('P46', 'App-Grid: Plus im eingeklappten Capture-Dock öffnet das schwebende App-Grid (7 Apps, Pfeiltasten, Escape mit Fokus zurück, Außenklick); fehlschlagendes Speichern öffnet nichts; Code wird erst gespeichert, dann geöffnet', async ({ page, clean }) => {
+  const rest = await page.$eval('.cb-capture', (e) => ({ state: e.dataset.state, plus: e.querySelector('.cb-capture__lead')?.tagName }));
+  await page.click('.cb-capture__lead');
+  await page.waitForSelector('.cb-launcher[role="dialog"]');
+  const labels = await page.$$eval('.cb-launcher .cb-app-tile__label', (els) => els.map((e) => e.textContent));
+  const studios = await page.$$eval('.cb-launcher .cb-app-tile', (els) => els.map((e) => getComputedStyle(e).getPropertyValue('--st').trim()).filter(Boolean).length);
+  const first = await page.evaluate(() => document.activeElement?.querySelector('.cb-app-tile__label')?.textContent);
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
+  const moved = await page.evaluate(() => document.activeElement?.querySelector('.cb-app-tile__label')?.textContent);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.cb-launcher', { state: 'detached' });
+  const focusBack = await page.evaluate(() => document.activeElement?.classList.contains('cb-capture__lead'));
+  await page.click('.cb-capture__lead');
+  await page.waitForSelector('.cb-launcher');
+  await page.mouse.click(720, 135);
+  const outside = await page.waitForSelector('.cb-launcher', { state: 'detached' }).then(() => true, () => false);
+  // a failing commit: error notice, the launcher stays, no editor, nothing stored
+  const before = (await dbItems(page)).length;
+  await failPuts(page);
+  await page.click('.cb-capture__lead');
+  await page.click('.cb-launcher .cb-app-tile__main:has-text("Dokument")');
+  await page.waitForSelector('.cb-notice[data-tone="error"]');
+  const failed = { launcher: !!(await page.$('.cb-launcher')), composer: !!(await page.$('.cb-composer')), db: (await dbItems(page)).length };
+  await page.evaluate(() => (window.__fail = false));
+  // success: the item is committed before the editor opens; the launcher is gone
+  await page.click('.cb-launcher .cb-app-tile__main:has-text("Code")');
+  await page.waitForSelector('.cb-composer[data-kind="code"] .cb-codecenter');
+  const stored = (await dbItems(page)).filter((i) => i.kind === 'code' && i.title === 'Neuer Code').length;
+  const launcherGone = !(await page.$('.cb-launcher'));
+  const studio = await page.$eval('.cb-composer', (e) => ({ studio: e.dataset.studio, name: e.querySelector('.cb-composer__studio')?.textContent, tab: !!e.querySelector('.cb-codecenter__tab'), status: e.querySelector('.cb-codecenter__status')?.textContent }));
+  const problems = (await clean()).filter((p) => !/QuotaExceeded|quota/i.test(p));
+  const ok =
+    rest.state === 'rest' && rest.plus === 'BUTTON' && labels.join('|') === 'Dokument|Klartext|Markdown|Code|Sprachaufnahme|Bild/Datei importieren|Schnellnotiz' && studios === 7 &&
+    first === 'Dokument' && moved === 'Sprachaufnahme' && focusBack && outside && failed.launcher && !failed.composer && failed.db === before &&
+    stored === 1 && launcherGone && studio.studio === 'code' && studio.name === 'CodeCenter' && studio.tab && /Zeile 1, Spalte 1/.test(studio.status ?? '') && !problems.length;
+  return { ok, observed: `rest=${JSON.stringify(rest)}, labels=${labels.join('|')}, studios=${studios}, keys ${first}→${moved}, focusBack=${focusBack}, outside=${outside}, failed=${JSON.stringify(failed)} (db before ${before}), stored=${stored}, launcherGone=${launcherGone}, studio=${JSON.stringify(studio)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P47', 'CodeCenter: Tag-Vervollständigung mit Enter setzt ein Tag-Paar (TSX <Card></Card>, HTML <section></section>), Cursor dazwischen; ein Undo nimmt das ganze Paar zurück, Redo stellt es her; gespeichert', async ({ page, clean }) => {
+  await createVia(page, 'Code');
+  await page.waitForSelector('.cb-composer .cm-content');
+  await page.keyboard.type('const n = 1;');
+  await page.waitForSelector('.cb-composer .cm-line span');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('function Card() {}');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('const a = <Ca');
+  await page.waitForFunction(() => [...document.querySelectorAll('.cm-tooltip-autocomplete li')].some((li) => li.textContent.includes('Card')));
+  const tsx = await completionLabels(page);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  const line = () => page.evaluate(() => [...document.querySelectorAll('.cb-composer .cm-line')].map((l) => l.textContent).find((t) => t.startsWith('const a')));
+  const paired = await line();
+  await page.waitForTimeout(600);
+  await page.keyboard.type('Hi');
+  const inside = await line();
+  await page.waitForTimeout(600);
+  await page.keyboard.press('ControlOrMeta+Z');
+  await page.keyboard.press('ControlOrMeta+Z');
+  const undone = await line();
+  await page.keyboard.press('ControlOrMeta+Shift+Z');
+  const redone = await line();
+  await savedStatus(page);
+  const ts = (await dbItems(page)).find((i) => i.kind === 'code' && i.body.includes('function Card'))?.body;
+  // HTML: same item switched to HTML, a fresh line
+  await page.selectOption('.cb-canvas-bar select', 'html');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('<sec');
+  await page.waitForFunction(() => [...document.querySelectorAll('.cm-tooltip-autocomplete li')].some((li) => li.textContent === 'section'));
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('x');
+  const html = await page.evaluate(() => [...document.querySelectorAll('.cb-composer .cm-line')].map((l) => l.textContent).find((t) => t.includes('section')));
+  await savedStatus(page);
+  const problems = await clean();
+  const ok =
+    tsx.includes('Card') && paired === 'const a = <Card></Card>' && inside === 'const a = <Card>Hi</Card>' && !/<\/Card>/.test(undone ?? '') && /<Card><\/Card>|<Card>Hi<\/Card>/.test(redone ?? '') &&
+    /const a = <Card>/.test(ts ?? '') && html === '<section>x</section>' && !problems.length;
+  return { ok, observed: `tsx labels=${tsx.slice(0, 5).join(',')}, paired=${JSON.stringify(paired)}, inside=${JSON.stringify(inside)}, undone=${JSON.stringify(undone)}, redone=${JSON.stringify(redone)}, html=${JSON.stringify(html)}, problems=${problems.join(' | ') || '-'}` };
+});
+
+test('P48', 'Markdown: fließende Moduswechsel – dieselbe CodeMirror-Instanz, Auswahl, Scrollposition und Verlauf bleiben; die Spalten gleiten (kein Sprung), Tippen direkt nach dem Wechsel geht nicht verloren; Reduced Motion schaltet sofort', async ({ page, clean }) => {
+  await createVia(page, 'Markdown');
+  await page.waitForSelector('.cb-md__source .cm-content');
+  const lines = Array.from({ length: 45 }, (_, i) => `Zeile ${i + 1}`).join('\n');
+  await page.keyboard.insertText(`# Motion\n\n${lines}`);
+  await page.keyboard.press('ControlOrMeta+Home');
+  for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Shift+End');
+  await page.evaluate(() => {
+    window.__cmEditor = document.querySelector('.cb-md__source .cm-editor');
+    document.querySelector('.cb-md__source .cm-scroller').scrollTop = 140;
+  });
+  await page.waitForTimeout(100);
+  const before = await page.evaluate(() => ({ sel: getSelection().toString(), scroll: Math.round(document.querySelector('.cb-md__source .cm-scroller').scrollTop) }));
+  // every frame of the switch: the source column must pass through intermediate widths (a glide, not a jump)
+  const frames = page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const seen = [];
+        const t0 = performance.now();
+        const tick = () => {
+          seen.push(parseFloat(getComputedStyle(document.querySelector('.cb-md')).gridTemplateColumns));
+          if (performance.now() - t0 < 1400) requestAnimationFrame(tick);
+          else resolve(seen);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  await page.click('.cb-composer [role="radio"]:has-text("Vorschau")');
+  const widths = await frames;
+  const start = widths[0];
+  const mid = widths.filter((w) => w > 1 && w < start - 1);
+  await page.waitForTimeout(100);
+  const done = await page.evaluate(() => ({ cols: getComputedStyle(document.querySelector('.cb-md')).gridTemplateColumns.split(' ').map(parseFloat), inert: document.querySelector('.cb-md__source').inert, preview: !!document.querySelector('.cb-markdown h1') }));
+  // back to the source and type at once: nothing is swallowed by the animation
+  await page.click('.cb-composer [role="radio"]:has-text("Quelltext")');
+  await page.evaluate(() => document.querySelector('.cb-md__source .cm-content').focus());
+  const back = await page.evaluate(() => ({ same: window.__cmEditor === document.querySelector('.cb-md__source .cm-editor'), sel: getSelection().toString(), scroll: Math.round(document.querySelector('.cb-md__source .cm-scroller').scrollTop) }));
+  await page.keyboard.press('End');
+  await page.keyboard.type('!');
+  await savedStatus(page);
+  const typed = (await dbItems(page)).find((i) => i.kind === 'markdown' && i.body.startsWith('# Motion'))?.body ?? '';
+  await page.keyboard.press('ControlOrMeta+Z');
+  await page.waitForTimeout(100);
+  await savedStatus(page);
+  const undone = (await dbItems(page)).find((i) => i.kind === 'markdown' && i.body.startsWith('# Motion'))?.body ?? '';
+  // reduced motion: the layout is final within a frame
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.click('.cb-composer [role="radio"]:has-text("Split")');
+  await settle(page);
+  const reduced = await page.evaluate(() => getComputedStyle(document.querySelector('.cb-md')).gridTemplateColumns.split(' ').map(parseFloat));
+  const problems = await clean();
+  const ok =
+    before.sel === 'Zeile 11' && mid.length >= 3 && done.cols[0] === 0 && done.inert && done.preview && back.same && back.sel === before.sel && Math.abs(back.scroll - before.scroll) <= 2 &&
+    typed.includes('Zeile 11!') && !undone.includes('Zeile 11!') && undone.includes('Zeile 45') && Math.abs(reduced[0] - reduced[1]) < 2 && !problems.length;
+  return { ok, observed: `before=${JSON.stringify(before)}, glide ${Math.round(start)}→${mid.slice(0, 4).map(Math.round).join('/')}… (${mid.length} frames), done=${JSON.stringify({ ...done, cols: done.cols.map(Math.round) })}, back=${JSON.stringify(back)}, typed=${typed.includes('Zeile 11!')}, undone=${!undone.includes('Zeile 11!')}, reduced=${reduced.map(Math.round)}, problems=${problems.join(' | ') || '-'}` };
 });
 
 const ONLY = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY) : null; // e.g. E2E_ONLY='^(P6|P23)$' for a focused run

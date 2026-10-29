@@ -11,9 +11,11 @@ import { DEFAULT_DOCUMENT_TITLE, documentOutline, documentText, sanitizeDocument
 import { storedEdits } from '../../domain/image-edits';
 import { isEditable, isLocal, isStudioImage, type Item } from '../../domain/types';
 import { tileOpenButtonId } from '../grid/ItemTile';
-import { formatDateTime, kindIcon, kindLabel } from '../items/item-meta';
-import type { CodeHandle } from './CodeEditor';
+import { formatDateTime, kindLabel } from '../items/item-meta';
+import { studios } from '../items/studio';
+import type { CodeHandle, CursorInfo } from './CodeEditor';
 import { CodeEditor } from './CodeEditor';
+import { resolveLanguage } from './codemirror';
 import { CodeToolbar } from './CodeToolbar';
 import { DocumentEditor, type DocumentHandle } from './DocumentEditor';
 import { EditorExplorer } from './EditorExplorer';
@@ -210,6 +212,7 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
   const [history, setHistory] = useState<HistoryState>({ canUndo: false, canRedo: false });
   const [rev, setRev] = useState(0);
   const deferredRev = useDeferredValue(rev);
+  const [cursor, setCursor] = useState<CursorInfo>({ line: 1, col: 1, selected: 0 });
 
   const body = useRef(item.kind === 'document' || item.kind === 'image' ? '' : item.body);
   const live = useRef({ title, language, handle });
@@ -424,6 +427,7 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
       className="cb-composer"
       aria-labelledby="cb-composer-title"
       data-kind={item.kind}
+      data-studio={item.kind}
       data-mode={hasModes ? effectiveMode : undefined}
       data-rail={railOpen || undefined}
       data-explorer={explorerOpen || undefined}
@@ -434,8 +438,10 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
       <header className="cb-composer__header">
         <div className="cb-composer__heading">
           <p className="cb-composer__eyebrow">
-            <Icon name={kindIcon[item.kind]} size={13} />
-            {kindLabel[item.kind]}
+            <span className="cb-studio-glyph cb-studio-glyph--xs" aria-hidden="true">
+              <Icon name={studios[item.kind].icon} size={12} />
+            </span>
+            <span className="cb-composer__studio">{studios[item.kind].name}</span>
             {place && <span className="cb-composer__place"> · {place}</span>}
           </p>
           {writable ? (
@@ -488,7 +494,22 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
           {item.kind === 'document' && handle && <DocumentToolbar handle={handle as DocumentHandle} disabled={!writable} />}
           {item.kind === 'text' && writable && (
             <div className="cb-canvas-bar__set" role="toolbar" aria-label="Format">
-              <ToolButton icon="fileText" label="Im Schreibstudio bearbeiten" text="Schreibstudio" onClick={() => void toStudio()} />
+              {/* the plain sheet's one primary way forward: the writing studio, in its own identity */}
+              <button
+                type="button"
+                className="cb-studio-cta"
+                data-studio="document"
+                aria-label="Im Schreibstudio bearbeiten"
+                title="Im Schreibstudio bearbeiten – mit Formatierung, Schriften und Seitenlayout"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => void toStudio()}
+              >
+                <span className="cb-studio-cta__glyph" aria-hidden="true">
+                  <Icon name="nib" size={15} />
+                </span>
+                <span className="cb-studio-cta__label">Im Schreibstudio bearbeiten</span>
+                <Icon name="arrowRight" size={14} className="cb-studio-cta__arrow" />
+              </button>
             </div>
           )}
           {item.kind === 'markdown' && <MarkdownToolbar handle={handle as CodeHandle | null} disabled={toolbarDisabled} />}
@@ -576,20 +597,44 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
               <MarkdownEditor initial={item.body} mode={effectiveMode} readOnly={!writable} prefs={prefs} title={title} onChange={onText} onHistory={setHistory} onReady={onHandle} />
             )}
             {item.kind === 'code' && (
-              <div className="cb-composer__pane">
-                <CodeEditor
-                  initial={item.body}
-                  language={language}
-                  readOnly={!writable}
-                  wrap={prefs.wrap}
-                  tabSize={prefs.tabSize}
-                  lineNumbers={prefs.lineNumbers}
-                  ariaLabel={`${kindLabel.code}-Quelltext`}
-                  title={title}
-                  onChange={onText}
-                  onHistory={setHistory}
-                  onReady={onHandle}
-                />
+              <div className="cb-composer__pane cb-codecenter">
+                {/* CodeCenter workbench: a tab strip and a status bar around the editor; its grid keeps a (still empty)
+                    preview column, so later runs can add more tabs and a live preview without reshaping the canvas */}
+                <div className="cb-codecenter__tabs">
+                  <span className="cb-codecenter__tab" aria-hidden="true">
+                    <Icon name="braces" size={13} />
+                    <span className="cb-codecenter__tab-name">{title.trim() || 'Ohne Titel'}</span>
+                    <span className="cb-codecenter__tab-ext">{(resolveLanguage(language)?.ext ?? 'txt').toUpperCase()}</span>
+                    {writable && autosave.state !== 'saved' && <span className="cb-codecenter__tab-dirty" />}
+                  </span>
+                </div>
+                <div className="cb-codecenter__editor">
+                  <CodeEditor
+                    initial={item.body}
+                    language={language}
+                    readOnly={!writable}
+                    wrap={prefs.wrap}
+                    tabSize={prefs.tabSize}
+                    lineNumbers={prefs.lineNumbers}
+                    ariaLabel={`${kindLabel.code}-Quelltext`}
+                    title={title}
+                    onChange={onText}
+                    onHistory={setHistory}
+                    onReady={onHandle}
+                    onCursor={setCursor}
+                  />
+                </div>
+                <footer className="cb-codecenter__status" aria-label="Codestatus">
+                  <span>
+                    Zeile {cursor.line}, Spalte {cursor.col}
+                    {cursor.selected > 0 && ` · ${cursor.selected} ausgewählt`}
+                  </span>
+                  <span className="cb-codecenter__status-meta">
+                    <span className="cb-codecenter__lang">{resolveLanguage(language)?.label ?? 'Klartext'}</span>
+                    <span>Leerzeichen: {prefs.tabSize}</span>
+                    <span>{body.current.includes('\r\n') ? 'CRLF' : 'LF'}</span>
+                  </span>
+                </footer>
               </div>
             )}
             {item.kind === 'text' && (

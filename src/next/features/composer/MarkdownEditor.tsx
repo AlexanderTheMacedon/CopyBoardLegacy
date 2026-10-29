@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../../components/Icon';
 import { CodeEditor, type CodeHandle } from './CodeEditor';
 import type { EditorPrefs, HistoryState } from './editor-types';
@@ -66,15 +66,38 @@ const renderPill: PillRenderer = (dom, view) => {
 const extensions = [markdownKeymap, markdownTypesetting, selectionPill(renderPill)];
 
 /**
- * Markdown writing: CodeMirror source (canonical string, edited as text only) + safe live preview. The source view stays
- * mounted in preview mode, so its history and selection survive mode switches. Split scrolls the preview with the source.
+ * Markdown writing: CodeMirror source (canonical string, edited as text only) + safe live preview. Both surfaces stay
+ * mounted in every mode, so the source keeps its history, selection and scroll position, and a mode switch never
+ * re-creates anything: the two grid columns glide between their widths (Run D.1). A leaving surface keeps the width it
+ * had while its column closes (no re-wrapping during the glide) and fades towards its own side; a hidden surface is inert.
+ * Split scrolls the preview with the source.
  */
 export function MarkdownEditor({ initial, mode, readOnly, prefs, title, onChange, onHistory, onReady }: MarkdownEditorProps) {
   const [text, setText] = useState(initial);
   const deferred = useDeferredValue(text);
   const preview = useRef<HTMLDivElement>(null);
+  const source = useRef<HTMLDivElement>(null);
   const showSource = mode !== 'preview';
   const showPreview = mode !== 'source';
+  // a hidden preview keeps its last render instead of re-rendering on every keystroke; showing it renders the current text
+  const shownText = useRef(initial);
+  if (showPreview) shownText.current = deferred;
+
+  // Freeze a leaving surface at the width it had (read before the glide moves anything: transitions start from the old
+  // layout), release it once it shows again so it grows with its column. Without motion there is nothing to freeze.
+  const lastMode = useRef(mode);
+  useLayoutEffect(() => {
+    const was = lastMode.current;
+    lastMode.current = mode;
+    for (const [pane, shown, wasShown] of [
+      [source.current, showSource, was !== 'preview'],
+      [preview.current, showPreview, was !== 'source'],
+    ] as const) {
+      if (!pane) continue;
+      if (shown) pane.style.removeProperty('--cb-md-frozen');
+      else if (wasShown && pane.offsetWidth > 0) pane.style.setProperty('--cb-md-frozen', `${pane.offsetWidth}px`);
+    }
+  }, [mode, showSource, showPreview]);
 
   const handleChange = useCallback(
     (value: string) => {
@@ -90,7 +113,7 @@ export function MarkdownEditor({ initial, mode, readOnly, prefs, title, onChange
 
   return (
     <div className="cb-md" data-mode={mode} data-width={prefs.width}>
-      <div className="cb-composer__pane cb-md__source" hidden={!showSource}>
+      <div ref={source} className="cb-composer__pane cb-md__source" data-shown={showSource} inert={!showSource}>
         <span className="cb-composer__pane-label" aria-hidden="true">
           <Icon name="code" size={12} />
           Markdown
@@ -113,15 +136,20 @@ export function MarkdownEditor({ initial, mode, readOnly, prefs, title, onChange
           onScroll={mode === 'split' ? sync : undefined}
         />
       </div>
-      {showPreview && (
-        <div ref={preview} className="cb-composer__pane cb-composer__pane--preview" aria-label="Markdown-Vorschau" role="region">
-          <span className="cb-composer__pane-label" aria-hidden="true">
-            <Icon name="eye" size={12} />
-            Vorschau
-          </span>
-          <MarkdownPreview source={deferred} />
-        </div>
-      )}
+      <div
+        ref={preview}
+        className="cb-composer__pane cb-composer__pane--preview"
+        aria-label="Markdown-Vorschau"
+        role="region"
+        data-shown={showPreview}
+        inert={!showPreview}
+      >
+        <span className="cb-composer__pane-label" aria-hidden="true">
+          <Icon name="eye" size={12} />
+          Vorschau
+        </span>
+        <MarkdownPreview source={shownText.current} />
+      </div>
     </div>
   );
 }

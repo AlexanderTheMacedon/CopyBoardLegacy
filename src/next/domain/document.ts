@@ -216,6 +216,18 @@ export const documentFromText = (text: string): DocumentContent => ({
   },
 });
 
+/**
+ * What converting a plain text into a document changes, so the confirmation can say it plainly instead of hiding it:
+ * the number of paragraphs (one per line), CRLF line ends that become plain breaks, lone CR characters that stay inside
+ * their paragraph, and empty lines at the end, which stay as empty paragraphs but are not part of the copied text.
+ */
+export function conversionNotes(text: string): { paragraphs: number; crlf: boolean; loneCr: boolean; trailingBlank: number } {
+  const lines = text.split(/\r?\n/);
+  let trailingBlank = 0;
+  while (trailingBlank < lines.length - 1 && !lines[lines.length - 1 - trailingBlank]) trailingBlank++;
+  return { paragraphs: lines.length, crlf: text.includes('\r\n'), loneCr: /\r(?!\n)/.test(text), trailingBlank };
+}
+
 export const emptyDocument = (): DocumentContent => ({ schema: DOCUMENT_SCHEMA, doc: { type: 'doc', content: [{ type: 'paragraph' }] } });
 
 /**

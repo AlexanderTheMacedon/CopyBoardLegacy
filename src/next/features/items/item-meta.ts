@@ -14,10 +14,11 @@ export const kindLabel: Record<ItemKind, string> = {
 };
 
 export const kindIcon: Record<ItemKind, IconName> = {
-  document: 'fileText',
+  // the editable kinds wear their studio's glyph (studio.ts), so a card and its editor read as one thing
+  document: 'nib',
   text: 'text',
-  markdown: 'hash',
-  code: 'code',
+  markdown: 'markdown',
+  code: 'braces',
   link: 'link',
   image: 'image',
   file: 'file',

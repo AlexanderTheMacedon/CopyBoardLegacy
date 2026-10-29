@@ -47,7 +47,7 @@ export function itemActions(item: Item, location: Location, { withOpen = false, 
   if (hasAsset(item) && isEditedImage(item)) actions.push({ id: 'download-original', label: 'Original herunterladen', icon: 'download' });
   // A user's own text card offers the writing studio (after an explicit conversion) and keeps the quick plain-text editor.
   if (item.kind === 'text' && isLocal(item)) {
-    actions.push({ id: 'open-studio', label: 'Im Schreibstudio bearbeiten', icon: 'pen' });
+    actions.push({ id: 'open-studio', label: 'Im Schreibstudio bearbeiten', icon: 'nib' });
     actions.push({ id: 'open-composer', label: 'Als Klartext bearbeiten', icon: 'text' });
   } else if (isEditable(item)) actions.push({ id: 'open-composer', label: 'Bearbeiten', icon: 'pen' });
   if (isStudioImage(item)) actions.push({ id: 'open-composer', label: 'Im Bildstudio bearbeiten', icon: 'sliders' });

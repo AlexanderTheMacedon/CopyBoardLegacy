@@ -1,0 +1,869 @@
+/* --- Studio Identity & Interaction Polish (Run D.1) ---------------------------------------------------------------------
+   Every editor is one member of the app family with its own curated colour (tokens.css, --cb-kind-*), glyph and name
+   (features/items/studio.ts). `data-studio` sets `--st`; everything else derives from it: ink for text and icons, a soft
+   tint, a gradient fill under white glyphs and a glow. Inside an editor the studio colour *is* the accent, so caret,
+   selection, pressed tools, focus rings, the line band and completion highlights all follow one systematic identity.
+   Builds on the Cinematic Nature Glass materials; every duration is a motion token (reduced motion collapses them). ---- */
+
+[data-studio='document'] {
+  --st: var(--cb-kind-document);
+}
+[data-studio='text'] {
+  --st: var(--cb-kind-text);
+}
+[data-studio='markdown'] {
+  --st: var(--cb-kind-markdown);
+}
+[data-studio='code'] {
+  --st: var(--cb-kind-code);
+}
+[data-studio='image'] {
+  --st: var(--cb-kind-image);
+}
+[data-studio='recording'] {
+  --st: var(--cb-kind-audio);
+}
+[data-studio='import'] {
+  --st: var(--cb-kind-file);
+}
+[data-studio='note'] {
+  --st: var(--cb-brand);
+}
+[data-studio] {
+  --st-ink: color-mix(in oklab, var(--st) 80%, var(--cb-ink));
+  --st-soft: color-mix(in srgb, var(--st) 11%, transparent);
+  --st-tint: color-mix(in srgb, var(--st) 18%, transparent);
+  --st-glow: color-mix(in srgb, var(--st) 40%, transparent);
+  --st-fill: linear-gradient(160deg, color-mix(in oklab, var(--st) 68%, white) 0%, var(--st) 48%, color-mix(in oklab, var(--st) 84%, var(--cb-ink)) 100%);
+}
+.cb-app[data-theme='dark'] [data-studio] {
+  --st-ink: color-mix(in oklab, var(--st) 64%, white);
+  --st-soft: color-mix(in srgb, var(--st) 17%, transparent);
+  --st-tint: color-mix(in srgb, var(--st) 26%, transparent);
+  --st-glow: color-mix(in srgb, var(--st) 50%, transparent);
+  --st-fill: linear-gradient(160deg, color-mix(in oklab, var(--st) 76%, white) 0%, var(--st) 55%, color-mix(in oklab, var(--st) 88%, var(--cb-ink)) 100%);
+}
+
+/* Inside an editor the studio is the accent (same derivation as the space accent in tokens.css, light and dark). */
+.cb-composer[data-studio] {
+  --cb-accent: var(--st-ink);
+  --cb-accent-hover: color-mix(in oklab, var(--st) 66%, var(--cb-ink));
+  --cb-accent-fill: linear-gradient(180deg, color-mix(in oklab, var(--st) 88%, white), color-mix(in oklab, var(--st) 86%, var(--cb-ink)));
+  --cb-accent-fill-hover: linear-gradient(180deg, var(--st), color-mix(in oklab, var(--st) 76%, var(--cb-ink)));
+  --cb-accent-soft: color-mix(in oklab, var(--st) 12%, white);
+  --cb-accent-glow: var(--st-glow);
+  --cb-surface-selected: color-mix(in oklab, var(--st) 14%, white);
+  --cb-focus-ring: color-mix(in oklab, var(--st) 80%, var(--cb-ink));
+  --cb-p-orange: var(--st);
+}
+.cb-app[data-theme='dark'] .cb-composer[data-studio] {
+  --cb-accent-hover: color-mix(in oklab, var(--st) 54%, white);
+  --cb-accent-fill: linear-gradient(180deg, color-mix(in oklab, var(--st) 86%, white), var(--st));
+  --cb-accent-fill-hover: linear-gradient(180deg, color-mix(in oklab, var(--st) 76%, white), color-mix(in oklab, var(--st) 92%, white));
+  --cb-accent-soft: color-mix(in oklab, var(--st) 22%, #0f1318);
+  --cb-surface-selected: color-mix(in oklab, var(--st) 26%, #0f1318);
+  --cb-focus-ring: color-mix(in oklab, var(--st) 68%, white);
+  --cb-p-orange: color-mix(in oklab, var(--st) 80%, white);
+}
+
+/* --- Studio glyph: one squircle container for every studio icon (header, launcher, dialogs) -------------------------- */
+.cb-studio-glyph {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--st-fill);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.34), inset 0 -1px 0 rgb(0 0 0 / 0.1), 0 6px 14px -8px var(--st-glow);
+  transition: transform var(--cb-dur-select) var(--cb-spring-bouncy), box-shadow var(--cb-dur-hover) var(--cb-ease-out);
+}
+/* glass sheen on the upper half: the tile reads as a lit object, not a flat chip */
+.cb-studio-glyph::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.26), rgb(255 255 255 / 0) 52%);
+  pointer-events: none;
+}
+.cb-studio-glyph .cb-icon {
+  position: relative;
+  stroke-width: 1.75;
+}
+.cb-studio-glyph--xs {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.32), 0 3px 8px -4px var(--st-glow);
+}
+.cb-studio-glyph--xl {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.36), inset 0 -1px 0 rgb(0 0 0 / 0.1), 0 12px 24px -12px var(--st-glow);
+}
+.cb-studio-glyph--lg {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.38), inset 0 -1px 0 rgb(0 0 0 / 0.1), 0 14px 26px -14px var(--st-glow);
+}
+
+/* --- Editor canvas: the header carries the studio (glyph, name, a faint light of its colour in the corner) ---------- */
+.cb-composer[data-studio] .cb-composer__header {
+  background: radial-gradient(90% 180% at 0% 0%, color-mix(in srgb, var(--st) 9%, transparent), transparent 62%);
+}
+.cb-composer[data-studio] .cb-composer__eyebrow {
+  gap: 7px;
+  color: var(--st-ink);
+}
+.cb-composer__studio {
+  letter-spacing: 0.08em;
+}
+.cb-composer__place {
+  letter-spacing: 0.02em;
+}
+/* the active mode in the editor's segmented track wears the studio: tinted thumb, studio ink */
+.cb-composer[data-studio] .cb-segmented--segmented .cb-glider {
+  box-shadow: var(--cb-glass-lit), var(--cb-shadow-1), 0 0 0 1px color-mix(in srgb, var(--st) 26%, transparent);
+}
+.cb-composer[data-studio] .cb-segmented--segmented .cb-segmented__option[aria-checked='true'] {
+  color: var(--st-ink);
+  font-weight: 650;
+}
+.cb-composer[data-studio] .cb-rail h4 .cb-icon {
+  color: var(--st-ink);
+}
+
+/* --- Tools: one size, one stroke, one press; pressed state in the studio tint ---------------------------------------- */
+.cb-tool .cb-icon {
+  transition: transform var(--cb-dur-select) var(--cb-spring-bouncy);
+}
+.cb-tool:hover:not(:disabled) .cb-icon {
+  transform: translateY(-0.5px) scale(1.06);
+}
+.cb-tool[aria-pressed='true'],
+.cb-tool[data-active] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cb-accent) 18%, transparent);
+}
+.cb-tool:focus-visible {
+  outline-offset: 1px;
+}
+.cb-composer[data-studio] .cb-select--studio select {
+  background-color: var(--st-soft);
+  color: var(--st-ink);
+  font-weight: 650;
+}
+
+/* --- Writing studio call to action (plain-text canvas): the primary way forward, in the studio's own colour -------- */
+.cb-canvas-bar__specific:has(.cb-studio-cta) {
+  /* room for the button's glow inside the horizontally scrolling bar */
+  padding-block: 6px;
+  margin-block: -6px;
+}
+.cb-studio-cta {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 13px 0 4px;
+  border-radius: 11px;
+  overflow: hidden;
+  background: var(--st-fill);
+  color: #fff;
+  font: var(--cb-text-meta);
+  font-weight: 650;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 2px rgb(var(--cb-shadow-color, 16 24 40) / 0.16),
+    0 8px 16px -10px var(--st-glow);
+  transition: transform var(--cb-dur-select) var(--cb-spring), box-shadow var(--cb-dur-hover) var(--cb-ease-out), filter var(--cb-dur-hover) var(--cb-ease-out);
+}
+/* one light sweep per hover — no idle pulsing */
+.cb-studio-cta::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.3) 50%, transparent 70%);
+  translate: -110% 0;
+  transition: translate 0s;
+}
+.cb-studio-cta:hover::after {
+  translate: 110% 0;
+  transition: translate calc(var(--cb-dur-expressive) * 1.6) var(--cb-ease-out);
+}
+.cb-studio-cta:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.06) brightness(1.04);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.32), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 2px 4px rgb(var(--cb-shadow-color, 16 24 40) / 0.16),
+    0 10px 20px -10px var(--st-glow);
+}
+.cb-studio-cta:active {
+  transform: scale(0.97);
+  transition-duration: var(--cb-dur-instant);
+}
+.cb-studio-cta:focus-visible {
+  outline-color: var(--st-ink);
+  outline-offset: 2px;
+}
+.cb-studio-cta__glyph {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.2);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+  transition: transform var(--cb-dur-select) var(--cb-spring-bouncy);
+}
+.cb-studio-cta:hover .cb-studio-cta__glyph {
+  transform: rotate(-8deg) scale(1.06);
+}
+.cb-studio-cta__arrow {
+  opacity: 0.8;
+  transition: translate var(--cb-dur-select) var(--cb-spring);
+}
+.cb-studio-cta:hover .cb-studio-cta__arrow {
+  translate: 2px 0;
+}
+
+/* --- Primary actions that open a studio (Inspector, dialogs) ---------------------------------------------------------- */
+.cb-button--primary[data-studio],
+[data-studio] .cb-button--studio {
+  background: var(--st-fill);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(0 0 0 / 0.1), 0 1px 2px rgb(var(--cb-shadow-color, 16 24 40) / 0.14),
+    0 10px 22px -12px var(--st-glow);
+}
+.cb-button--primary[data-studio]:hover:not(:disabled),
+[data-studio] .cb-button--studio:hover:not(:disabled) {
+  background: var(--st-fill);
+  filter: saturate(1.06) brightness(1.05);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.32), inset 0 -1px 0 rgb(0 0 0 / 0.1), 0 2px 4px rgb(var(--cb-shadow-color, 16 24 40) / 0.14),
+    0 14px 28px -12px var(--st-glow);
+}
+.cb-button--primary[data-studio]:active:not(:disabled),
+[data-studio] .cb-button--studio:active:not(:disabled) {
+  transform: scale(0.98);
+  transition-duration: var(--cb-dur-instant);
+}
+.cb-button--primary[data-studio] .cb-icon,
+[data-studio] .cb-button--studio .cb-icon {
+  stroke-width: 1.75;
+}
+/* a quiet text action: present, never competing with the primary */
+.cb-button--quiet {
+  min-height: 36px;
+  padding: 0 var(--cb-space-2);
+  background: transparent;
+  color: var(--cb-text-tertiary);
+  font-weight: 550;
+}
+.cb-button--quiet:hover:not(:disabled) {
+  transform: none;
+  color: var(--cb-text-primary);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 4px;
+}
+
+/* --- A studio's dialog (text card → document): glyph beside the title, calm facts, one clear primary ---------------- */
+.cb-card-dialog[data-studio] .cb-card-dialog__header {
+  justify-content: flex-start;
+  gap: 14px;
+  padding-left: 22px;
+}
+.cb-card-dialog[data-studio] .cb-card-dialog__header > div {
+  flex: 1;
+  min-width: 0;
+}
+.cb-card-dialog[data-studio] .cb-card-dialog__eyebrow {
+  color: var(--st-ink);
+}
+.cb-card-dialog[data-studio] .cb-card-dialog__header h2 {
+  font-size: 25px;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.cb-card-dialog__glyph {
+  margin-top: 3px;
+}
+.cb-convert__lead {
+  margin: 0 0 var(--cb-space-3);
+  font: var(--cb-text-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--cb-text-primary);
+  text-wrap: pretty;
+}
+.cb-convert__facts {
+  display: grid;
+  gap: 9px;
+  margin: 0 0 var(--cb-space-3);
+  padding: 13px 15px;
+  list-style: none;
+  border-radius: var(--cb-radius-control);
+  background: color-mix(in srgb, var(--cb-text-primary) 3.5%, transparent);
+  box-shadow: inset 0 0 0 1px var(--cb-border-subtle);
+}
+.cb-convert__facts li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  font: var(--cb-text-meta);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--cb-text-secondary);
+}
+.cb-convert__facts li > .cb-icon {
+  margin-top: 2px;
+  color: var(--cb-text-tertiary);
+}
+.cb-convert__facts li[data-tone='keep'] > .cb-icon {
+  color: var(--cb-status-success);
+}
+.cb-convert__facts li[data-tone='change'] > .cb-icon {
+  color: var(--st-ink);
+}
+.cb-convert__facts strong {
+  font-weight: 650;
+  color: var(--cb-text-primary);
+}
+.cb-convert__alt {
+  margin: 0;
+  font: var(--cb-text-meta);
+  color: var(--cb-text-tertiary);
+}
+
+/* --- App grid: "Neu erstellen" as squircle app tiles (launcher above the capture dock, and the sheet) ----------------- */
+.cb-app-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cb-app-tile {
+  position: relative;
+  min-width: 0;
+  animation: cb-app-tile-in var(--cb-dur-expressive) var(--cb-spring) backwards;
+  animation-delay: calc(var(--i, 0) * 26ms + 40ms);
+}
+@keyframes cb-app-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+}
+.cb-app-tile[data-wide] {
+  grid-column: 1 / -1;
+}
+.cb-app-tile__main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 100%;
+  padding: 16px 8px 14px;
+  border-radius: 20px;
+  text-align: center;
+  background: var(--cb-glass-sheen), color-mix(in srgb, var(--cb-glass-solid) 62%, transparent);
+  border: 1px solid var(--cb-glass-rim);
+  box-shadow: var(--cb-glass-lit), 0 1px 2px rgb(var(--cb-shadow-color, 16 24 40) / 0.05);
+  transition: transform var(--cb-dur-select) var(--cb-spring), box-shadow var(--cb-dur-hover) var(--cb-ease-out), background-color var(--cb-dur-hover) var(--cb-ease-out),
+    border-color var(--cb-dur-hover) var(--cb-ease-out);
+}
+.cb-app-tile__main:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--st) 28%, var(--cb-glass-rim));
+  background: var(--cb-glass-sheen), color-mix(in srgb, var(--st) 6%, var(--cb-glass-solid));
+  box-shadow: var(--cb-glass-lit), var(--cb-shadow-2), 0 16px 30px -20px var(--st-glow);
+}
+.cb-app-tile__main:hover:not(:disabled) .cb-app-tile__glyph {
+  transform: translateY(-1px) scale(1.06) rotate(-4deg);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 -1px 0 rgb(0 0 0 / 0.1), 0 16px 26px -12px var(--st-glow);
+}
+.cb-app-tile__main:active:not(:disabled) {
+  transform: scale(0.96);
+  transition-duration: var(--cb-dur-instant);
+}
+.cb-app-tile__main:focus-visible {
+  outline-color: var(--st-ink);
+  outline-offset: 2px;
+}
+.cb-app-tile__main:disabled {
+  cursor: progress;
+}
+.cb-app-tile:not([data-busy]) .cb-app-tile__main:disabled {
+  opacity: 0.5;
+}
+.cb-app-tile[data-busy] .cb-app-tile__glyph {
+  animation: cb-app-busy 0.9s var(--cb-ease-in-out) infinite alternate;
+}
+@keyframes cb-app-busy {
+  to {
+    transform: scale(0.92);
+    opacity: 0.72;
+  }
+}
+.cb-app-tile__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+.cb-app-tile__label {
+  font: var(--cb-text-ui);
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--cb-text-primary);
+  text-wrap: balance;
+}
+.cb-app-tile__hint {
+  font: var(--cb-text-meta);
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--cb-text-tertiary);
+}
+/* the code tile's language rides as a pill under its name */
+.cb-app-tile[data-kind='code'] .cb-app-tile__main {
+  padding-bottom: 42px;
+}
+.cb-app-tile__language {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  max-width: calc(100% - 16px);
+  translate: -50% 0;
+}
+.cb-app-tile__language select {
+  appearance: none;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 22px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--st-soft);
+  color: var(--st-ink);
+  font: var(--cb-text-meta);
+  font-size: 11.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.cb-app-tile__language .cb-icon {
+  position: absolute;
+  right: 8px;
+  color: var(--st-ink);
+  pointer-events: none;
+}
+/* the wide tile (quick note) is a quieter row */
+.cb-app-tile[data-wide] .cb-app-tile__main {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 9px 14px 9px 9px;
+  border-radius: 16px;
+  text-align: left;
+}
+.cb-app-tile[data-wide] .cb-app-tile__glyph {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.cb-app-tile[data-wide] .cb-app-tile__text {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+
+/* sheet ("Neu erstellen" dialog): the same grid, a little more air */
+.cb-create .cb-card-dialog__body {
+  padding-top: var(--cb-space-4);
+  padding-bottom: var(--cb-space-5);
+}
+
+/* launcher: floating glass above the capture dock, grown out of the plus */
+.cb-launcher {
+  --cb-launch-w: min(420px, calc(100% - var(--cb-space-3) * 2));
+  position: absolute;
+  z-index: 2;
+  bottom: calc(100% + 12px);
+  left: clamp(var(--cb-space-3), calc(var(--cb-launch-x, 40px) - 34px), calc(100% - var(--cb-launch-w) - var(--cb-space-3)));
+  width: var(--cb-launch-w);
+  padding: 14px 14px 14px;
+  border-radius: var(--cb-radius-panel);
+  background: var(--cb-glass-sheen), var(--cb-glass-thick);
+  backdrop-filter: blur(var(--cb-blur-thick)) saturate(var(--cb-glass-saturate));
+  border: 1px solid var(--cb-glass-rim);
+  box-shadow: var(--cb-glass-lit), var(--cb-shadow-4);
+  pointer-events: auto;
+  transform-origin: 34px 100%;
+  animation: cb-launch-in var(--cb-dur-panel) var(--cb-spring) both;
+}
+.cb-launcher[data-state='closing'] {
+  animation: cb-launch-out var(--cb-dur-exit) var(--cb-ease-exit) both;
+}
+.cb-launcher[data-state='closing'] .cb-app-tile {
+  animation: none;
+}
+@keyframes cb-launch-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.9);
+  }
+}
+@keyframes cb-launch-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+  }
+}
+.cb-launcher__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--cb-space-3);
+  padding: 2px 4px 12px;
+}
+.cb-launcher__head h2 {
+  font: var(--cb-text-editorial-sm);
+  font-size: 22px;
+  line-height: 1.1;
+}
+.cb-launcher__target {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--cb-text-meta);
+  font-size: 12px;
+  color: var(--cb-text-tertiary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cb-launcher {
+    background: var(--cb-glass-solid);
+  }
+}
+
+/* the capture dock's plus: always a filled, clickable button, resting or expanded; open, it turns into a close mark */
+.cb-capture__lead {
+  cursor: pointer;
+  background: var(--cb-accent-fill);
+  color: var(--cb-on-accent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(0 0 0 / 0.1), 0 8px 16px -10px var(--cb-accent-glow);
+}
+.cb-capture:hover .cb-capture__lead,
+.cb-capture__lead:hover {
+  transform: scale(1.06);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(0 0 0 / 0.1), 0 12px 22px -10px var(--cb-accent-glow);
+}
+.cb-capture__lead:active {
+  transform: scale(0.93);
+  transition-duration: var(--cb-dur-instant);
+}
+.cb-capture__lead:hover .cb-icon {
+  transform: rotate(90deg);
+}
+.cb-capture .cb-capture__lead[data-open] .cb-icon {
+  transform: rotate(135deg);
+}
+.cb-capture__lead:focus-visible {
+  outline-offset: 2px;
+}
+.cb-capture__lead .cb-icon {
+  stroke-width: 1.9;
+}
+
+/* --- CodeCenter: tab strip, editor, status bar; a reserved (empty) preview column for later runs -------------------- */
+.cb-composer__pane.cb-codecenter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'tabs tabs' 'editor preview' 'status status';
+  overflow: hidden;
+  animation: none;
+}
+.cb-codecenter__tabs {
+  grid-area: tabs;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 12px 0;
+  box-shadow: inset 0 -1px 0 var(--cb-border-subtle);
+  background: color-mix(in srgb, var(--cb-text-primary) 2.5%, transparent);
+}
+.cb-codecenter__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: min(100%, 420px);
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px 9px 0 0;
+  background: var(--cb-paper);
+  box-shadow: inset 0 2px 0 var(--st), 1px 0 0 var(--cb-border-subtle), -1px 0 0 var(--cb-border-subtle);
+  font: var(--cb-text-meta);
+  font-weight: 600;
+  color: var(--cb-text-primary);
+}
+.cb-codecenter__tab > .cb-icon {
+  flex: none;
+  color: var(--st-ink);
+}
+.cb-codecenter__tab-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cb-codecenter__tab-ext {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--st-soft);
+  color: var(--st-ink);
+  font: 600 10px / 15px var(--cb-font-mono);
+  letter-spacing: 0.04em;
+}
+.cb-codecenter__tab-dirty {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--st);
+  animation: cb-appear var(--cb-dur-swift) var(--cb-ease-out);
+}
+.cb-codecenter__editor {
+  grid-area: editor;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+.cb-codecenter__status {
+  grid-area: status;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--cb-space-3);
+  min-width: 0;
+  padding: 6px 16px 7px;
+  font: var(--cb-text-meta);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--cb-text-tertiary);
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 var(--cb-border-subtle);
+}
+.cb-codecenter__status-meta {
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+  overflow: hidden;
+}
+.cb-codecenter__lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--st-ink);
+  font-weight: 600;
+}
+.cb-codecenter__lang::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 2.5px;
+  background: var(--st);
+}
+
+/* Completion popover: frosted glass, studio-tinted selection and matches, squircle type chips */
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete {
+  background: var(--cb-glass-sheen), var(--cb-glass-thick);
+  backdrop-filter: blur(var(--cb-blur-thick)) saturate(var(--cb-glass-saturate));
+  border-radius: 14px;
+  box-shadow: var(--cb-glass-lit), var(--cb-shadow-3);
+  animation: cb-complete-in var(--cb-dur-swift) var(--cb-ease-glide);
+  transform-origin: top left;
+}
+@keyframes cb-complete-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete > ul > li {
+  transition: background-color var(--cb-dur-instant) var(--cb-ease-out);
+}
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--cb-surface-selected);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cb-accent) 16%, transparent);
+}
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete > ul > li:hover:not([aria-selected]) {
+  background: color-mix(in srgb, var(--cb-text-primary) 5%, transparent);
+}
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cb-accent) 12%, transparent);
+  color: var(--cb-accent);
+  font-family: var(--cb-font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 1;
+}
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon::after {
+  line-height: 1;
+}
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete :is(.cm-completionIcon-keyword, .cm-completionIcon-text) {
+  background: color-mix(in srgb, var(--cb-syn-keyword) 13%, transparent);
+  color: var(--cb-syn-keyword);
+}
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete :is(.cm-completionIcon-function, .cm-completionIcon-method) {
+  background: color-mix(in srgb, var(--cb-syn-function) 13%, transparent);
+  color: var(--cb-syn-function);
+}
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete :is(.cm-completionIcon-type, .cm-completionIcon-class, .cm-completionIcon-interface) {
+  background: color-mix(in srgb, var(--cb-syn-type) 14%, transparent);
+  color: var(--cb-syn-type);
+}
+.cb-composer .cm-tooltip.cm-tooltip-autocomplete :is(.cm-completionIcon-property, .cm-completionIcon-variable, .cm-completionIcon-constant) {
+  background: color-mix(in srgb, var(--cb-syn-property) 13%, transparent);
+  color: var(--cb-syn-property);
+}
+
+/* --- Markdown: fluid modes. Both surfaces stay mounted; the grid columns glide between their widths. A single surface
+   centres on its measure through auto margins (positions follow the gliding widths, nothing snaps); a leaving surface
+   keeps its width (`--cb-md-frozen`, MarkdownEditor) and slides out towards its own side as it fades. ---------------- */
+.cb-composer[data-kind='markdown'] .cb-md {
+  grid-auto-flow: column;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--cb-space-4);
+  /* sheets may glow past the edges, a sliding-out sheet may not travel beyond them */
+  clip-path: inset(-40px);
+  transition: grid-template-columns var(--cb-dur-panel) var(--cb-ease-glide), gap var(--cb-dur-panel) var(--cb-ease-glide);
+}
+.cb-composer[data-kind='markdown'] .cb-md[data-mode='source'] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+  gap: 0;
+}
+.cb-composer[data-kind='markdown'] .cb-md[data-mode='preview'] {
+  grid-template-columns: minmax(0, 0fr) minmax(0, 1fr);
+  gap: 0;
+}
+.cb-composer[data-kind='markdown'] .cb-md > .cb-composer__pane {
+  position: relative;
+  z-index: 1;
+  justify-self: start;
+  width: var(--cb-md-frozen, 100%);
+  min-width: 0;
+  margin-inline: auto;
+  animation: none;
+  transition: opacity var(--cb-dur-swift) var(--cb-ease-out), translate var(--cb-dur-panel) var(--cb-ease-glide), width var(--cb-dur-panel) var(--cb-ease-glide),
+    font-size var(--cb-dur-panel) var(--cb-ease-glide), box-shadow var(--cb-dur-panel) var(--cb-ease-out);
+}
+.cb-composer[data-kind='markdown'] .cb-md:is([data-mode='source'], [data-mode='preview']) > .cb-composer__pane[data-shown='true'] {
+  justify-self: start;
+  width: min(100%, calc(var(--cb-read-w) + 112px));
+}
+.cb-composer[data-kind='markdown'] .cb-md > .cb-composer__pane[data-shown='false'] {
+  z-index: 0;
+  width: var(--cb-md-frozen, 360px);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: none;
+}
+.cb-composer[data-kind='markdown'] .cb-md > .cb-md__source[data-shown='false'] {
+  translate: -24px 0;
+}
+.cb-composer[data-kind='markdown'] .cb-md > .cb-composer__pane--preview[data-shown='false'] {
+  translate: 24px 0;
+}
+/* the preview text settles in as it arrives */
+.cb-composer[data-kind='markdown'] .cb-md > .cb-composer__pane--preview[data-shown='true'] .cb-markdown {
+  animation: cb-md-settle var(--cb-dur-panel) var(--cb-ease-glide);
+}
+@keyframes cb-md-settle {
+  from {
+    opacity: 0.4;
+    transform: translateY(4px);
+  }
+}
+
+/* --- Phone ------------------------------------------------------------------------------------------------------------ */
+@media (max-width: 599.98px) {
+  .cb-launcher {
+    --cb-launch-w: calc(100% - var(--cb-space-3) * 2);
+    left: var(--cb-space-3);
+    padding: 12px;
+  }
+  .cb-app-grid {
+    gap: 8px;
+  }
+  .cb-app-tile__main {
+    padding: 14px 6px 12px;
+    gap: 8px;
+    border-radius: 18px;
+  }
+  .cb-studio-glyph--lg {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+  .cb-app-tile__label {
+    font-size: 12.5px;
+    overflow-wrap: anywhere;
+  }
+  .cb-app-tile__hint {
+    display: none;
+  }
+  .cb-app-tile[data-wide] .cb-app-tile__hint {
+    display: inline;
+  }
+  .cb-app-tile[data-kind='code'] .cb-app-tile__main {
+    padding-bottom: 38px;
+  }
+  .cb-studio-cta__label {
+    font-size: 12.5px;
+  }
+  .cb-codecenter__status-meta > :not(.cb-codecenter__lang) {
+    display: none;
+  }
+  .cb-card-dialog[data-studio] .cb-card-dialog__header {
+    padding-left: 16px;
+  }
+  .cb-card-dialog[data-studio] .cb-card-dialog__header h2 {
+    font-size: 22px;
+  }
+  .cb-card-dialog__glyph {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-studio-cta::after {
+    display: none;
+  }
+  .cb-app-tile[data-busy] .cb-app-tile__glyph {
+    animation: none;
+    opacity: 0.7;
+  }
+}

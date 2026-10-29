@@ -1,5 +1,7 @@
 import { completeAnyWord, completeFromList, ifNotIn, snippetCompletion as snip, type Completion, type CompletionSource } from '@codemirror/autocomplete';
+import { syntaxTree } from '@codemirror/language';
 import { EditorState, type Extension } from '@codemirror/state';
+import { tagPairOnCompletion } from './tag-completion';
 
 // Practical, local code completion (no language server): what the editor can honestly know from the text and the language.
 // Measured before this run: TS/JS offered keywords, snippets and local declarations; Python builtins and locals; every other
@@ -115,10 +117,41 @@ const bufferWords =
 const scoped = new Set(['typescript', 'javascript', 'python']);
 
 /** Where statement snippets make no sense: after a dot, inside strings, comments, names being declared, JSX text. */
-const jsNoSnippets = ['PropertyName', 'PropertyDefinition', 'PrivatePropertyName', 'String', 'TemplateString', 'RegExp', 'LineComment', 'BlockComment', 'VariableDefinition', 'TypeDefinition', 'Label', 'JSXText', 'JSXAttributeValue'];
+const jsNoSnippets = ['PropertyName', 'PropertyDefinition', 'PrivatePropertyName', 'String', 'TemplateString', 'RegExp', 'LineComment', 'BlockComment', 'VariableDefinition', 'TypeDefinition', 'Label', 'JSXText', 'JSXAttributeValue', 'JSXOpenTag', 'JSXSelfClosingTag', 'JSXCloseTag'];
 
 /** Members every object inherits (`toString`, `__proto__` …): noise in a suggestion list, so they are left out. */
 const inherited = new Set(Object.getOwnPropertyNames(Object.prototype));
+
+/** HTML elements offered as JSX tag names (the common ones; any other name can still be typed). */
+const jsxElements = 'a article aside audio b blockquote br button canvas code details dialog div em fieldset figure footer form h1 h2 h3 h4 h5 h6 header hr i iframe img input label li main nav ol option p pre section select small span strong summary svg table tbody td textarea th thead tr ul video'
+  .split(' ')
+  .map((label): Completion => ({ label, type: 'type' }));
+
+/**
+ * JSX tag names after `<` (the JavaScript package completes none there): the capitalised names of this file — its
+ * components, and the names it uses — plus the common HTML elements. Only where the tree reads JSX, never in type
+ * arguments or comparisons. Choosing one closes the tag (tag-completion.ts).
+ */
+const jsxTagNames: CompletionSource = (context) => {
+  const typed = context.matchBefore(/<[A-Za-z_$][\w$.]*$|<$/);
+  if (!typed) return null;
+  let jsx = false;
+  for (let node: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(context.state).resolveInner(context.pos, -1); node; node = node.parent) {
+    if (node.name.startsWith('JSX')) {
+      jsx = true;
+      break;
+    }
+    if (node.name === 'TypeArgList' || node.name === 'TypeParamList' || node.name === 'BinaryExpression') break;
+  }
+  if (!jsx) return null;
+  const own = typed.text.slice(1);
+  const names = new Set<string>();
+  // a long file is read up to a bound: suggestions stay instant
+  for (const match of context.state.sliceDoc(0, 200_000).matchAll(/\b[A-Z][\w$]*\b/g)) if (match[0] !== own) names.add(match[0]);
+  // no type of its own: a name the language package also offers (a local declaration) then merges into one option
+  const components = [...names].map((label): Completion => ({ label }));
+  return { from: typed.from + 1, options: [...components, ...jsxElements], validFor: /^[\w$.]*$/ };
+};
 
 async function jsExtras(): Promise<CompletionSource[]> {
   const { scopeCompletionSource } = await import('@codemirror/lang-javascript');
@@ -127,7 +160,9 @@ async function jsExtras(): Promise<CompletionSource[]> {
     const result = await globals(context);
     return result && { ...result, options: result.options.filter((o) => !inherited.has(o.label)) };
   };
-  return [members, ifNotIn(jsNoSnippets, completeFromList(jsSnippets))];
+  // a JSX tag name is a tag, not an expression: there only the tag names are offered
+  const jsxTags = ['JSXOpenTag', 'JSXSelfClosingTag', 'JSXCloseTag'];
+  return [ifNotIn(jsxTags, members), ifNotIn(jsNoSnippets, completeFromList(jsSnippets)), jsxTagNames];
 }
 
 /** Sources added for one language id (`''` = plain text code). Registered as global language data next to the language's own. */
@@ -140,8 +175,14 @@ export async function completionSources(languageId: string): Promise<CompletionS
   return sources;
 }
 
+/** Languages with tags: a completed tag name also gets its closing tag (tag-completion.ts). */
+const tagged = new Set(['html', 'typescript', 'javascript']);
+
 /** The completion extension of one code language (empty array → nothing beyond what the language brings). */
 export async function completionExtension(languageId: string): Promise<Extension> {
   const sources = await completionSources(languageId);
-  return sources.length ? EditorState.languageData.of(() => sources.map((autocomplete) => ({ autocomplete }))) : [];
+  return [
+    sources.length ? EditorState.languageData.of(() => sources.map((autocomplete) => ({ autocomplete }))) : [],
+    tagged.has(languageId) ? tagPairOnCompletion : [],
+  ];
 }

@@ -18,7 +18,7 @@ export function CodeToolbar({ language, readOnly, prefs, handle, onLanguage, onP
   const known = resolveLanguage(language);
   return (
     <div className="cb-canvas-bar__set" role="toolbar" aria-label="Code-Einstellungen">
-      <label className="cb-select">
+      <label className="cb-select cb-select--studio">
         <span className="cb-visually-hidden">Sprache</span>
         <select value={known?.id ?? '__custom'} disabled={readOnly} onChange={(event) => onLanguage(event.target.value === '__custom' ? language : event.target.value)}>
           {!known && <option value="__custom">{language || 'Text'}</option>}

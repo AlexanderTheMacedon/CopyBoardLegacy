@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppLauncher } from './AppGrid';
 import { SmartCapture } from './SmartCapture';
 
 /** A visual-viewport inset above this is an on-screen keyboard (not a browser toolbar or a rounding step). */
@@ -15,6 +16,26 @@ const KEYBOARD_MIN = 80;
 export function ComposerDock({ hidden }: { hidden: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [composing, setComposing] = useState(false);
+  // the plus's floating app launcher: open, or still animating out (`closing`)
+  const [launcher, setLauncher] = useState<{ x: number; closing: boolean } | null>(null);
+  const plus = useRef<HTMLElement | null>(null);
+  const trigger = useCallback(() => plus.current, []);
+  const closeLauncher = useCallback((returnFocus: boolean) => {
+    setLauncher((l) => (l && !l.closing ? { ...l, closing: true } : l));
+    if (returnFocus) plus.current?.focus({ preventScroll: true });
+  }, []);
+  const exited = useCallback(() => setLauncher((l) => (l?.closing ? null : l)), []);
+  const toggleLauncher = (button: HTMLElement) => {
+    plus.current = button;
+    if (launcher && !launcher.closing) return closeLauncher(false);
+    const dock = ref.current?.getBoundingClientRect();
+    const at = button.getBoundingClientRect();
+    setLauncher({ x: at.left + at.width / 2 - (dock?.left ?? 0), closing: false });
+  };
+  // an editor, selection or image mode hides the dock: the launcher goes with it
+  useEffect(() => {
+    if (hidden) setLauncher(null);
+  }, [hidden]);
 
   useEffect(() => {
     const dock = ref.current;
@@ -71,9 +92,11 @@ export function ComposerDock({ hidden }: { hidden: boolean }) {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setComposing(false);
       }}
     >
-      <SmartCapture />
+      <SmartCapture launcherOpen={!!launcher && !launcher.closing} onLaunch={toggleLauncher} />
       {/* local blur aura behind the surface (after it: the dock measures its first child) */}
       <span className="cb-composer-halo" aria-hidden="true" />
+      {/* a sibling of the surface, never inside it: nested glass would blur only the bar, not the board behind */}
+      {launcher && <AppLauncher x={launcher.x} closing={launcher.closing} onClose={closeLauncher} onExited={exited} trigger={trigger} />}
     </div>
   );
 }

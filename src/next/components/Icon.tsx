@@ -366,6 +366,29 @@ const paths = {
   plane: <path d="M20.5 15.5 13 11V5.5a1 1 0 0 0-2 0V11l-7.5 4.5v2l7.5-2.5v3.5l-2 1.5v1.5l3-1 3 1V20l-2-1.5V15l7.5 2.5Z" />,
   mountain: <path d="M3 19.5 9.2 8.8a1 1 0 0 1 1.7 0l2.6 4.5M8 19.5l5.6-8.3a1 1 0 0 1 1.7 0L21 19.5ZM3 19.5h18M7.6 12.2l1.4 1.3 1.6-1.6" />,
   droplet: <path d="M12 3.5c3.4 4 5.5 7.2 5.5 10a5.5 5.5 0 0 1-11 0c0-2.8 2.1-6 5.5-10ZM9.5 14.5a2.6 2.6 0 0 0 2.5 2.5" />,
+  // studio identities (Run D.1): one drawing per studio, same grid and stroke as every other icon
+  nib: (
+    <>
+      <path d="M12 20.5 6.5 12 9 5.5h6l2.5 6.5Z" />
+      <path d="M12 20.5v-7.2M9 3.5h6" />
+      <circle cx="12" cy="12" r="1.3" />
+    </>
+  ),
+  markdown: (
+    <>
+      <rect x="2.75" y="5.5" width="18.5" height="13" rx="3" />
+      <path d="M6.5 15V9l2.5 3 2.5-3v6M16.5 9v5.5M14.25 12.5l2.25 2.25 2.25-2.25" />
+    </>
+  ),
+  braces: <path d="M8.5 4.5H8a2.5 2.5 0 0 0-2.5 2.5v2.5A2.5 2.5 0 0 1 3 12a2.5 2.5 0 0 1 2.5 2.5V17A2.5 2.5 0 0 0 8 19.5h.5M15.5 4.5h.5A2.5 2.5 0 0 1 18.5 7v2.5A2.5 2.5 0 0 0 21 12a2.5 2.5 0 0 0-2.5 2.5V17a2.5 2.5 0 0 1-2.5 2.5h-.5" />,
+  aperture: (
+    <>
+      <circle cx="12" cy="12" r="8.75" />
+      <path d="m14.1 8.4 4.95 8.55M9.9 8.4h9.9M7.8 12l4.95-8.55M9.9 15.6 6.5 9.75M14.1 15.6H4.2M16.2 12l-4.95 8.55" />
+    </>
+  ),
+  tray: <path d="M12 3.5v10.5M7.75 9.75 12 14l4.25-4.25M4 14v3.5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V14" />,
+  note: <path d="M5.5 4.5h13a1 1 0 0 1 1 1v8.75L14.25 19.5H5.5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1ZM14.25 19.5v-4.25a1 1 0 0 1 1-1h4.25M8 9h8M8 12.5h4.5" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof paths;

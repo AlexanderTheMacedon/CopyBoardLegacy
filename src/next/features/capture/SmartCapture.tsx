@@ -35,7 +35,7 @@ const isMac = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(n
  * saved with "Hinzufügen" (or ⌘/Strg+Enter); pasted images and files go straight to the board, pasted text lands in the
  * field as usual. The action row stays mounted and only expands, so the input never remounts (SM-10).
  */
-export function SmartCapture() {
+export function SmartCapture({ launcherOpen = false, onLaunch }: { launcherOpen?: boolean; onLaunch?: (button: HTMLElement) => void }) {
   const { dispatch } = usePreview();
   const space = useCaptureSpace();
   const folder = useOpenFolder();
@@ -79,9 +79,19 @@ export function SmartCapture() {
         Smart Capture
       </h2>
       <div className="cb-capture__field">
-        <span className="cb-capture__lead" aria-hidden="true">
-          <Icon name={folder ? 'folderInput' : 'plus'} size={18} />
-        </span>
+        {/* the plus is always there and always a button, resting or expanded: it opens the app launcher */}
+        <button
+          type="button"
+          className="cb-capture__lead"
+          aria-label={target ? `Neu erstellen in „${target}“` : 'Neu erstellen'}
+          title="Neu erstellen"
+          aria-haspopup="dialog"
+          aria-expanded={launcherOpen}
+          data-open={launcherOpen || undefined}
+          onClick={(event) => (onLaunch ? onLaunch(event.currentTarget) : dispatch({ type: 'openModal', modal: { kind: 'create' } }))}
+        >
+          <Icon name="plus" size={20} />
+        </button>
         <label htmlFor={CAPTURE_INPUT_ID} className="cb-visually-hidden">
           {target ? `Inhalt für ${target} erfassen` : 'Inhalt erfassen'}
         </label>

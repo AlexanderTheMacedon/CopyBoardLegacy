@@ -45,15 +45,17 @@
   --cb-brand: #f2622e;
   --cb-hue: var(--cb-brand);
   --cb-ink: #0a0d12;
-  /* Content kinds: quiet identities for file tiles and kind chips (never status colours) */
-  --cb-kind-document: #0f8f86;
-  --cb-kind-text: #5b6b82;
-  --cb-kind-markdown: #7b5cff;
-  --cb-kind-link: #2f7bff;
+  /* Content kinds = studio identities (Run D.1): one curated colour per editor, shared by cards, chips, menus, the
+     inspector, "Neu erstellen" and the editor canvas (studio-identity.css derives ink, tint, fill and glow from it).
+     Hues sit apart on the wheel; none is a status colour. */
+  --cb-kind-document: #4a5cf0; /* Schreibstudio · royal ink */
+  --cb-kind-text: #5b6b82; /* Klartext · graphite */
+  --cb-kind-markdown: #9a4de8; /* Markdown Studio · violet */
+  --cb-kind-code: #0c9c8a; /* CodeCenter · teal */
+  --cb-kind-image: #e2457f; /* Image Studio · rose */
+  --cb-kind-link: #0e9bd8;
   --cb-kind-file: #e08a12;
-  --cb-kind-audio: #f2477f;
-  --cb-kind-image: #10a971;
-  --cb-kind-code: #3b4a5f;
+  --cb-kind-audio: #ee4a3f;
 
   /* --- Primitives: derived from the identity hue, so legacy references follow the active space --- */
   --cb-p-paper: #fbfcfd;

@@ -251,7 +251,13 @@ export function Inspector({ item, leaving, width, onWidthChange }: InspectorProp
 
           <div className="cb-inspector__actions" role="group" aria-label="Aktionen" style={step(3)}>
             {layout.primary && (
-              <button type="button" className="cb-button cb-button--primary cb-inspector__primary" onClick={() => run(layout.primary as ItemAction)}>
+              <button
+                type="button"
+                className="cb-button cb-button--primary cb-inspector__primary"
+                // opening a studio wears that studio's identity (the writing studio for a text card or a document)
+                data-studio={layout.primary.id === 'open-studio' || (layout.primary.id === 'open-composer' && item.kind === 'document') ? 'document' : undefined}
+                onClick={() => run(layout.primary as ItemAction)}
+              >
                 <Icon name={layout.primary.icon} size={17} />
                 <span>{layout.primary.label}</span>
               </button>
