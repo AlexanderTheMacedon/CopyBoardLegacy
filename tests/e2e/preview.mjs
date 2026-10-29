@@ -2227,6 +2227,66 @@ test('P48', 'Markdown: fließende Moduswechsel – dieselbe CodeMirror-Instanz, 
   return { ok, observed: `before=${JSON.stringify(before)}, glide ${Math.round(start)}→${mid.slice(0, 4).map(Math.round).join('/')}… (${mid.length} frames), done=${JSON.stringify({ ...done, cols: done.cols.map(Math.round) })}, back=${JSON.stringify(back)}, typed=${typed.includes('Zeile 11!')}, undone=${!undone.includes('Zeile 11!')}, reduced=${reduced.map(Math.round)}, problems=${problems.join(' | ') || '-'}` };
 });
 
+// --- Final UX Polish (Run D.2): title field, card actions, notice corner, solid space flyout, Markdown blank lines ------
+test('P49', 'Feinschliff: Kartenaktionen auf gefrosteter Kante (Text kollidiert nicht), Drei-Punkte so kräftig wie Kopieren; Hinweis in der freien Ecke unten links neben dem Composer; Space-Flyout deckend; Editor-Titel als ruhiges Feld; Markdown-Vorschau übernimmt zusätzliche Leerzeilen', { clipboard: true }, async ({ page, clean }) => {
+  // card actions: the preview top frosts on hover, both actions share ink, the dots are drawn heavier
+  const tile = page.locator(`${LIVE_TILES}[data-kind="text"]`).first();
+  await tile.hover();
+  await page.waitForTimeout(400);
+  const card = await tile.evaluate((el) => {
+    const after = getComputedStyle(el.querySelector('.cb-tile__preview'), '::after');
+    const [quick, more] = el.querySelectorAll('.cb-tile__actions .cb-icon-button');
+    return { scrim: Number(after.opacity), blur: after.backdropFilter, ink: getComputedStyle(quick).color === getComputedStyle(more).color, dots: getComputedStyle(more.querySelector('.cb-icon')).strokeWidth };
+  });
+  // a notice keeps to the bottom-left corner, level with the composer, clear of it
+  await tile.locator('.cb-tile__actions .cb-icon-button').first().click();
+  await page.waitForSelector('.cb-notice');
+  await page.waitForTimeout(500);
+  const notice = await page.evaluate(() => {
+    const n = document.querySelector('.cb-notice').getBoundingClientRect();
+    const c = document.querySelector('.cb-composer-dock > .cb-capture').getBoundingClientRect();
+    return { left: Math.round(n.left), right: Math.round(n.right), bottom: Math.round(n.bottom), composerLeft: Math.round(c.left), composerBottom: Math.round(c.bottom) };
+  });
+  await page.click('[aria-label="Hinweis schließen"]');
+  // the space flyout is one solid sheet
+  await page.hover('.cb-space-switch__trigger');
+  await page.waitForTimeout(400);
+  const sheet = await page.$eval('.cb-spaces-flyout', (el) => {
+    const layers = getComputedStyle(el).backgroundImage + ' ' + getComputedStyle(el).backgroundColor;
+    return Math.max(...[...layers.matchAll(/rgba?\([^)]*?([\d.]+)\)/g)].map((m) => (m[0].startsWith('rgba') || m[0].includes('/') ? Number(m[1]) : 1)));
+  });
+  await page.mouse.move(900, 600);
+  // editor title: a soft tinted field that hugs its text, no hard underline
+  await createVia(page, 'Markdown');
+  await page.waitForSelector('.cb-md__source .cm-content');
+  await page.keyboard.insertText('# Abstand\n\nOben\n\n\n\nUnten');
+  await page.click('#cb-composer-title');
+  await page.waitForTimeout(400);
+  const title = await page.evaluate(() => {
+    const el = document.querySelector('#cb-composer-title');
+    const s = getComputedStyle(el);
+    return { shadow: s.boxShadow, bg: s.backgroundColor, width: Math.round(el.getBoundingClientRect().width), heading: Math.round(el.parentElement.getBoundingClientRect().width), textLeft: Math.round(el.getBoundingClientRect().left + parseFloat(s.paddingLeft)), eyebrowLeft: Math.round(document.querySelector('.cb-composer__eyebrow').getBoundingClientRect().left) };
+  });
+  // Markdown preview: three blank lines between two paragraphs keep two extra lines of height
+  await page.click('.cb-composer [role="radio"]:has-text("Split")');
+  await page.waitForSelector('.cb-markdown .cb-md-gap');
+  const gap = await page.evaluate(() => {
+    const ps = [...document.querySelectorAll('.cb-markdown p')];
+    const oben = ps.find((p) => p.textContent === 'Oben').getBoundingClientRect();
+    const unten = ps.find((p) => p.textContent === 'Unten').getBoundingClientRect();
+    const line = parseFloat(getComputedStyle(document.querySelector('.cb-markdown')).lineHeight);
+    return { lines: Math.round(((unten.top - oben.bottom) / line) * 10) / 10, count: document.querySelectorAll('.cb-markdown .cb-md-gap').length };
+  });
+  const problems = await clean(['DataTransfer.', 'clipboard.']);
+  const ok =
+    card.scrim === 1 && /blur/.test(card.blur) && card.ink && card.dots === '2.6px' &&
+    notice.left <= 40 && notice.right < notice.composerLeft && Math.abs(notice.bottom - notice.composerBottom) <= 2 &&
+    sheet >= 0.9 &&
+    !/0px 2px 0px -1px/.test(title.shadow) && /inset/.test(title.shadow) && !/[ ,/] ?0\)$/.test(title.bg) && title.width < title.heading && Math.abs(title.textLeft - title.eyebrowLeft) <= 2 &&
+    gap.count === 1 && gap.lines >= 2.4 && gap.lines <= 3.2 && !problems.length;
+  return { ok, observed: `card=${JSON.stringify(card)}, notice=${JSON.stringify(notice)}, flyout alpha=${sheet}, title=${JSON.stringify(title)}, gap=${JSON.stringify(gap)}, problems=${problems.join(' | ') || '-'}` };
+});
+
 const ONLY = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY) : null; // e.g. E2E_ONLY='^(P6|P23)$' for a focused run
 for (const t of tests) {
   if (ONLY && !ONLY.test(t.id)) continue;
