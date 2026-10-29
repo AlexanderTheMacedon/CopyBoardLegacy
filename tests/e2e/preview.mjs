@@ -825,7 +825,7 @@ test('P23', 'Dokument: create in a nested folder, format (heading, bold, list, l
   await page.click('.cb-tile--folder .cb-tile__open');
   await page.waitForSelector('.cb-folder-window, [data-cb-context="folder"]');
   await newDocument(page);
-  const where = await page.$eval('.cb-composer__eyebrow', (e) => e.textContent);
+  const where = await page.$eval('.cb-composer__studio-id', (e) => e.textContent);
   await page.keyboard.type('Quartalsbericht');
   await page.keyboard.press('Enter');
   await page.keyboard.type('Ergebnis mit ');
@@ -1067,7 +1067,7 @@ test('P28', 'editors on a phone in dark mode: no horizontal overflow, one close 
   await page.click('.cb-tile[data-item-id="it-prompt-review"] .cb-tile__open');
   await page.click('.cb-inspector button:has-text("Bearbeiten")');
   await page.waitForSelector('.cb-md .cm-content');
-  const md = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > innerWidth, split: document.querySelector('.cb-segmented [aria-checked="true"]').textContent, close: document.querySelectorAll('[aria-label="Editor schließen"]').length, panes: document.querySelectorAll('.cb-md > .cb-composer__pane[data-shown="true"]').length }));
+  const md = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > innerWidth, split: document.querySelector('.cb-segmented [aria-checked="true"]').getAttribute('aria-label'), close: document.querySelectorAll('[aria-label="Editor schließen"]').length, panes: document.querySelectorAll('.cb-md > .cb-composer__pane[data-shown="true"]').length }));
   await page.click('[aria-label="Editor schließen"]');
   await page.waitForSelector('.cb-inspector');
   await page.click('[aria-label="Inspector schließen"]');
@@ -2242,9 +2242,11 @@ test('P49', 'Closure: Editor-Header mit Studio-Glyph neben dem Namen und ohne Sp
     const primary = el.querySelector('.cb-tile__primary');
     const more = el.querySelector('.cb-tile__actions .cb-icon-button:not(.cb-tile__primary)');
     const box = (e) => e.getBoundingClientRect();
-    const p = box(el.querySelector('.cb-tile__preview'));
+    const t = box(el);
+    const meta = box(el.querySelector('.cb-tile__meta'));
     const a = box(el.querySelector('.cb-tile__actions'));
-    return { primaryBg: getComputedStyle(primary).backgroundImage, moreBg: getComputedStyle(more).backgroundColor, label: primary.getAttribute('aria-label'), clearOfPreview: a.top >= p.bottom - 1 };
+    // run D.2.2: the pair sits in the card's top-right corner, not on the meta line
+    return { primaryBg: getComputedStyle(primary).backgroundImage, moreBg: getComputedStyle(more).backgroundColor, label: primary.getAttribute('aria-label'), topRight: a.top - t.top < 24 && t.right - a.right < 24 && a.bottom <= meta.top };
   });
   await tile.locator('.cb-tile__primary').click();
   await page.waitForSelector(`${LIVE_TILES}[data-kind="text"] .cb-tile__primary[data-done]`);
@@ -2269,11 +2271,11 @@ test('P49', 'Closure: Editor-Header mit Studio-Glyph neben dem Namen und ohne Sp
   await page.click('#cb-composer-title');
   await page.waitForTimeout(400);
   const header = await page.evaluate(() => {
-    const glyph = document.querySelector('.cb-composer__eyebrow .cb-studio-glyph').getBoundingClientRect();
+    const glyph = document.querySelector('.cb-composer__studio-id .cb-studio-glyph').getBoundingClientRect();
     const name = document.querySelector('.cb-composer__studio').getBoundingClientRect();
     const title = document.querySelector('#cb-composer-title');
     const s = getComputedStyle(title);
-    return { eyebrow: document.querySelector('.cb-composer__eyebrow').textContent, glyph: Math.round(glyph.width), sideBySide: name.left > glyph.right && Math.abs((name.top + name.bottom) / 2 - (glyph.top + glyph.bottom) / 2) <= 2, underline: /0px 2px 0px -1px/.test(s.boxShadow) || s.textDecorationLine !== 'none' || parseFloat(s.borderBottomWidth) > 0, tinted: !/[ ,/] ?0\)$/.test(s.backgroundColor) };
+    return { eyebrow: document.querySelector('.cb-composer__studio-id').textContent, glyph: Math.round(glyph.width), sideBySide: name.left > glyph.right && Math.abs((name.top + name.bottom) / 2 - (glyph.top + glyph.bottom) / 2) <= 2, underline: /0px 2px 0px -1px/.test(s.boxShadow) || s.textDecorationLine !== 'none' || parseFloat(s.borderBottomWidth) > 0, tinted: !/[ ,/] ?0\)$/.test(s.backgroundColor) };
   });
   // Markdown preview: blank-line runs follow the standard (no artificial gaps)
   await page.click('.cb-composer [role="radio"]:has-text("Split")');
@@ -2286,7 +2288,7 @@ test('P49', 'Closure: Editor-Header mit Studio-Glyph neben dem Namen und ohne Sp
   });
   const problems = await clean(['DataTransfer.', 'clipboard.']);
   const ok =
-    /gradient/.test(card.primaryBg) && card.moreBg === 'rgba(0, 0, 0, 0)' && /Kopieren/.test(card.label) && card.clearOfPreview &&
+    /gradient/.test(card.primaryBg) && card.moreBg === 'rgba(0, 0, 0, 0)' && /Kopieren/.test(card.label) && card.topRight &&
     copied.tag === '"Kopiert"' && copied.clip.length > 0 &&
     toast.l <= 40 && !overlaps(toast, composer) && !overlaps(toast, dock) && toast.b <= 900 &&
     undo.icon === 'undo' && undo.line === 'cb-toast-time' && undo.action === 'Rückgängig' &&
@@ -2386,6 +2388,82 @@ test('P51', 'Spaces sortieren: Griff pro Space, Ziehen mit Platzhalter, Tastatur
     JSON.stringify(dragged) === JSON.stringify(expectDrag) && JSON.stringify(keyed) === JSON.stringify(expectKey) && keyFocus.grip && keyFocus.open && /Position 2/.test(keyFocus.said) &&
     JSON.stringify(reloaded) === JSON.stringify(expectKey) && JSON.stringify(afterDrop) === JSON.stringify(expectKey) && moved?.spaceId === 'sp-ideas' && title === 'Ideen' && !problems.length;
   return { ok, observed: `before=${before}, during=${JSON.stringify(during)}, dragged=${dragged}, keyed=${keyed} ${JSON.stringify(keyFocus)}, reloaded=${reloaded}, moved=${moved?.spaceId}, afterDrop=${afterDrop}, title=${title}, problems=${problems.join(' | ') || '-'}` };
+});
+
+// --- Header & copy micro-polish (Run D.2.2): one-line editor header in every editor and viewport; copy back in the corner ----
+test('P52', 'Editor-Header einzeilig (Glyph, Studio, ›, Dateiname, Status, Schließen) in allen fünf Editoren auf Desktop, Tablet und Phone; Stift nur bei Hover/Fokus; Enter bestätigt; Karten-Aktionen oben rechts auch bei Touch', { clipboard: true }, async ({ page, clean }) => {
+  const headerOf = (name) =>
+    page.evaluate((n) => {
+      const q = (s) => document.querySelector(s)?.getBoundingClientRect();
+      const header = q('.cb-composer__header');
+      const parts = ['.cb-composer__studio-id .cb-studio-glyph', '.cb-composer__crumb', '#cb-composer-title', '.cb-composer__status', '.cb-composer__close'].map(q);
+      const [glyph, crumb, title, status, close] = parts;
+      const mid = (r) => (r.top + r.bottom) / 2;
+      const oneLine = parts.every((r) => r && Math.abs(mid(r) - mid(glyph)) <= 3);
+      const seg = q('.cb-composer__header > .cb-segmented');
+      const row = [title, status, seg, close].filter(Boolean).sort((a, b) => a.left - b.left);
+      const ordered = glyph.right <= crumb.left + 1 && crumb.right <= title.left + 8 && row.every((r, i) => i === 0 || row[i - 1].right <= r.left + 1) && close.right <= header.right + 1;
+      const studioName = document.querySelector('.cb-composer__studio');
+      return { n, dbg: ordered ? '' : JSON.stringify({ glyph, crumb, title, row, hr: header.right }, (k, v) => typeof v === 'number' ? Math.round(v) : v), h: Math.round(header.height), glyph: Math.round(glyph.width), oneLine, ordered, name: getComputedStyle(studioName).display !== 'none' ? studioName.textContent : '', overflowX: document.documentElement.scrollWidth > innerWidth + 1 };
+    }, name);
+  const seen = {};
+  const check = async (label) => {
+    for (const [name, vp] of [['desktop', { width: 1440, height: 900 }], ['tablet', { width: 834, height: 1112 }], ['phone', { width: 390, height: 844 }]]) {
+      await page.setViewportSize(vp);
+      await page.waitForTimeout(300);
+      const h = await headerOf(`${label}/${name}`);
+      seen[h.n] = h;
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(250);
+  };
+  for (const label of ['Klartext', 'Dokument', 'Markdown', 'Code']) {
+    await createVia(page, label);
+    await page.fill('#cb-composer-title', 'Ein ziemlich langer Dateiname, der auf dem Phone gekürzt werden muss');
+    await check(label);
+  }
+  // pen: only while the title is hovered or focused; Enter confirms and moves into the writing surface
+  await createVia(page, 'Markdown');
+  await page.mouse.move(700, 400);
+  await page.waitForTimeout(300);
+  const pen = () => page.$eval('.cb-composer__title-pen', (e) => parseFloat(getComputedStyle(e).opacity));
+  const penRest = await pen();
+  await page.hover('#cb-composer-title');
+  await page.waitForTimeout(300);
+  const penHover = await pen();
+  await page.click('#cb-composer-title');
+  await page.mouse.move(700, 400);
+  await page.waitForTimeout(300);
+  const penFocus = await pen();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.activeElement?.closest('.cb-composer__body'));
+  await page.waitForTimeout(300);
+  const penAfter = await pen();
+  // the image studio shares the header
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-composer', { state: 'detached' });
+  await pasteTestImage(page);
+  await page.click('.cb-tile[data-kind="image"] .cb-tile__open', { button: 'right' });
+  await page.click('[role="menuitem"]:has-text("Im Bildstudio bearbeiten")');
+  await studioReady(page);
+  await check('Bild');
+  // cards on touch: the pair stays visible in the top-right corner
+  await page.click('[aria-label="Editor schließen"]');
+  await page.waitForSelector('.cb-composer', { state: 'detached' });
+  await page.keyboard.press('Escape');
+  const touch = await page.evaluate(() => {
+    const el = document.querySelector('.cb-tile[data-kind="text"]:not(.cb-departure *)');
+    const t = el.getBoundingClientRect();
+    const a = el.querySelector('.cb-tile__actions').getBoundingClientRect();
+    return { top: Math.round(a.top - t.top), right: Math.round(t.right - a.right), w: Math.round(a.width) };
+  });
+  const problems = await clean(['DataTransfer.', 'clipboard.']);
+  const all = Object.values(seen);
+  const ok =
+    all.length === 15 && all.every((h) => h.oneLine && h.ordered && h.h <= 72 && !h.overflowX && /Studio|\w/.test(h.n)) &&
+    all.filter((h) => /desktop/.test(h.n)).every((h) => h.glyph >= 26 && h.name) &&
+    penRest === 0 && penHover > 0.5 && penFocus > 0.5 && penAfter === 0 && touch.top < 24 && !problems.length;
+  return { ok, observed: `${all.map((h) => `${h.n}: h=${h.h} line=${h.oneLine} order=${h.ordered} glyph=${h.glyph}${h.dbg}`).join('; ')}, pen=${[penRest, penHover, penFocus, penAfter]}, touch=${JSON.stringify(touch)}, problems=${problems.join(' | ') || '-'}` };
 });
 
 const ONLY = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY) : null; // e.g. E2E_ONLY='^(P6|P23)$' for a focused run

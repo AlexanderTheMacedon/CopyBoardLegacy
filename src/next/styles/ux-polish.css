@@ -3,44 +3,75 @@
    corner on every device, a leading copy action on cards, and reorderable spaces in the dock flyout. Every colour is a
    token (light and dark follow); every duration a motion token (reduced motion collapses them). ------------------- */
 
-/* --- Editor header: glyph and studio name on one optical line, the glyph at full size with room around it -------------- */
-.cb-composer[data-studio] .cb-composer__eyebrow {
+/* --- Editor header (Run D.2.2): one line. [studio glyph] [studio name] › [file name] … [status, actions, close].
+   The glyph is large, the name wears the studio ink, the file name is an inline field (tinted on hover, soft studio tint
+   and hairline on focus, a pen as the edit hint) and gives way with an ellipsis; nothing wraps, nothing overlaps. ----- */
+.cb-composer .cb-composer__header {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--cb-space-3);
+  min-height: 56px;
+}
+.cb-composer .cb-composer__heading {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cb-composer__studio-id {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
   gap: 10px;
-  margin-bottom: 6px;
-  line-height: 1;
+  color: var(--st-ink, var(--cb-accent));
 }
 .cb-composer__glyph {
   width: 28px;
   height: 28px;
   border-radius: 9px;
 }
-@media (max-width: 599.98px) {
-  .cb-composer[data-studio] .cb-composer__eyebrow {
-    gap: 8px;
-    margin-bottom: 4px;
-  }
-  .cb-composer__glyph {
-    width: 24px;
-    height: 24px;
-    border-radius: 8px;
-  }
+.cb-composer .cb-composer__studio {
+  font: var(--cb-text-panel);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
-
-/* Title: an inline field, not a ruled input. It hugs its text, hover hints that it can be edited, focus wears the studio's
-   soft tint and a hairline, never an underline. The text stays aligned with the glyph above. */
+.cb-composer__crumb {
+  flex: none;
+  color: var(--cb-text-tertiary);
+}
+.cb-composer__heading h2 {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 560;
+}
+.cb-composer__title-wrap {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
 .cb-composer__title {
-  width: calc(100% + 14px);
-  max-width: calc(100% + 14px);
-  margin: -2px -7px;
-  padding: 2px 7px;
+  flex: 0 1 auto;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 0 -7px;
+  padding: 3px 7px;
   border-radius: 9px;
+  font-size: 15px;
+  font-weight: 560;
   text-decoration: none;
   transition: background-color var(--cb-dur-hover) var(--cb-ease-out), box-shadow var(--cb-dur-hover) var(--cb-ease-out);
 }
 @supports (field-sizing: content) {
   .cb-composer__title {
     width: auto;
-    min-width: 8ch;
+    max-width: 100%;
+    min-width: 6ch;
     field-sizing: content;
   }
 }
@@ -52,6 +83,65 @@
   outline: none;
   background: var(--st-soft, color-mix(in srgb, var(--cb-accent) 10%, transparent));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st, var(--cb-accent)) 32%, transparent);
+}
+/* the pen only shows while the field is hovered or focused; it keeps its place so nothing shifts */
+.cb-composer__title-pen {
+  flex: none;
+  color: var(--st-ink, var(--cb-text-tertiary));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cb-dur-hover) var(--cb-ease-out);
+}
+.cb-composer__title-wrap:is(:hover, :focus-within) .cb-composer__title-pen {
+  opacity: 0.85;
+}
+.cb-composer .cb-composer__status {
+  flex: none;
+  order: 0;
+}
+.cb-composer__header > .cb-segmented {
+  flex: none;
+}
+@media (max-width: 599.98px) {
+  .cb-composer .cb-composer__header {
+    gap: var(--cb-space-2);
+    min-height: 52px;
+  }
+  .cb-composer .cb-composer__heading {
+    gap: 6px;
+  }
+  .cb-composer__studio-id {
+    gap: 8px;
+  }
+  .cb-composer__glyph {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+  }
+  /* the save status shrinks to its dot (the text stays for assistive technology); mode switch shows icons only */
+  .cb-composer__status-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .cb-composer .cb-composer__status {
+    min-height: 0;
+    padding: 0 2px;
+  }
+}
+/* with the mode switch beside it, a phone header keeps the studio glyph alone (its name stays as the tooltip) */
+@media (max-width: 479.98px) {
+  .cb-composer__header[data-modes] .cb-composer__studio {
+    display: none;
+  }
+}
+@media (max-width: 359.98px) {
+  .cb-composer .cb-composer__studio {
+    display: none;
+  }
 }
 
 /* --- Notices: always bottom left. `--cb-toast-bottom` names the free edge per context: above the composer (its live
@@ -206,45 +296,33 @@
   animation: none;
 }
 
-/* --- Card actions: they sit on the meta line, never on the preview. Copy (the registry's primary quick action) leads in
-   the space colour and is always there; "…" stays quiet and appears with the card's hover or focus (always on touch). -- */
-/* one line beside the actions (margin, not padding: overflow clips at the border box); the kind label gives way first,
-   the date, space chip and favourite stay */
-.cb-grid[data-view='grid'] .cb-tile__meta {
-  flex-wrap: nowrap;
-  min-height: 30px;
-  margin-right: 70px;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.cb-grid[data-view='grid'] .cb-tile__meta > * {
-  flex: none;
-}
-.cb-grid[data-view='grid'] .cb-tile__meta > span:first-of-type,
-.cb-grid[data-view='grid'] .cb-tile__meta > .cb-space-chip {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* --- Card actions (Run D.2.2): back in the top-right corner, as before D.2.1 (board.css owns position, hover/focus reveal
+   and the lift; touch has no hover, so there they stay visible). One compact frosted pair: copy (registry primary quick
+   action) leads in the space colour, "…" stays the quiet secondary. The meta line is the card's own again. -- */
 .cb-grid[data-view='grid'] .cb-tile__actions {
-  top: auto;
-  bottom: calc(var(--cb-card-inset) + 2px);
-  right: calc(var(--cb-card-inset) + 2px);
   align-items: center;
-  opacity: 1;
-  transform: none;
-}
-.cb-grid[data-view='grid'] .cb-tile:is(:hover, :focus-within) .cb-tile__actions,
-.cb-grid[data-view='grid'] .cb-tile__actions:has([aria-expanded='true']) {
-  transform: translateY(var(--cb-hover-lift));
-}
-.cb-grid[data-view='grid'] .cb-tile:focus-within:not(:hover) .cb-tile__actions {
-  transform: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cb-glass-solid) 94%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cb-text-primary) 8%, transparent), 0 6px 16px -10px rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(10px) saturate(1.2);
 }
 @media (hover: none) {
+  .cb-grid[data-view='grid'] .cb-tile__actions {
+    top: calc(var(--cb-card-inset) + 8px);
+    bottom: auto;
+    right: calc(var(--cb-card-inset) + 8px);
+    opacity: 1;
+    transform: none;
+  }
   .cb-grid[data-view='grid'] .cb-tile__body {
-    padding-right: 4px;
+    padding-right: 0;
+  }
+  /* no hover on touch, so the pair is always there: written previews start below it instead of running under it */
+  .cb-grid[data-view='grid'] :is(.cb-preview--text, .cb-preview--document, .cb-preview--markdown) .cb-preview__text {
+    margin-top: 30px;
+    -webkit-line-clamp: 5;
   }
 }
 /* quiet "…": no glass of its own, tertiary ink */
@@ -260,41 +338,26 @@
   background: var(--cb-glass-hover);
   color: var(--cb-text-primary);
 }
-@media (hover: hover) {
-  .cb-grid[data-view='grid'] .cb-tile__actions .cb-icon-button:not(.cb-tile__primary) {
-    opacity: 0;
-    transition: opacity var(--cb-dur-hover) var(--cb-ease-out), background-color var(--cb-dur-hover) var(--cb-ease-out);
-  }
-  .cb-grid[data-view='grid'] .cb-tile:is(:hover, :focus-within) .cb-tile__actions .cb-icon-button:not(.cb-tile__primary),
-  .cb-grid[data-view='grid'] .cb-tile__actions .cb-icon-button[aria-expanded='true'] {
-    opacity: 1;
-  }
-}
 /* three 1.5 px dots vanish next to a full outline glyph; the dots carry the weight of the other icons */
 .cb-icon[data-icon='more'] {
   stroke-width: 2.6;
 }
 
-/* the leading copy (data-done is set by the copy action only): soft space tint at rest, filled on the card's hover/focus,
-   lifts on its own hover, presses in, and confirms in place ("Kopiert", success fill) once the clipboard took it */
+/* the copy button (data-done is set by the copy action only): filled in the space colour, lifts on its own hover, presses
+   in, and confirms in place ("Kopiert", success fill) once the clipboard took it */
 .cb-tile__actions .cb-tile__primary {
   position: relative;
   width: 30px;
   height: 30px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--cb-accent) 13%, transparent);
-  color: var(--cb-accent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cb-accent) 20%, transparent);
+  background: var(--cb-accent-fill);
+  color: var(--cb-on-accent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 6px 14px -8px var(--cb-accent-glow);
   transition: background-color var(--cb-dur-hover) var(--cb-ease-out), color var(--cb-dur-hover) var(--cb-ease-out),
     box-shadow var(--cb-dur-hover) var(--cb-ease-out), translate var(--cb-dur-select) var(--cb-spring), scale var(--cb-dur-select) var(--cb-spring);
 }
 .cb-tile__actions .cb-tile__primary .cb-icon {
   stroke-width: 1.85;
-}
-.cb-tile:is(:hover, :focus-within) .cb-tile__actions .cb-tile__primary {
-  background: var(--cb-accent-fill);
-  color: var(--cb-on-accent);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 6px 14px -8px var(--cb-accent-glow);
 }
 .cb-tile__actions .cb-tile__primary:hover {
   background: var(--cb-accent-fill-hover);
@@ -352,10 +415,6 @@
   .cb-tile__primary[data-done]::after {
     animation: none;
   }
-}
-/* list rows: the same pair on the row's end */
-.cb-grid[data-view='list'] .cb-tile__actions .cb-tile__primary {
-  background: color-mix(in srgb, var(--cb-accent) 13%, transparent);
 }
 
 /* --- Space flyout: a solid sheet with a real lift; every space has a grip to reorder it ---------------------------- */

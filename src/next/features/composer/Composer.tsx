@@ -188,6 +188,8 @@ export function Composer() {
 function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'markdown' | 'code' | 'image' }> }) {
   const { dispatch, library, workspace, notify, markFresh } = usePreview();
   const phone = useMediaQuery(PHONE_QUERY);
+  // the mode switch shows icons only where the header has no room for its labels (the header stays one line)
+  const compactHeader = useMediaQuery('(max-width: 1099.98px)');
   const writable = isLocal(item);
   const place = useBreadcrumb(item);
 
@@ -435,17 +437,18 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
       style={{ '--cb-editor-font': `${prefs.fontSize}px` } as CSSProperties}
       onKeyDown={onKeyDown}
     >
-      <header className="cb-composer__header">
+      <header className="cb-composer__header" data-modes={hasModes || undefined}>
+        {/* one line: [studio glyph] [studio name] › [file name] … [save status, actions, close] */}
         <div className="cb-composer__heading">
-          <p className="cb-composer__eyebrow">
+          <span className="cb-composer__studio-id" title={studios[item.kind].name}>
             <span className="cb-studio-glyph cb-composer__glyph" aria-hidden="true">
-              <Icon name={studios[item.kind].icon} size={15} />
+              <Icon name={studios[item.kind].icon} size={16} />
             </span>
-            {/* the studio only: where the item lives stays in the context rail ("Ort"), not in the header */}
             <span className="cb-composer__studio">{studios[item.kind].name}</span>
-          </p>
+          </span>
+          <Icon name="chevronRight" size={14} className="cb-composer__crumb" />
           {writable ? (
-            <>
+            <span className="cb-composer__title-wrap">
               <label htmlFor="cb-composer-title" className="cb-visually-hidden">
                 Titel
               </label>
@@ -467,7 +470,8 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
                   }
                 }}
               />
-            </>
+              <Icon name="pen" size={13} className="cb-composer__title-pen" />
+            </span>
           ) : (
             <h2 id="cb-composer-title" ref={titleRef} tabIndex={-1}>
               {item.title}
@@ -476,14 +480,14 @@ function Canvas({ item }: { item: Extract<Item, { kind: 'document' | 'text' | 'm
         </div>
         <p className="cb-composer__status" role="status" data-state={writable ? autosave.state : 'example'}>
           <span className="cb-composer__status-dot" aria-hidden="true" />
-          {status}
+          <span className="cb-composer__status-text">{status}</span>
           {writable && autosave.state === 'error' && (
             <button type="button" className="cb-composer__retry" onClick={() => void autosave.flush()}>
               Erneut versuchen
             </button>
           )}
         </p>
-        {hasModes && <SegmentedControl label="Editor-Modus" size="sm" options={modeOptions(phone)} value={effectiveMode} onChange={setMode} />}
+        {hasModes && <SegmentedControl label="Editor-Modus" size="sm" options={modeOptions(phone)} value={effectiveMode} onChange={setMode} iconOnly={compactHeader} />}
         {!railOpen && !studio && <IconButton icon="panelRight" label="Kontextleiste einblenden" className="cb-composer__rail-toggle" onClick={() => setRailOpen(true)} />}
         {prefs.focus && <IconButton icon="focus" label="Fokusmodus beenden" className="cb-composer__focus-exit" onClick={() => changePrefs({ focus: false })} />}
         <IconButton icon="x" label="Editor schließen" className="cb-composer__close" onClick={() => void requestClose()} />
